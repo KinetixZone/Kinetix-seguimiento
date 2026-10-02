@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Syne', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root {
+  --color-kinetix-blue: #0055ff;
+  --color-kinetix-blue-hover: #1a6cff;
+  --color-kinetix-red: #ff1e27;
+  --color-kinetix-red-hover: #e50914;
+  --color-kinetix-primary: #0055ff;
+  --color-kinetix-primary-hover: #1a6cff;
+  --color-kinetix-glow: rgba(0, 85, 255, 0.25);
+  --color-kinetix-red-glow: rgba(255, 30, 39, 0.25);
+}
+
+[data-theme="red"] {
+  --color-kinetix-primary: #ff1e27;
+  --color-kinetix-primary-hover: #e50914;
+  --color-kinetix-glow: rgba(255, 30, 39, 0.25);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+  
+  h1, h2, h3, .font-brand {
+    font-family: var(--font-display);
+  }
+}
+
+.text-kinetix-brand {
+  color: var(--color-kinetix-primary);
+}
+
+.bg-kinetix-brand {
+  background-color: var(--color-kinetix-primary);
+}
+
+.border-kinetix-brand {
+  border-color: var(--color-kinetix-primary);
+}
+
+.shadow-kinetix {
+  box-shadow: 0 10px 25px -5px var(--color-kinetix-glow);
+}
+
+/* Custom scrollbar for mobile simulator and code blocks */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}

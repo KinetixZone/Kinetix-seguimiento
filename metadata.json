@@ -1,0 +1,6 @@
+{
+  "name": "Kinetix Functional Zone - Especificación Técnica y Prototipo",
+  "description": "Especificación técnica completa, arquitectura y prototipo interactivo de seguimiento físico, composición corporal y membresías para Kinetix Functional Zone.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
