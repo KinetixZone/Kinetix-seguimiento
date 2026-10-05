@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { UserProfile, PhysicalEvaluationRecord, MembershipStatus, KinetixPlanName } from '../../types';
+import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord, MembershipStatus, KinetixPlanName } from '../../types';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
+import { ExcelExportModal } from '../common/ExcelExportModal';
 import { 
   Users, 
   UserPlus, 
@@ -29,11 +30,14 @@ import {
   ShieldAlert,
   Clock,
   TrendingUp,
-  Info
+  Info,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface StaffManagementViewProps {
   users: UserProfile[];
+  bodyCompRecords?: BodyCompositionRecord[];
+  evaluations?: PhysicalEvaluationRecord[];
   onSelectUserToInspect: (user: UserProfile) => void;
   onCreateUserByEmail: (newUser: { 
     name: string; 
@@ -61,6 +65,8 @@ interface StaffManagementViewProps {
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   users,
+  bodyCompRecords = [],
+  evaluations = [],
   onSelectUserToInspect,
   onCreateUserByEmail,
   onOpenTestEntryForUser,
@@ -72,6 +78,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   currentUser,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Payment date and profile edit modal state
@@ -195,13 +202,24 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             Control de Atletas & Pagos
           </h2>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
-        >
-          <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Alta por Email</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
+            title="Exportar datos completos a Excel / CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Exportar a Excel</span>
+          </button>
+
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
+          >
+            <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Alta por Email</span>
+          </button>
+        </div>
       </div>
 
       {/* COACH'S OWN PERSONAL PROGRESS PANEL (Progreso Personal del Coach en Sesión) */}
@@ -1053,6 +1071,15 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             )}
           </div>
         </div>
+      )}
+      {/* MODAL: EXPORTAR A EXCEL / CSV */}
+      {showExportModal && (
+        <ExcelExportModal
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
     </div>
   );

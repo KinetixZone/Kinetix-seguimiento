@@ -270,6 +270,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           <StaffManagementView
             currentUser={effectiveUser}
             users={users}
+            bodyCompRecords={bodyCompRecords}
+            evaluations={evaluations}
             onSelectUserToInspect={handleSelectUserToInspect}
             onCreateUserByEmail={onCreateUserByEmail}
             onOpenTestEntryForUser={handleOpenEvaluationForUser}

@@ -38,22 +38,51 @@ export default function App() {
     }
   });
   
-  // Data State
+  // Data State with full local persistence
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
-      // Rehydrate any locally updated avatars
-      return INITIAL_USERS.map(u => {
-        const savedAvatar = localStorage.getItem(`kinetix_avatar_${u.id}`);
-        return savedAvatar ? { ...u, avatarUrl: savedAvatar } : u;
-      });
-    } catch {
-      return INITIAL_USERS;
-    }
+      const saved = localStorage.getItem('kinetix_users_data');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_USERS;
   });
 
-  const [bodyCompRecords, setBodyCompRecords] = useState<BodyCompositionRecord[]>(ALL_INITIAL_BODY_COMP);
-  const [evaluations, setEvaluations] = useState<PhysicalEvaluationRecord[]>(ALL_INITIAL_PHYSICAL_EVALS);
+  const [bodyCompRecords, setBodyCompRecords] = useState<BodyCompositionRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('kinetix_body_comp_data');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ALL_INITIAL_BODY_COMP;
+  });
+
+  const [evaluations, setEvaluations] = useState<PhysicalEvaluationRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('kinetix_evaluations_data');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ALL_INITIAL_PHYSICAL_EVALS;
+  });
+
   const [notifications, setNotifications] = useState<PushNotificationSimulation[]>(INITIAL_NOTIFICATIONS);
+
+  // Sync state changes to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('kinetix_users_data', JSON.stringify(users));
+    } catch {}
+  }, [users]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kinetix_body_comp_data', JSON.stringify(bodyCompRecords));
+    } catch {}
+  }, [bodyCompRecords]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kinetix_evaluations_data', JSON.stringify(evaluations));
+    } catch {}
+  }, [evaluations]);
 
   const currentUser = users.find(u => u.id === currentUserId) || users[0];
 

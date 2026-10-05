@@ -229,68 +229,67 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         </div>
       </div>
 
-      {/* In-App Notifications & State Test Bench */}
-      <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-            <Bell className="w-3.5 h-3.5 text-blue-400" />
-            Simulador de Avisos en la Misma Página
-          </span>
-          <span className="text-[10px] font-mono text-neutral-500">In-App</span>
+      {/* Staff Direct Controls (Only visible to Staff/Coaches) */}
+      {currentUser.role === 'staff' && (
+        <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Controles Administrativos de Cobro & Suspensión</span>
+            </span>
+            <span className="text-[10px] font-mono text-neutral-500">Solo Staff</span>
+          </div>
+
+          <p className="text-[11px] text-neutral-400 leading-relaxed">
+            Herramientas operativas del coach para emitir avisos directos y verificar reglas de corte:
+          </p>
+
+          <div className="space-y-2">
+            <button
+              onClick={handleTriggerSarahReminder}
+              className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
+            >
+              <div>
+                <div className="font-semibold text-white flex items-center gap-1.5">
+                  <Send className="w-3 h-3 text-blue-400" />
+                  <span>Enviar Recordatorio de Pago In-App</span>
+                </div>
+                <div className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
+                  Emite un aviso oficial de pago a la campana del alumno.
+                </div>
+              </div>
+              <span className="text-[10px] text-blue-400 shrink-0 font-medium">Enviar &rarr;</span>
+            </button>
+
+            <button
+              onClick={handleTriggerSuspension}
+              className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
+            >
+              <div>
+                <div className="font-semibold text-red-400 flex items-center gap-1.5">
+                  <ShieldAlert className="w-3 h-3 text-red-500" />
+                  <span>Aplicar Regla de Suspensión por Vencimiento (5 días de gracia)</span>
+                </div>
+                <div className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
+                  Aplica la regla de corte tras superar los 5 días de gracia natural.
+                </div>
+              </div>
+              <span className="text-[10px] text-red-400 shrink-0 font-medium">Suspender &rarr;</span>
+            </button>
+
+            <button
+              onClick={() => onUpdateMembershipStatus('active', 25)}
+              className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
+            >
+              <div className="font-medium text-neutral-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>Restablecer Membresía Activa (Al Día)</span>
+              </div>
+              <span className="text-[10px] text-emerald-400 shrink-0">Activar &rarr;</span>
+            </button>
+          </div>
         </div>
-
-        <p className="text-[11px] text-neutral-400 leading-relaxed">
-          Las notificaciones se reciben directamente en la página web / app sin intermediarios externos:
-        </p>
-
-        <div className="space-y-2">
-          {/* Sarah Prompt Example */}
-          <button
-            onClick={handleTriggerSarahReminder}
-            className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
-          >
-            <div>
-              <div className="font-semibold text-white flex items-center gap-1.5">
-                <Send className="w-3 h-3 text-blue-400" />
-                <span>Disparar Recordatorio de Pago (Ejemplo Oficial Sarah)</span>
-              </div>
-              <div className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
-                "Hola Sarah, tu membresía vence el 30 de Abril, 2024. Monto a Pagar: $89.99..."
-              </div>
-            </div>
-            <span className="text-[10px] text-blue-400 shrink-0 font-medium">Lanzar Aviso &rarr;</span>
-          </button>
-
-          {/* Trigger Auto Suspension Test */}
-          <button
-            onClick={handleTriggerSuspension}
-            className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
-          >
-            <div>
-              <div className="font-semibold text-red-400 flex items-center gap-1.5">
-                <ShieldAlert className="w-3 h-3 text-red-500" />
-                <span>Simular Corte por Falta de Pago (Suspensión Automática)</span>
-              </div>
-              <div className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
-                Aplica la regla de suspensión tras superar los 5 días de gracia.
-              </div>
-            </div>
-            <span className="text-[10px] text-red-400 shrink-0 font-medium">Suspender &rarr;</span>
-          </button>
-
-          {/* Reset to Active */}
-          <button
-            onClick={() => onUpdateMembershipStatus('active', 25)}
-            className="w-full text-left p-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 transition-colors flex items-center justify-between text-xs"
-          >
-            <div className="font-medium text-neutral-300 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              <span>Restablecer Membresía Activa (25 días restantes)</span>
-            </div>
-            <span className="text-[10px] text-emerald-400 shrink-0">Reset &rarr;</span>
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -214,10 +214,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </button>
           </form>
 
-          {/* Quick Demo Access Strip */}
+          {/* Registered Accounts Selector */}
           <div className="pt-2 border-t border-neutral-800/80 space-y-2.5">
             <span className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400 block text-center">
-              Acceso Rápido de Prueba (1 Clic)
+              Seleccionar Cuenta Registrada
             </span>
 
             {roleTab === 'staff' ? (
