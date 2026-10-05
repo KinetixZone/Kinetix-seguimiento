@@ -1,96 +1,70 @@
 import React from 'react';
-import { FileText, Smartphone, LayoutDashboard, Printer, Download, Bell, Globe } from 'lucide-react';
-import { BrandTheme } from '../types';
+import { Bell, LogOut, ShieldCheck, User, Camera, Upload } from 'lucide-react';
+import { UserProfile } from '../types';
 
 interface NavigationHeaderProps {
-  viewMode: 'web' | 'simulator' | 'spec' | 'split';
-  setViewMode: (mode: 'web' | 'simulator' | 'spec' | 'split') => void;
-  brandTheme: BrandTheme;
-  setBrandTheme: (theme: BrandTheme) => void;
+  currentUser: UserProfile;
+  gymLogoUrl: string | null;
   unreadNotificationsCount: number;
   onOpenNotifications: () => void;
-  onPrint: () => void;
-  onExportMarkdown: () => void;
+  onOpenProfileModal: () => void;
+  onLogout: () => void;
 }
 
 export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
-  viewMode,
-  setViewMode,
-  brandTheme,
-  setBrandTheme,
+  currentUser,
+  gymLogoUrl,
   unreadNotificationsCount,
   onOpenNotifications,
-  onPrint,
-  onExportMarkdown,
+  onOpenProfileModal,
+  onLogout,
 }) => {
+  const isStaff = currentUser.role === 'staff';
+
   return (
-    <header className="sticky top-0 z-50 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800/80 px-4 md:px-8 py-3 transition-colors no-print">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        {/* Zone 1: Brand Wordmark with Kinetix Blue & Red Official Identity */}
+    <header className="sticky top-0 z-40 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800/80 px-3.5 sm:px-6 py-2.5 transition-colors no-print">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+        {/* Zone 1: Official Gym Brand Logo & Identity */}
         <div className="flex items-center gap-3">
-          <a href="#" className="flex items-center gap-2.5 group">
-            {/* Dual Color Brand Badge: Blue with Red Flame Accent */}
-            <div className="relative w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-extrabold text-sm tracking-tighter shadow-md shadow-blue-500/30 overflow-hidden">
-              <span className="relative z-10 font-brand">KZ</span>
-              <div className="absolute -right-2 -bottom-2 w-5 h-5 bg-red-600 rounded-full" />
-            </div>
+          <button 
+            onClick={onOpenProfileModal}
+            className="flex items-center gap-2.5 group text-left"
+            title={isStaff ? 'Hacer clic para personalizar logo o foto de perfil' : 'Ver mi perfil'}
+          >
+            {/* Gym Logo Display */}
+            {gymLogoUrl ? (
+              <div className="relative w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                <img
+                  src={gymLogoUrl}
+                  alt="Logo Gimnasio"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="relative w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-extrabold text-sm tracking-tighter shadow-md shadow-blue-500/30 overflow-hidden shrink-0">
+                <span className="relative z-10 font-brand">KZ</span>
+                <div className="absolute -right-2 -bottom-2 w-5 h-5 bg-red-600 rounded-full" />
+              </div>
+            )}
             
             <div className="flex flex-col">
-              <span className="text-lg md:text-xl font-bold tracking-tight text-white font-brand">
+              <span className="text-base sm:text-lg font-bold tracking-tight text-white font-brand leading-none">
                 KINETIX <span className="font-light text-blue-500">Functional</span> <span className="font-bold text-red-500">Zone</span>
               </span>
+              <span className="text-[10px] text-neutral-400 hidden sm:block mt-0.5">
+                {isStaff ? 'Portal del Entrenador · Coach Jorge' : 'Plataforma Oficial del Atleta'}
+              </span>
             </div>
-          </a>
+          </button>
         </div>
 
-        {/* Zone 2: View Mode Switcher (Web App vs Mobile Simulator vs Tech Spec) */}
-        <div className="flex items-center gap-2">
-          <nav className="flex items-center bg-neutral-900/90 p-1 rounded-xl border border-neutral-800">
-            <button
-              onClick={() => setViewMode('web')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                viewMode === 'web'
-                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Plataforma Web</span>
-            </button>
-
-            <button
-              onClick={() => setViewMode('simulator')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                viewMode === 'simulator'
-                  ? 'bg-neutral-800 text-white font-semibold shadow-sm border border-neutral-700/50'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-blue-400" />
-              <span>Simulador Celular</span>
-            </button>
-
-            <button
-              onClick={() => setViewMode('spec')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                viewMode === 'spec'
-                  ? 'bg-neutral-800 text-white font-semibold shadow-sm border border-neutral-700/50'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-red-400" />
-              <span>Especificación</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Zone 3: Notification Bell & Export Actions */}
-        <div className="flex items-center gap-2">
-          {/* In-Page Notification Bell with Counter */}
+        {/* Zone 2: User Status & Actions */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Notification Bell with Badge */}
           <button
             onClick={onOpenNotifications}
             className="relative p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 transition-colors"
-            title="Centro de notificaciones en la página"
+            title="Centro de notificaciones"
           >
             <Bell className="w-4 h-4 text-blue-400" />
             {unreadNotificationsCount > 0 && (
@@ -100,21 +74,45 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             )}
           </button>
 
+          {/* Active User Pill (Opens User Profile & Logo Modal) */}
           <button
-            onClick={onExportMarkdown}
-            title="Descargar especificación técnica en Markdown"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors whitespace-nowrap"
+            onClick={onOpenProfileModal}
+            className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800/90 border border-neutral-800 transition-all text-left"
+            title="Ver perfil, subir foto o personalizar logo"
           >
-            <Download className="w-3.5 h-3.5 text-blue-400" />
-            <span>.MD</span>
+            <div className="relative">
+              <img
+                src={currentUser.avatarUrl}
+                alt={currentUser.name}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border border-neutral-700"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+              {isStaff && (
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-red-600 rounded-full border border-neutral-900 flex items-center justify-center text-[8px] text-white font-bold">
+                  ★
+                </span>
+              )}
+            </div>
+
+            <div className="hidden sm:block text-left overflow-hidden max-w-[120px] md:max-w-[160px]">
+              <span className="text-xs font-bold text-white block truncate leading-tight">
+                {currentUser.name}
+              </span>
+              <span className={`text-[9px] font-semibold uppercase block ${
+                isStaff ? 'text-red-400' : 'text-blue-400'
+              }`}>
+                {isStaff ? 'Coach Jorge' : 'Atleta'}
+              </span>
+            </div>
           </button>
 
+          {/* Logout / Switch User */}
           <button
-            onClick={onPrint}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors shadow-md shadow-blue-500/25 whitespace-nowrap"
+            onClick={onLogout}
+            className="p-2 rounded-xl bg-neutral-900 hover:bg-red-950/60 border border-neutral-800 hover:border-red-900/60 text-neutral-400 hover:text-red-300 transition-colors"
+            title="Cerrar sesión / Cambiar usuario"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Exportar PDF</span>
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

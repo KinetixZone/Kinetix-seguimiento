@@ -1,5 +1,7 @@
 export type UserRole = 'athlete' | 'staff' | 'admin';
 
+export type StaffRole = 'owner' | 'coach'; // 'owner': Leslie & Jorge (Control Total) | 'coach': Gus (Evaluador & Seguimiento)
+
 export type MembershipStatus = 'active' | 'expiring_soon' | 'expired' | 'suspended';
 
 export type Gender = 'male' | 'female';
@@ -9,6 +11,7 @@ export interface UserProfile {
   name: string;
   email: string;
   role: UserRole;
+  staffRole?: StaffRole; // 'owner' (Leslie & Jorge) vs 'coach' (Gus)
   phone: string;
   avatarUrl: string;
   birthDate: string; // YYYY-MM-DD

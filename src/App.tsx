@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationHeader } from './components/NavigationHeader';
-import { TechnicalSpecViewer } from './components/spec/TechnicalSpecViewer';
-import { MobileAppSimulator } from './components/mobile/MobileAppSimulator';
-import { KinetixWebPortal } from './components/web/KinetixWebPortal';
+import { KinetixResponsiveApp } from './components/KinetixResponsiveApp';
+import { LoginPage } from './components/auth/LoginPage';
+import { UserProfileAndLogoModal } from './components/common/UserProfileAndLogoModal';
 import { InAppNotificationCenter } from './components/common/InAppNotificationCenter';
 import { 
   INITIAL_USERS, 
@@ -10,7 +10,6 @@ import {
   ALL_INITIAL_PHYSICAL_EVALS,
   INITIAL_NOTIFICATIONS 
 } from './data/mockData';
-import { TECHNICAL_SPEC_SECTIONS } from './data/technicalSpecContent';
 import { 
   UserProfile, 
   BodyCompositionRecord, 
@@ -22,16 +21,74 @@ import {
 } from './types';
 
 export default function App() {
-  // Default to 'web' (Plataforma Web Oficial Kinetix)
-  const [viewMode, setViewMode] = useState<'web' | 'simulator' | 'spec' | 'split'>('web');
-  const [brandTheme, setBrandTheme] = useState<BrandTheme>('blue');
+  const [brandTheme] = useState<BrandTheme>('blue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  // Authentication State: default authenticated to Leslie (Dueña & Coach)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [currentUserId, setCurrentUserId] = useState<string>('user-staff-leslie');
+
+  // Custom Gym Logo (Persisted in localStorage)
+  const [gymLogoUrl, setGymLogoUrl] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('kinetix_gym_logo');
+    } catch {
+      return null;
+    }
+  });
   
   // Data State
-  const [users, setUsers] = useState<UserProfile[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    try {
+      // Rehydrate any locally updated avatars
+      return INITIAL_USERS.map(u => {
+        const savedAvatar = localStorage.getItem(`kinetix_avatar_${u.id}`);
+        return savedAvatar ? { ...u, avatarUrl: savedAvatar } : u;
+      });
+    } catch {
+      return INITIAL_USERS;
+    }
+  });
+
   const [bodyCompRecords, setBodyCompRecords] = useState<BodyCompositionRecord[]>(ALL_INITIAL_BODY_COMP);
   const [evaluations, setEvaluations] = useState<PhysicalEvaluationRecord[]>(ALL_INITIAL_PHYSICAL_EVALS);
   const [notifications, setNotifications] = useState<PushNotificationSimulation[]>(INITIAL_NOTIFICATIONS);
+
+  const currentUser = users.find(u => u.id === currentUserId) || users[0];
+
+  // Update user avatar (Atletas & Coach)
+  const handleUpdateAvatar = (userId: string, newAvatarUrl: string) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, avatarUrl: newAvatarUrl } : u));
+    try {
+      localStorage.setItem(`kinetix_avatar_${userId}`, newAvatarUrl);
+    } catch {}
+  };
+
+  // Update Gym Logo (Coach/Staff)
+  const handleUpdateGymLogo = (newLogoUrl: string | null) => {
+    setGymLogoUrl(newLogoUrl);
+    try {
+      if (newLogoUrl) {
+        localStorage.setItem('kinetix_gym_logo', newLogoUrl);
+      } else {
+        localStorage.removeItem('kinetix_gym_logo');
+      }
+    } catch {}
+  };
+
+  // Login handler
+  const handleLogin = (user: UserProfile) => {
+    setCurrentUserId(user.id);
+    setIsAuthenticated(true);
+    setIsProfileModalOpen(false);
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setIsProfileModalOpen(false);
+  };
 
   // Add Body Comp Record
   const handleAddBodyCompRecord = (record: Omit<BodyCompositionRecord, 'id'>) => {
@@ -42,12 +99,12 @@ export default function App() {
     setBodyCompRecords(prev => [...prev, newRecord]);
   };
 
-  // Delete Body Comp Record (Staff control)
+  // Delete Body Comp Record
   const handleDeleteBodyCompRecord = (recordId: string) => {
     setBodyCompRecords(prev => prev.filter(b => b.id !== recordId));
   };
 
-  // Update Body Comp Record (Staff control)
+  // Update Body Comp Record
   const handleUpdateBodyCompRecord = (recordId: string, updates: Partial<BodyCompositionRecord>) => {
     setBodyCompRecords(prev => prev.map(b => b.id === recordId ? { ...b, ...updates } : b));
   };
@@ -61,20 +118,20 @@ export default function App() {
     setEvaluations(prev => [...prev, newEval]);
   };
 
-  // Delete Physical Evaluation (Staff control)
+  // Delete Physical Evaluation
   const handleDeleteEvaluation = (evalId: string) => {
     setEvaluations(prev => prev.filter(e => e.id !== evalId));
   };
 
-  // Update Physical Evaluation (Staff control)
+  // Update Physical Evaluation
   const handleUpdateEvaluation = (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => {
     setEvaluations(prev => prev.map(e => e.id === evalId ? { ...e, ...updates } : e));
   };
 
-  // Update Membership Status (e.g. suspension, renewal)
+  // Update Membership Status
   const handleUpdateMembershipStatus = (status: MembershipStatus, daysUntilExpiry: number) => {
     setUsers(prev => prev.map(u => {
-      if (u.id === 'user-001') {
+      if (u.id === currentUserId) {
         return {
           ...u,
           membership: {
@@ -89,7 +146,7 @@ export default function App() {
     }));
   };
 
-  // Staff/Owner direct control: Update payment date, billing day, plan and access for ANY user
+  // Staff direct control: Update payment date, billing day, plan and access
   const handleUpdateUserMembership = (
     userId: string,
     status: MembershipStatus,
@@ -127,14 +184,17 @@ export default function App() {
     }));
   };
 
-  // Staff/Owner direct control: Delete Athlete and cascade delete records
+  // Delete Athlete
   const handleDeleteAthlete = (userId: string) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
     setBodyCompRecords(prev => prev.filter(b => b.userId !== userId));
     setEvaluations(prev => prev.filter(e => e.userId !== userId));
+    if (currentUserId === userId) {
+      setCurrentUserId('user-staff-01');
+    }
   };
 
-  // Staff/Owner direct control: Update Athlete Profile info
+  // Update Athlete Profile
   const handleUpdateAthleteProfile = (userId: string, updates: Partial<UserProfile>) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
   };
@@ -163,197 +223,119 @@ export default function App() {
       email: newUser.email,
       role: 'athlete',
       phone: '+52 (55) 0000-0000',
-      avatarUrl: newUser.gender === 'male' 
-        ? 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80'
-        : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+      avatarUrl: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 999999)}?auto=format&fit=crop&w=400&q=80`,
       birthDate: '1998-01-01',
       gender: newUser.gender,
       heightCm: newUser.heightCm,
       weightUnit: 'kg',
       emergencyContact: {
-        name: 'Contacto Primario',
-        phone: '+52 (55) 0000-1111',
+        name: 'Pendiente',
+        phone: 'Pendiente',
         relationship: 'Familiar',
       },
       membership: {
         id: `mem-${Date.now()}`,
         planName: newUser.planName,
         status: 'active',
-        startDate: new Date().toISOString().slice(0, 10),
+        startDate: '2024-04-01',
         expiryDate: defaultExpiry,
         monthlyFee: fee,
         currency: 'USD',
         autoRenew: true,
         gracePeriodDays: 5,
         daysUntilExpiry: 30,
-        lastPaymentDate: new Date().toISOString().slice(0, 10),
+        lastPaymentDate: '2024-04-01',
         nextPaymentDate: defaultExpiry,
         billingDayOfMonth: billDay,
         hasNutritionPlan: newUser.planName !== 'Kinetix',
         personalCoach: newUser.planName === 'Entrenos Personalizados (Coach Jorge)' ? 'Coach Jorge' : undefined,
         paymentReminderSent: false,
       },
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: new Date().toISOString().split('T')[0],
     };
 
     setUsers(prev => [createdUser, ...prev]);
   };
 
-  // Push / In-page notification simulation
   const handleSimulateNotification = (title: string, body: string) => {
     const newNotif: PushNotificationSimulation = {
       id: `notif-${Date.now()}`,
       title,
       body,
-      timestamp: 'Justo ahora',
-      type: title.toLowerCase().includes('suspendida') ? 'membership_suspension' : 'payment_reminder',
+      timestamp: new Date().toISOString(),
       read: false,
+      type: 'payment_reminder',
     };
     setNotifications(prev => [newNotif, ...prev]);
+    setIsNotificationsOpen(true);
   };
 
   const handleMarkAllNotificationsAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  // Export full technical specification as Markdown file
-  const handleExportMarkdown = () => {
-    let fullMarkdown = `# ESPECIFICACIÓN TÉCNICA Y ARQUITECTURA DE SISTEMA\n`;
-    fullMarkdown += `## Proyecto: Kinetix Functional Zone (Web & Mobile PWA Platform)\n`;
-    fullMarkdown += `Fecha de Generación: ${new Date().toLocaleDateString('es-ES')}\n\n`;
-    fullMarkdown += `--------------------------------------------------\n\n`;
-
-    TECHNICAL_SPEC_SECTIONS.forEach(sec => {
-      fullMarkdown += `# ${sec.title}\n\n`;
-      fullMarkdown += `> ${sec.summary}\n\n`;
-      fullMarkdown += `${sec.contentMarkdown}\n\n`;
-      fullMarkdown += `--------------------------------------------------\n\n`;
-    });
-
-    const blob = new Blob([fullMarkdown], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'Kinetix_Functional_Zone_Especificacion_Tecnica.md');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // IF NOT AUTHENTICATED: Show the Portal de Acceso (Login Page)
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        users={users}
+        gymLogoUrl={gymLogoUrl}
+        onLogin={handleLogin}
+      />
+    );
+  }
+
+  // IF AUTHENTICATED: Render the full responsive application
   return (
     <div data-theme={brandTheme} className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans">
-      {/* Top Bar Header with Kinetix Blue & Red Identity */}
+      {/* Top Bar Header with Kinetix Blue & Red Identity (No switcher buttons) */}
       <NavigationHeader
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        brandTheme={brandTheme}
-        setBrandTheme={setBrandTheme}
+        currentUser={currentUser}
+        gymLogoUrl={gymLogoUrl}
         unreadNotificationsCount={unreadCount}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
-        onPrint={handlePrint}
-        onExportMarkdown={handleExportMarkdown}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onLogout={handleLogout}
       />
 
-      {/* Main View Area */}
+      {/* Main Responsive Application (Works seamlessly on phones and computers) */}
       <main className="flex-1">
-        {/* VIEW 1: Modern Web Platform (Plataforma Web Oficial Responsive) */}
-        {viewMode === 'web' && (
-          <div className="animate-fade-in">
-            <KinetixWebPortal
-              users={users}
-              bodyCompRecords={bodyCompRecords}
-              evaluations={evaluations}
-              notifications={notifications}
-              onAddBodyCompRecord={handleAddBodyCompRecord}
-              onDeleteBodyCompRecord={handleDeleteBodyCompRecord}
-              onUpdateBodyCompRecord={handleUpdateBodyCompRecord}
-              onAddEvaluation={handleAddEvaluation}
-              onDeleteEvaluation={handleDeleteEvaluation}
-              onUpdateEvaluation={handleUpdateEvaluation}
-              onUpdateMembershipStatus={handleUpdateMembershipStatus}
-              onCreateUserByEmail={handleCreateUserByEmail}
-              onOpenNotifications={() => setIsNotificationsOpen(true)}
-              onSimulatePushNotification={handleSimulateNotification}
-              onUpdateUserMembership={handleUpdateUserMembership}
-              onDeleteAthlete={handleDeleteAthlete}
-              onUpdateAthleteProfile={handleUpdateAthleteProfile}
-            />
-          </div>
-        )}
-
-        {/* VIEW 2: Mobile Touch Simulator */}
-        {viewMode === 'simulator' && (
-          <div className="animate-fade-in py-4">
-            <MobileAppSimulator
-              users={users}
-              bodyCompRecords={bodyCompRecords}
-              evaluations={evaluations}
-              notifications={notifications}
-              onAddBodyCompRecord={handleAddBodyCompRecord}
-              onDeleteBodyCompRecord={handleDeleteBodyCompRecord}
-              onUpdateBodyCompRecord={handleUpdateBodyCompRecord}
-              onAddEvaluation={handleAddEvaluation}
-              onDeleteEvaluation={handleDeleteEvaluation}
-              onUpdateEvaluation={handleUpdateEvaluation}
-              onUpdateMembershipStatus={handleUpdateMembershipStatus}
-              onCreateUserByEmail={handleCreateUserByEmail}
-              onUpdateUserMembership={handleUpdateUserMembership}
-              onDeleteAthlete={handleDeleteAthlete}
-              onUpdateAthleteProfile={handleUpdateAthleteProfile}
-            />
-          </div>
-        )}
-
-        {/* VIEW 3: Full Technical Specification Document */}
-        {viewMode === 'spec' && (
-          <div className="animate-fade-in">
-            <TechnicalSpecViewer onOpenSimulator={() => setViewMode('web')} />
-          </div>
-        )}
-
-        {/* VIEW 4: Split View (Spec + Mobile Phone Simulator) */}
-        {viewMode === 'split' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 max-w-[1720px] mx-auto animate-fade-in">
-            <div className="lg:col-span-7 xl:col-span-8 overflow-y-auto">
-              <TechnicalSpecViewer onOpenSimulator={() => setViewMode('web')} />
-            </div>
-
-            <div className="lg:col-span-5 xl:col-span-4 sticky top-20 self-start">
-              <div className="border border-neutral-800 rounded-3xl p-3 bg-neutral-900/30 backdrop-blur-md">
-                <div className="text-center pb-2">
-                  <span className="text-[11px] font-mono text-blue-400 uppercase tracking-wider font-semibold">
-                    Simulador Móvil Conectado en Tiempo Real
-                  </span>
-                </div>
-                <MobileAppSimulator
-                  users={users}
-                  bodyCompRecords={bodyCompRecords}
-                  evaluations={evaluations}
-                  notifications={notifications}
-                  onAddBodyCompRecord={handleAddBodyCompRecord}
-                  onDeleteBodyCompRecord={handleDeleteBodyCompRecord}
-                  onUpdateBodyCompRecord={handleUpdateBodyCompRecord}
-                  onAddEvaluation={handleAddEvaluation}
-                  onDeleteEvaluation={handleDeleteEvaluation}
-                  onUpdateEvaluation={handleUpdateEvaluation}
-                  onUpdateMembershipStatus={handleUpdateMembershipStatus}
-                  onCreateUserByEmail={handleCreateUserByEmail}
-                  onUpdateUserMembership={handleUpdateUserMembership}
-                  onDeleteAthlete={handleDeleteAthlete}
-                  onUpdateAthleteProfile={handleUpdateAthleteProfile}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        <KinetixResponsiveApp
+          currentUser={currentUser}
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          notifications={notifications}
+          onAddBodyCompRecord={handleAddBodyCompRecord}
+          onDeleteBodyCompRecord={handleDeleteBodyCompRecord}
+          onUpdateBodyCompRecord={handleUpdateBodyCompRecord}
+          onAddEvaluation={handleAddEvaluation}
+          onDeleteEvaluation={handleDeleteEvaluation}
+          onUpdateEvaluation={handleUpdateEvaluation}
+          onUpdateMembershipStatus={handleUpdateMembershipStatus}
+          onCreateUserByEmail={handleCreateUserByEmail}
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
+          onSimulatePushNotification={handleSimulateNotification}
+          onUpdateUserMembership={handleUpdateUserMembership}
+          onDeleteAthlete={handleDeleteAthlete}
+          onUpdateAthleteProfile={handleUpdateAthleteProfile}
+          onSwitchUser={(u) => setCurrentUserId(u.id)}
+        />
       </main>
+
+      {/* Profile & Gym Logo Modal */}
+      {isProfileModalOpen && (
+        <UserProfileAndLogoModal
+          currentUser={currentUser}
+          gymLogoUrl={gymLogoUrl}
+          onUpdateAvatar={handleUpdateAvatar}
+          onUpdateGymLogo={handleUpdateGymLogo}
+          onLogout={handleLogout}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
 
       {/* In-Page Notification Modal Drawer */}
       <InAppNotificationCenter
@@ -363,31 +345,9 @@ export default function App() {
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
         onSimulateNewNotification={() => handleSimulateNotification(
           'Recordatorio de Pago Kinetix',
-          'Hola Sarah, tu membresía vence el 30 de Abril, 2024. Monto a Pagar: $89.99. Por favor contacta al gimnasio para renovar tu membresía.'
+          'Hola, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.'
         )}
       />
-
-      {/* Executive Footer */}
-      <footer className="border-t border-neutral-900 bg-neutral-950 py-6 px-4 md:px-8 text-neutral-500 text-xs no-print">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-white font-extrabold text-[10px]">
-              KZ
-            </span>
-            <span className="text-neutral-200 font-bold font-brand">KINETIX Functional Zone</span>
-            <span className="text-neutral-600">·</span>
-            <span className="text-neutral-400">Plataforma Oficial de Gestión & Rendimiento</span>
-          </div>
-
-          <div className="text-neutral-500 text-[11px] flex items-center gap-4">
-            <span className="text-blue-400">Azul & Rojo Oficial</span>
-            <span>·</span>
-            <span>Fórmulas: OMS / Cooper (Niveles 1-5) / 1RM</span>
-            <span>·</span>
-            <span className="text-neutral-400">Control Interno de Atletas & Staff</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

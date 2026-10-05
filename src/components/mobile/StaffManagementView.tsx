@@ -56,6 +56,7 @@ interface StaffManagementViewProps {
   onDeleteAthlete?: (userId: string) => void;
   onUpdateAthleteProfile?: (userId: string, updates: Partial<UserProfile>) => void;
   onBackToDashboard?: () => void;
+  currentUser?: UserProfile;
 }
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
@@ -68,6 +69,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onDeleteAthlete,
   onUpdateAthleteProfile,
   onBackToDashboard,
+  currentUser,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,7 +101,13 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   // Payment color filter state: 'all' | 5 | 15 | 20 | 30
   const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30>('all');
 
-  const coachUser = users.find(u => u.role === 'staff' || u.id === 'user-staff-01') || users[0];
+  const activeStaff = currentUser && currentUser.role === 'staff' 
+    ? currentUser 
+    : (users.find(u => u.role === 'staff' || u.id === 'user-staff-leslie' || u.id === 'user-staff-01') || users[0]);
+
+  const isOwner = activeStaff.staffRole === 'owner' || activeStaff.id === 'user-staff-leslie' || activeStaff.id === 'user-staff-01' || !activeStaff.staffRole;
+  const isCoachGus = activeStaff.staffRole === 'coach' || activeStaff.id === 'user-staff-gus';
+  const staffMembers = users.filter(u => u.role === 'staff');
 
   const filteredAthletes = users.filter(u => {
     if (u.role !== 'athlete') return false;
@@ -196,29 +204,35 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </button>
       </div>
 
-      {/* COACH'S OWN PERSONAL PROGRESS PANEL (Progreso Personal del Coach) */}
+      {/* COACH'S OWN PERSONAL PROGRESS PANEL (Progreso Personal del Coach en Sesión) */}
       <div className="p-4 rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-900/90 to-red-950/30 border border-red-900/40 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img
-              src={coachUser.avatarUrl}
-              alt={coachUser.name}
+              src={activeStaff.avatarUrl}
+              alt={activeStaff.name}
               className="w-10 h-10 rounded-2xl object-cover border-2 border-red-500/50 shadow-md"
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">{coachUser.name}</h3>
-                <span className="text-[9px] bg-red-600 text-white font-extrabold uppercase px-2 py-0.5 rounded-full shadow-sm">
-                  Head Coach
+                <h3 className="text-sm font-bold text-white">{activeStaff.name}</h3>
+                <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full shadow-sm ${
+                  isOwner ? 'bg-red-600 text-white' : 'bg-amber-600 text-white'
+                }`}>
+                  {isOwner ? 'Dueño/a · Control Total' : 'Coach / Profe'}
                 </span>
               </div>
-              <span className="text-[11px] text-neutral-400 font-medium">Mi Monitoreo Personal de Rendimiento & Composición</span>
+              <span className="text-[11px] text-neutral-400 font-medium">
+                {isOwner 
+                  ? 'Acceso total a finanzas, logo, membresías y atletas'
+                  : 'Acceso a evaluaciones 1RM, Cooper, pesajes y clases'}
+              </span>
             </div>
           </div>
 
           <button
-            onClick={() => onSelectUserToInspect(coachUser)}
+            onClick={() => onSelectUserToInspect(activeStaff)}
             className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700/80 transition-all flex items-center gap-1"
             title="Ver mi panel personal de atleta y entrenador"
           >
@@ -256,7 +270,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         {/* Coach Quick Actions for Himself */}
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-800/60">
           <button
-            onClick={() => onOpenBodyCompForUser ? onOpenBodyCompForUser(coachUser) : onSelectUserToInspect(coachUser)}
+            onClick={() => onOpenBodyCompForUser ? onOpenBodyCompForUser(activeStaff) : onSelectUserToInspect(activeStaff)}
             className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
           >
             <Scale className="w-3.5 h-3.5 text-blue-400" />
@@ -264,12 +278,56 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           </button>
 
           <button
-            onClick={() => onOpenTestEntryForUser(coachUser)}
+            onClick={() => onOpenTestEntryForUser(activeStaff)}
             className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
           >
             <Dumbbell className="w-3.5 h-3.5 text-red-400" />
             <span>Registrar Mi Test Físico</span>
           </button>
+        </div>
+      </div>
+
+      {/* EQUIPO DE COACHES & DIRECCIÓN KINETIX (Permisos Diferenciados) */}
+      <div className="p-3.5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-white">
+            <ShieldCheck className="w-4 h-4 text-red-500" />
+            <span>Equipo Oficial de Coaches Kinetix ({staffMembers.length})</span>
+          </div>
+          <span className="text-[10px] text-neutral-400 font-mono">
+            {isOwner ? '👑 Tienes Control Total' : '🏋️ Permisos Operativos de Profe'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          {staffMembers.map(staff => {
+            const isStaffOwner = staff.staffRole === 'owner' || staff.id === 'user-staff-leslie' || staff.id === 'user-staff-01';
+            return (
+              <div 
+                key={staff.id}
+                className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800/80 flex items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <img
+                    src={staff.avatarUrl}
+                    alt={staff.name}
+                    className="w-8 h-8 rounded-lg object-cover shrink-0 border border-neutral-700"
+                  />
+                  <div className="overflow-hidden">
+                    <strong className="text-xs text-white block truncate">{staff.name}</strong>
+                    <span className="text-[10px] text-neutral-400 block truncate font-mono">{staff.email}</span>
+                  </div>
+                </div>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+                  isStaffOwner 
+                    ? 'bg-red-950 text-red-400 border border-red-800' 
+                    : 'bg-amber-950 text-amber-400 border border-amber-800'
+                }`}>
+                  {isStaffOwner ? 'Dueño/a' : 'Profe'}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -942,9 +1000,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </button>
                 </div>
 
-                {/* DANGER ZONE: Eliminar Atleta */}
+                {/* DANGER ZONE: Eliminar Atleta (Solo Dueños: Leslie & Jorge) */}
                 <div className="pt-2 border-t border-neutral-800/80">
-                  {!showDeleteConfirm ? (
+                  {!isOwner ? (
+                    <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 text-[11px] text-neutral-400 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>La baja permanente y eliminación de atletas está restringida a los dueños (Leslie & Jorge).</span>
+                    </div>
+                  ) : !showDeleteConfirm ? (
                     <button
                       type="button"
                       onClick={() => setShowDeleteConfirm(true)}
