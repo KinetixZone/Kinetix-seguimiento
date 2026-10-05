@@ -257,7 +257,7 @@ export const INITIAL_PHYSICAL_EVAL_JUAN: PhysicalEvaluationRecord[] = [
       notes: 'Ritmo estable, fatiga en últimos 2 minutos.',
     },
     enduranceTest: {
-      name: '100 Lagartijas por tiempo',
+      name: 'Evaluación de Resistencia Funcional',
       result: '7:42 min',
       scoreScoreLevel: 'Intermedio',
     },
@@ -287,7 +287,7 @@ export const INITIAL_PHYSICAL_EVAL_JUAN: PhysicalEvaluationRecord[] = [
       notes: 'Capacidad aeróbica sobresaliente. Paso constante a 4:17/km.',
     },
     enduranceTest: {
-      name: '100 Lagartijas por tiempo',
+      name: 'Evaluación de Resistencia Funcional',
       result: '7:14 min',
       scoreScoreLevel: 'Avanzado',
     },
@@ -390,7 +390,7 @@ export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [
       notes: 'Ritmo demoledor a 4:00/km sostenido.',
     },
     enduranceTest: {
-      name: '100 Lagartijas por tiempo',
+      name: 'Evaluación de Resistencia Funcional',
       result: '06:15 min',
       timeSeconds: 375,
       scoreScoreLevel: 'Élite',
@@ -422,7 +422,7 @@ export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [
       notes: 'Supera los 3,100 metros en 12 minutos (+120m vs test previo).',
     },
     enduranceTest: {
-      name: '100 Lagartijas por tiempo',
+      name: 'Evaluación de Resistencia Funcional',
       result: '05:48 min',
       timeSeconds: 348,
       scoreScoreLevel: 'Élite',
@@ -435,7 +435,7 @@ export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [
       { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 125, reps: 1, estimated1RMKg: 125, weightUnit: 'kg' },
       { exerciseId: 'pullups_or_rows', exerciseName: 'Dominadas Lastradas', weightKg: 110, reps: 12, estimated1RMKg: 145, weightUnit: 'kg' },
     ],
-    generalCoachNotes: 'Progresión personal sobresaliente. +10kg en sentadillas y 100 lagartijas en menos de 6 minutos.',
+    generalCoachNotes: 'Progresión personal sobresaliente. +10kg en sentadillas y test de resistencia completado en 5:48 min.',
   },
 ];
 

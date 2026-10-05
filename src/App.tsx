@@ -22,7 +22,7 @@ import {
 } from './types';
 
 export default function App() {
-  // Default to 'web' as requested by user (Web page gratis como https://kinetix-control.vercel.app/)
+  // Default to 'web' (Plataforma Web Oficial Kinetix)
   const [viewMode, setViewMode] = useState<'web' | 'simulator' | 'spec' | 'split'>('web');
   const [brandTheme, setBrandTheme] = useState<BrandTheme>('blue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
@@ -263,7 +263,7 @@ export default function App() {
 
       {/* Main View Area */}
       <main className="flex-1">
-        {/* VIEW 1: Modern Web Platform (Vercel Style / Responsive Web App) */}
+        {/* VIEW 1: Modern Web Platform (Plataforma Web Oficial Responsive) */}
         {viewMode === 'web' && (
           <div className="animate-fade-in">
             <KinetixWebPortal
@@ -376,7 +376,7 @@ export default function App() {
             </span>
             <span className="text-neutral-200 font-bold font-brand">KINETIX Functional Zone</span>
             <span className="text-neutral-600">·</span>
-            <span className="text-neutral-400">Plataforma Web Oficial & PWA Gratuita (Vercel)</span>
+            <span className="text-neutral-400">Plataforma Oficial de Gestión & Rendimiento</span>
           </div>
 
           <div className="text-neutral-500 text-[11px] flex items-center gap-4">
@@ -384,7 +384,7 @@ export default function App() {
             <span>·</span>
             <span>Fórmulas: OMS / Cooper (Niveles 1-5) / 1RM</span>
             <span>·</span>
-            <span>https://kinetix-control.vercel.app/</span>
+            <span className="text-neutral-400">Control Interno de Atletas & Staff</span>
           </div>
         </div>
       </footer>

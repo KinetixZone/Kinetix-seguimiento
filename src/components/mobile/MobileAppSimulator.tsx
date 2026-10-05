@@ -389,6 +389,11 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               }}
               onCreateUserByEmail={onCreateUserByEmail}
               onOpenTestEntryForUser={handleOpenEvaluationForUser}
+              onOpenBodyCompForUser={(u) => {
+                setSelectedUserId(u.id);
+                setIsInspectingAthlete(true);
+                setCurrentTab('body');
+              }}
               onUpdateUserMembership={onUpdateUserMembership}
               onDeleteAthlete={onDeleteAthlete}
               onUpdateAthleteProfile={onUpdateAthleteProfile}

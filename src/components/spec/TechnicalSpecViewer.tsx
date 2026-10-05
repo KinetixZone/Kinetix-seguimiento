@@ -131,7 +131,7 @@ export const TechnicalSpecViewer: React.FC<TechnicalSpecViewerProps> = ({ onOpen
             </button>
             <div className="flex items-center gap-3 text-xs text-neutral-400 px-3 py-2 bg-neutral-950/60 rounded-xl border border-neutral-800">
               <CheckCircle2 className="w-4 h-4 text-blue-400" />
-              <span>Web PWA Gratuita (Vercel) · Cooper Niveles 1-5 · Azul & Rojo</span>
+              <span>Portal Web Oficial · Cooper Niveles 1-5 · Pagos por Color</span>
             </div>
           </div>
         </div>
@@ -195,7 +195,7 @@ export const TechnicalSpecViewer: React.FC<TechnicalSpecViewerProps> = ({ onOpen
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-400">✓</span>
-                <span><strong>Plataforma Web Gratuita:</strong> Despliegue en Vercel sin comisiones de tiendas de apps.</span>
+                <span><strong>Portal Web Oficial & Pagos por Color:</strong> Códigos Azul (5), Rojo (15), Rosa (20) y Verde (30) con control manual de acceso.</span>
               </li>
             </ul>
           </div>

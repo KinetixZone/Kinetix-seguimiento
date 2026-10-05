@@ -417,14 +417,18 @@ La identidad gráfica oficial de Kinetix Functional Zone transmite alto rendimie
 
 ---
 
-### 5.6 Despliegue Web Gratuito (Vercel PWA) vs Tiendas de Aplicaciones
-A solicitud de Kinetix Functional Zone (referencia: \`https://kinetix-control.vercel.app/\`), el sistema está diseñado primordialmente como una **Plataforma Web Progresiva (PWA)**:
-1. **100% Gratuito en Alojamiento:** Puede desplegarse en Vercel sin costos fijos de servidores, beneficiándose de SSL automático y CDN global.
-2. **Cero Costos de Tiendas:** Evita el pago recurrente de $99 USD/año del Apple Developer Program y la tasa de Google Play.
-3. **Instalación con 1 Clic en Móviles:** El atleta abre la web en Safari o Chrome, presiona *"Agregar a pantalla de inicio"* y la aplicación se comporta como una app nativa (pantalla completa, sin barra de URL, ícono propio KZ).
-4. **Notificaciones Directas en Página (In-App):** El usuario recibe recordatorios de pago y avisos de resultados de pruebas directamente en la campana de notificaciones de la página, sin requerir pasarelas externas de WhatsApp hasta fases posteriores.
-5. **Acceso sin Barreras de QR:** Sin necesidad de lectores de torniquetes QR por el momento; se valida la membresía visualmente con la tarjeta de credencial digital del atleta (Verde/Activo, Ámbar/Gracia o Rojo/Suspendido).
-6. **Captura Directa de Nivel Cooper por Staff:** El entrenador solo asigna el Nivel alcanzado (Nivel 1 al 5) y el sistema despliega el diagnóstico completo al atleta sin fricción.`
+### 5.6 Arquitectura de Plataforma Web Kinetix & Sistema de Pagos por Colores
+El sistema está diseñado como una **Plataforma Web Oficial & Progresiva** para Kinetix Functional Zone:
+1. **Acceso Universal Multiplataforma:** Disponible desde cualquier navegador web (móvil y escritorio) con sincronización en tiempo real.
+2. **Sistema de Pagos Codificado por Colores:**
+   - 🔵 **Código Azul:** Vencimiento el día 5 de cada mes.
+   - 🔴 **Código Rojo:** Vencimiento el día 15 de cada mes.
+   - 🌸 **Código Rosa:** Vencimiento el día 20 de cada mes.
+   - 🟢 **Código Verde:** Vencimiento el día 30 de cada mes.
+3. **Control Manual de Acceso para Entrenadores:** Pausa o reactivación instantánea de membresías con 1 solo clic por parte del Coach para control total del gimnasio.
+4. **Notificaciones Directas en Plataforma (In-App):** El usuario recibe recordatorios de pago y avisos de resultados de pruebas directamente en la campana de notificaciones.
+5. **Validación Visual de Membresías:** Credencial digital con código de color de corte y estado de cuenta (Activa, Por Vencer o Pausada).
+6. **Captura Directa de Nivel Cooper y Tests Físicos:** El entrenador asigna el Nivel alcanzado (Niveles 1 al 5), pruebas de fuerza 1RM y resistencia funcional.`
   },
   {
     id: 'seguridad-privacidad',

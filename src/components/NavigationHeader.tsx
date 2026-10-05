@@ -43,7 +43,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
           </a>
         </div>
 
-        {/* Zone 2: View Mode Switcher (Web App Vercel vs Mobile Simulator vs Tech Spec) */}
+        {/* Zone 2: View Mode Switcher (Web App vs Mobile Simulator vs Tech Spec) */}
         <div className="flex items-center gap-2">
           <nav className="flex items-center bg-neutral-900/90 p-1 rounded-xl border border-neutral-800">
             <button
@@ -55,7 +55,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Plataforma Web (Vercel)</span>
+              <span>Plataforma Web</span>
             </button>
 
             <button

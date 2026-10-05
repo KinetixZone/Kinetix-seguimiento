@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, MembershipStatus } from '../../types';
+import { getPaymentGroup } from '../../utils/paymentColorCodes';
 import { 
   CreditCard, 
   Calendar, 
@@ -136,13 +137,32 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   🏋️ Personalizado: {mem.personalCoach}
                 </span>
               )}
-              <span className="text-[10px] text-blue-400 font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">
-                Día {mem.billingDayOfMonth || 15} de corte
-              </span>
+              {(() => {
+                const pg = getPaymentGroup(mem.billingDayOfMonth);
+                return (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
+                    <span>{pg.dotEmoji}</span>
+                    <span>{pg.label}</span>
+                  </span>
+                );
+              })()}
             </div>
           </div>
           <div>{getStatusBadge(mem.status)}</div>
         </div>
+
+        {/* Warning if paused / suspended */}
+        {mem.status === 'suspended' && (
+          <div className="p-3 my-2 rounded-2xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-start gap-2 shadow-lg">
+            <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-white font-bold">ACCESO PAUSADO POR EL STAFF</strong>
+              <p className="text-[11px] text-red-300/90 leading-relaxed mt-0.5">
+                Tu acceso a reservas y seguimiento se encuentra temporalmente en pausa. Por favor ponte en contacto con Coach Jorge o acércate a recepción para regularizar tu pago del día {mem.billingDayOfMonth || 15} de cada mes.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Plan Details & Expiry Date */}
         <div className="grid grid-cols-2 gap-3 py-3 border-b border-neutral-800/80 text-xs">

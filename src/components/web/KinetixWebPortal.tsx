@@ -101,25 +101,23 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Vercel Free Hosting & Web Platform Banner */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-950/60 via-neutral-900 to-red-950/40 border border-blue-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Kinetix Executive Management Portal Header */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs font-mono text-blue-400">
-            <Globe className="w-3.5 h-3.5" />
-            <span>PLATAFORMA WEB OFICIAL · ACCESO DESDE CUALQUIER NAVEGADOR</span>
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span>PORTAL DE GESTIÓN & RENDIMIENTO FÍSICO</span>
             <span>·</span>
-            <span className="text-red-400 font-bold">100% GRATIS EN VERCEL</span>
+            <span className="text-red-400 font-bold">KINETIX FUNCTIONAL ZONE</span>
           </div>
-          <h2 className="text-lg sm:text-xl font-bold text-white font-brand flex items-center gap-2">
-            <span>Kinetix Control Web</span>
-            <span className="text-xs font-normal text-neutral-400 font-mono bg-neutral-900 px-2.5 py-0.5 rounded-full border border-neutral-800">
-              https://kinetix-control.vercel.app/
+          <h2 className="text-lg sm:text-xl font-bold text-white font-brand flex items-center gap-2.5">
+            <span>Panel Oficial del Atleta & Entrenador</span>
+            <span className="text-xs font-medium text-neutral-300 bg-neutral-950 px-2.5 py-0.5 rounded-full border border-neutral-800">
+              {currentUser.name} ({currentUser.membership.planName})
             </span>
           </h2>
-          <p className="text-xs text-neutral-300 max-w-2xl leading-relaxed">
-            ¡Sí, puede ser totalmente una <strong>página web / aplicación web progresiva (PWA) gratuita</strong>! 
-            No necesitas pagar la licencia de $99 USD/año de Apple ni tiendas de apps. 
-            Tus atletas abren el enlace en su celular, tocan <em>"Agregar a pantalla de inicio"</em> y se instala gratis con ícono propio.
+          <p className="text-xs text-neutral-400 max-w-2xl leading-relaxed">
+            Supervisa en tiempo real el progreso de fuerza 1RM, nivel cardiorrespiratorio en Cooper, evaluaciones de resistencia y estados de pago codificados por color.
           </p>
         </div>
 
@@ -136,7 +134,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           <button
             onClick={() => onSimulatePushNotification(
               'Recordatorio de Pago Kinetix',
-              'Hola Sarah, tu membresía vence el 30 de Abril, 2024. Monto a Pagar: $89.99. Por favor contacta al gimnasio para renovar tu membresía.'
+              `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence el ${currentUser.membership.expiryDate}. Por favor contacta al gimnasio para renovar tu membresía.`
             )}
             className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs border border-neutral-700/80 transition-colors flex items-center gap-1.5"
           >
@@ -377,6 +375,11 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
                 setCurrentSection('tests');
+              }}
+              onOpenBodyCompForUser={(u) => {
+                setSelectedUserId(u.id);
+                setIsInspectingAthlete(true);
+                setCurrentSection('body');
               }}
               onUpdateUserMembership={onUpdateUserMembership}
               onDeleteAthlete={onDeleteAthlete}

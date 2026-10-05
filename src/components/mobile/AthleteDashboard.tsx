@@ -1,5 +1,6 @@
 import React from 'react';
 import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord } from '../../types';
+import { getPaymentGroup } from '../../utils/paymentColorCodes';
 import { 
   TrendingUp, 
   Activity, 
@@ -14,7 +15,8 @@ import {
   Share2,
   Instagram,
   CreditCard,
-  Flame
+  Flame,
+  ShieldAlert
 } from 'lucide-react';
 
 interface AthleteDashboardProps {
@@ -70,6 +72,25 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
         </div>
       </div>
 
+      {/* Paused Access Alert Banner */}
+      {isSuspended && (
+        <div className="p-3.5 rounded-2xl bg-red-950/90 border border-red-800 flex items-center justify-between text-xs text-red-200 shadow-xl shadow-red-950/50">
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+            <div>
+              <strong className="block text-white font-bold">ACCESO PAUSADO POR EL STAFF</strong>
+              <span className="text-[11px] text-red-300/90">Tu membresía se encuentra pausada. Contacta a Coach Jorge para reactivar tu acceso y reservas.</span>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab('membership')}
+            className="px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs whitespace-nowrap active:scale-95 transition-all"
+          >
+            Ver Detalle
+          </button>
+        </div>
+      )}
+
       {/* PERMANENT PAYMENT DUE DATE WIDGET (Siempre visible para el atleta) */}
       <div className={`p-3.5 rounded-2xl border transition-all ${
         isSuspended
@@ -98,14 +119,18 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                   {currentUser.membership.expiryDate}
                 </span>
               </div>
-              <div className="text-[10px] text-neutral-400 flex items-center gap-1.5 flex-wrap">
+              <div className="text-[10px] text-neutral-400 flex items-center gap-1.5 flex-wrap mt-0.5">
                 <span>Plan: <strong className="text-neutral-200">{currentUser.membership.planName}</strong></span>
-                {currentUser.membership.billingDayOfMonth && (
-                  <>
-                    <span>·</span>
-                    <span className="text-blue-400 font-mono">Corte: Día {currentUser.membership.billingDayOfMonth} de cada mes</span>
-                  </>
-                )}
+                <span>·</span>
+                {(() => {
+                  const pg = getPaymentGroup(currentUser.membership.billingDayOfMonth);
+                  return (
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
+                      <span>{pg.dotEmoji}</span>
+                      <span>{pg.label}</span>
+                    </span>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 {currentUser.membership.hasNutritionPlan && (

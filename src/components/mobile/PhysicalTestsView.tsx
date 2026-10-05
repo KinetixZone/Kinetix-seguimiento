@@ -88,7 +88,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
   
   // Test de Resistencia (Por tiempo)
-  const [enduranceExerciseName, setEnduranceExerciseName] = useState<string>('100 Lagartijas por tiempo');
+  const [enduranceExerciseName, setEnduranceExerciseName] = useState<string>('Evaluación de Resistencia Funcional');
   const [enduranceMinutes, setEnduranceMinutes] = useState<number>(7);
   const [enduranceSeconds, setEnduranceSeconds] = useState<number>(14);
   const [enduranceScoreLevel, setEnduranceScoreLevel] = useState<'Básico' | 'Intermedio' | 'Avanzado' | 'Élite'>('Avanzado');
@@ -133,7 +133,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setEvalDate(new Date().toISOString().slice(0, 10));
     setSelectedCooperLevel(latestEval ? (latestEval.cooperTest.levelNumber || 5) : 5);
     setOptionalDistance(latestEval?.cooperTest.distanceMeters || 2800);
-    setEnduranceExerciseName(latestEval?.enduranceTest.name || '100 Lagartijas por tiempo');
+    setEnduranceExerciseName(latestEval?.enduranceTest.name || 'Evaluación de Resistencia Funcional');
     setEnduranceMinutes(7);
     setEnduranceSeconds(14);
     setEnduranceScoreLevel('Avanzado');
@@ -232,7 +232,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Quick preset exercises for endurance
   const ENDURANCE_PRESETS = [
-    '100 Lagartijas por tiempo',
+    'Evaluación de Resistencia Funcional',
     '50 Burpees for time',
     'Remo 2000m',
     '100 Sentadillas con salto',
@@ -706,7 +706,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: TEST DE RESISTENCIA (POR TIEMPO - RETOS ROTATIVOS COMO 100 LAGARTIJAS) */}
+      {/* TAB 3: TEST DE RESISTENCIA (POR TIEMPO - RETOS ROTATIVOS FUNCIONALES) */}
       {/* ========================================================================= */}
       {activeTab === 'endurance' && latestEval && (
         <div className="space-y-4">
@@ -777,7 +777,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/80 text-[11px] text-neutral-400 space-y-1">
               <strong className="text-neutral-200 block">¿Cómo funciona el Test de Resistencia en Kinetix?</strong>
               <p className="leading-relaxed">
-                Los ejercicios van rotando según el ciclo de entrenamiento (ej. <strong>100 lagartijas</strong>, <strong>50 burpees</strong>, <strong>remo 2000m</strong>). 
+                Los ejercicios van rotando según el ciclo de entrenamiento (ej. <strong>50 burpees</strong>, <strong>remo 2000m</strong>, <strong>100 sentadillas</strong>). 
                 El Coach solo registra el <strong>tiempo total</strong> en que lo completas para medir tu potencia anaeróbica y velocidad de recuperación neuromuscular.
               </p>
             </div>
@@ -1009,7 +1009,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       setEvalDate(ev.evaluationDate);
                       setSelectedCooperLevel(ev.cooperTest.levelNumber || 5);
                       setOptionalDistance(ev.cooperTest.distanceMeters || 2800);
-                      setEnduranceExerciseName(ev.enduranceTest.name || '100 Lagartijas por tiempo');
+                      setEnduranceExerciseName(ev.enduranceTest.name || 'Evaluación de Resistencia Funcional');
                       const sec = parseSecondsFromTimeStr(ev.enduranceTest.result);
                       setEnduranceMinutes(Math.floor(sec / 60));
                       setEnduranceSeconds(sec % 60);

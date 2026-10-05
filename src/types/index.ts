@@ -100,7 +100,7 @@ export interface StrengthMaxRecord {
 }
 
 export interface EnduranceTimeTestRecord {
-  name: string; // e.g., "100 Lagartijas por tiempo" o "Remo 2000m"
+  name: string; // e.g., "Evaluación de Resistencia Funcional" o "Remo 2000m"
   result: string; // e.g., "7:14 min"
   timeSeconds?: number;
   scoreScoreLevel?: 'Básico' | 'Intermedio' | 'Avanzado' | 'Élite';
