@@ -520,7 +520,7 @@ export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
   {
     id: 'notif-1',
     title: 'Recordatorio de Pago Kinetix',
-    body: 'Hola Sarah, tu membresía vence el 30 de Abril, 2024. Monto a Pagar: $89.99. Por favor contacta al gimnasio para renovar tu membresía.',
+    body: 'Hola Sarah, tu membresía vence el 30 de Abril, 2024. Por favor contacta al gimnasio para renovar tu membresía.',
     timestamp: '2024-04-15 09:00',
     type: 'payment_reminder',
     read: false,
