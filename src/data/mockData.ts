@@ -443,7 +443,6 @@ export const INITIAL_BODY_COMP_COACH: BodyCompositionRecord[] = [
 ];
 
 export const ALL_INITIAL_BODY_COMP: BodyCompositionRecord[] = [
-  ...INITIAL_BODY_COMP_JUAN,
   ...INITIAL_BODY_COMP_COACH,
 ];
 
@@ -516,18 +515,16 @@ export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [
 ];
 
 export const ALL_INITIAL_PHYSICAL_EVALS: PhysicalEvaluationRecord[] = [
-  ...INITIAL_PHYSICAL_EVAL_JUAN,
-  ...INITIAL_PHYSICAL_EVAL_MARIA,
   ...INITIAL_PHYSICAL_EVAL_COACH,
 ];
 
 export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
   {
-    id: 'notif-1',
-    title: 'Recordatorio de Pago Kinetix',
-    body: 'Hola Sarah, tu membresía vence el 30 de Abril, 2024. Por favor contacta al gimnasio para renovar tu membresía.',
+    id: 'notif-welcome',
+    title: 'Bienvenido al Portal Kinetix',
+    body: 'Plataforma oficial activa. Registra tus evaluaciones de Cooper, RM de fuerza y seguimiento funcional.',
     timestamp: '2024-04-15 09:00',
-    type: 'payment_reminder',
+    type: 'milestone',
     read: false,
   },
   {

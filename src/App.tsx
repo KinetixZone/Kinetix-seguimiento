@@ -41,11 +41,25 @@ export default function App() {
     }
   });
   
-  // Data State with full local persistence
+  // Data State with full local persistence (Sanitizes legacy demo profiles automatically)
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('kinetix_users_data');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: UserProfile[] = JSON.parse(saved);
+        const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
+        const cleanUsers = parsed.filter(u => !demoIds.includes(u.id));
+        
+        // Ensure official staff members always have latest profile data
+        const officialStaff = INITIAL_USERS.filter(s => s.role === 'staff');
+        const finalUsers = [
+          ...officialStaff,
+          ...cleanUsers.filter(u => u.role !== 'staff')
+        ];
+        
+        localStorage.setItem('kinetix_users_data', JSON.stringify(finalUsers));
+        return finalUsers;
+      }
     } catch {}
     return INITIAL_USERS;
   });
@@ -53,7 +67,13 @@ export default function App() {
   const [bodyCompRecords, setBodyCompRecords] = useState<BodyCompositionRecord[]>(() => {
     try {
       const saved = localStorage.getItem('kinetix_body_comp_data');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: BodyCompositionRecord[] = JSON.parse(saved);
+        const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
+        const clean = parsed.filter(b => !demoIds.includes(b.userId));
+        localStorage.setItem('kinetix_body_comp_data', JSON.stringify(clean));
+        return clean;
+      }
     } catch {}
     return ALL_INITIAL_BODY_COMP;
   });
@@ -61,7 +81,13 @@ export default function App() {
   const [evaluations, setEvaluations] = useState<PhysicalEvaluationRecord[]>(() => {
     try {
       const saved = localStorage.getItem('kinetix_evaluations_data');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: PhysicalEvaluationRecord[] = JSON.parse(saved);
+        const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
+        const clean = parsed.filter(e => !demoIds.includes(e.userId));
+        localStorage.setItem('kinetix_evaluations_data', JSON.stringify(clean));
+        return clean;
+      }
     } catch {}
     return ALL_INITIAL_PHYSICAL_EVALS;
   });
