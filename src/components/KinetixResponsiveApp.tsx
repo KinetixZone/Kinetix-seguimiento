@@ -64,6 +64,8 @@ interface KinetixResponsiveAppProps {
   ) => void;
   onDeleteAthlete?: (userId: string) => void;
   onUpdateAthleteProfile?: (userId: string, updates: Partial<UserProfile>) => void;
+  onClearDemoAthletes?: () => void;
+  onRestoreDemoAthletes?: () => void;
   onSwitchUser: (user: UserProfile) => void;
 }
 
@@ -86,6 +88,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onUpdateUserMembership,
   onDeleteAthlete,
   onUpdateAthleteProfile,
+  onClearDemoAthletes,
+  onRestoreDemoAthletes,
   onSwitchUser,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff'>('dashboard');
@@ -430,6 +434,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onUpdateUserMembership={onUpdateUserMembership}
             onDeleteAthlete={onDeleteAthlete}
             onUpdateAthleteProfile={onUpdateAthleteProfile}
+            onClearDemoAthletes={onClearDemoAthletes}
+            onRestoreDemoAthletes={onRestoreDemoAthletes}
             onBackToDashboard={handleGoHome}
           />
         )}

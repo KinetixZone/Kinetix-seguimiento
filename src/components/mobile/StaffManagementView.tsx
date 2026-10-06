@@ -32,7 +32,8 @@ import {
   TrendingUp,
   Info,
   FileSpreadsheet,
-  Bell
+  Bell,
+  RotateCcw
 } from 'lucide-react';
 
 interface StaffManagementViewProps {
@@ -60,6 +61,8 @@ interface StaffManagementViewProps {
   ) => void;
   onDeleteAthlete?: (userId: string) => void;
   onUpdateAthleteProfile?: (userId: string, updates: Partial<UserProfile>) => void;
+  onClearDemoAthletes?: () => void;
+  onRestoreDemoAthletes?: () => void;
   onBackToDashboard?: () => void;
   onOpenSendNotification?: () => void;
   currentUser?: UserProfile;
@@ -76,6 +79,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onUpdateUserMembership,
   onDeleteAthlete,
   onUpdateAthleteProfile,
+  onClearDemoAthletes,
+  onRestoreDemoAthletes,
   onBackToDashboard,
   onOpenSendNotification,
   currentUser,
@@ -215,6 +220,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             >
               <Bell className="w-3.5 h-3.5 text-blue-400" />
               <span>Mandar Avisos</span>
+            </button>
+          )}
+
+          {isOwner && users.some(u => u.role === 'athlete') && onClearDemoAthletes && (
+            <button
+              onClick={() => {
+                if (window.confirm('¿Deseas eliminar los alumnos de prueba y dejar la plataforma limpia únicamente con el Staff oficial (Leslie, Coach Jorge y Gus)?')) {
+                  onClearDemoAthletes();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-red-950/70 border border-neutral-700/80 hover:border-red-700/80 text-neutral-300 hover:text-red-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
+              title="Eliminar perfiles de prueba y dejar la base de datos limpia"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Limpiar Atletas Demo</span>
             </button>
           )}
 
@@ -444,7 +464,39 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           Atletas en Lista ({filteredAthletes.length})
         </span>
 
-        {filteredAthletes.map((athlete) => {
+        {filteredAthletes.length === 0 ? (
+          <div className="p-8 rounded-3xl bg-neutral-900/60 border border-neutral-800 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <strong className="text-white text-sm block font-brand">Base de Datos Lista (Solo Staff Oficial)</strong>
+              <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                No hay alumnos registrados. La plataforma está limpia para comenzar a registrar a tus atletas reales de Kinetix con su correo y plan.
+              </p>
+            </div>
+            <div className="pt-2 flex items-center justify-center gap-2.5 flex-wrap">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition-all active:scale-95"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Alta de Primer Alumno</span>
+              </button>
+              {isOwner && onRestoreDemoAthletes && (
+                <button
+                  onClick={onRestoreDemoAthletes}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-all"
+                  title="Cargar los 4 alumnos demo si deseas realizar pruebas visuales"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Cargar Alumnos Demo (Pruebas)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          filteredAthletes.map((athlete) => {
           const pg = getPaymentGroup(athlete.membership.billingDayOfMonth);
           const isSuspended = athlete.membership.status === 'suspended';
           const isExpiringSoon = athlete.membership.status === 'expiring_soon';
@@ -587,7 +639,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
             </div>
           );
-        })}
+        })
+      )}
       </div>
 
       {/* MODAL: ALTA DE ATLETA POR CORREO */}

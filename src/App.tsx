@@ -7,6 +7,7 @@ import { InAppNotificationCenter } from './components/common/InAppNotificationCe
 import { SendNotificationModal } from './components/common/SendNotificationModal';
 import { 
   INITIAL_USERS, 
+  DEMO_ATHLETES,
   ALL_INITIAL_BODY_COMP,
   ALL_INITIAL_PHYSICAL_EVALS,
   INITIAL_NOTIFICATIONS 
@@ -288,6 +289,18 @@ export default function App() {
     setUsers(prev => [createdUser, ...prev]);
   };
 
+  const handleClearDemoAthletes = () => {
+    // Keep only official staff members (Leslie, Coach Jorge, Coach Gus)
+    setUsers(prev => prev.filter(u => u.role === 'staff'));
+  };
+
+  const handleRestoreDemoAthletes = () => {
+    setUsers(prev => {
+      const staffOnly = prev.filter(u => u.role === 'staff');
+      return [...staffOnly, ...DEMO_ATHLETES];
+    });
+  };
+
   const handleSimulateNotification = (title: string, body: string) => {
     const newNotif: PushNotificationSimulation = {
       id: `notif-${Date.now()}`,
@@ -354,6 +367,8 @@ export default function App() {
           onUpdateUserMembership={handleUpdateUserMembership}
           onDeleteAthlete={handleDeleteAthlete}
           onUpdateAthleteProfile={handleUpdateAthleteProfile}
+          onClearDemoAthletes={handleClearDemoAthletes}
+          onRestoreDemoAthletes={handleRestoreDemoAthletes}
           onSwitchUser={(u) => setCurrentUserId(u.id)}
         />
       </main>

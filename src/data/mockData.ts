@@ -4,7 +4,7 @@ export const HERO_IMAGE = '/src/assets/images/kinetix_hero_gym_1790797558081.jpg
 export const ATHLETE_AVATAR = '/src/assets/images/kinetix_avatar_athlete_1790797568543.jpg';
 export const COACH_AVATAR = '/src/assets/images/kinetix_avatar_coach_1790797579030.jpg';
 
-export const INITIAL_USERS: UserProfile[] = [
+export const DEMO_ATHLETES: UserProfile[] = [
   {
     id: 'user-001',
     name: 'Juan Pérez',
@@ -146,6 +146,9 @@ export const INITIAL_USERS: UserProfile[] = [
     },
     createdAt: '2024-01-30',
   },
+];
+
+export const INITIAL_STAFF_USERS: UserProfile[] = [
   {
     id: 'user-staff-leslie',
     name: 'Leslie (Dueña & Coach)',
@@ -248,6 +251,11 @@ export const INITIAL_USERS: UserProfile[] = [
     },
     createdAt: '2023-06-01',
   },
+];
+
+// INITIAL_USERS begins exclusively with Staff users (Zero demo athletes by default for production)
+export const INITIAL_USERS: UserProfile[] = [
+  ...INITIAL_STAFF_USERS
 ];
 
 // Historical body composition for Juan Pérez
