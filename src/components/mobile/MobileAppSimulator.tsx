@@ -277,8 +277,12 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleTriggerPushBanner(
-                'Recordatorio de Pago Kinetix',
-                `Hola Sarah, tu membresía vence el 30 de Abril, 2024. Monto a Pagar: $89.99. Por favor contacta al gimnasio para renovar tu membresía.`
+                currentUser.role === 'staff'
+                  ? 'Aviso Oficial de Coach'
+                  : 'Recordatorio de Pago Kinetix',
+                currentUser.role === 'staff'
+                  ? 'Atención atletas: Mañana sesión de fuerza y técnica funcional a las 07:00 AM.'
+                  : `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.`
               )}
               className="p-1.5 rounded-lg bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800 transition-colors"
               title="Probar notificación push"

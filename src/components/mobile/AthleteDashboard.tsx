@@ -91,85 +91,114 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
         </div>
       )}
 
-      {/* PERMANENT PAYMENT DUE DATE WIDGET (Siempre visible para el atleta) */}
-      <div className={`p-3.5 rounded-2xl border transition-all ${
-        isSuspended
-          ? 'bg-red-950/60 border-red-800/80'
-          : isExpiringSoon
-          ? 'bg-amber-950/60 border-amber-800/70'
-          : 'bg-neutral-900/90 border-neutral-800 hover:border-blue-500/40'
-      }`}>
-        <div className="flex items-center justify-between">
+      {/* PERMANENT PAYMENT DUE DATE WIDGET (Solo para atletas; Staff/Coaches cuentan con Acceso Permanente Ilimitado sin fecha de corte) */}
+      {currentUser.role === 'staff' ? (
+        <div className="p-3.5 rounded-2xl border bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950/40 border-neutral-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-              isSuspended
-                ? 'bg-red-500/20 text-red-400'
-                : isExpiringSoon
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'bg-blue-500/20 text-blue-400'
-            }`}>
-              <CreditCard className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                <span>Tu Próxima Fecha de Pago:</span>
-                <span className={`font-mono ${
-                  isSuspended ? 'text-red-400' : isExpiringSoon ? 'text-amber-400' : 'text-blue-400 font-extrabold'
-                }`}>
-                  {currentUser.membership.expiryDate}
+                <span>Acceso Maestro Staff & Coach</span>
+                <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full font-mono font-semibold">
+                  Ilimitado
                 </span>
               </div>
               <div className="text-[10px] text-neutral-400 flex items-center gap-1.5 flex-wrap mt-0.5">
-                <span>Plan: <strong className="text-neutral-200">{currentUser.membership.planName}</strong></span>
+                <span className="text-emerald-400 font-medium">✓ Sin fecha de corte ni cobros</span>
                 <span>·</span>
-                {(() => {
-                  const pg = getPaymentGroup(currentUser.membership.billingDayOfMonth);
-                  return (
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
-                      <span>{pg.dotEmoji}</span>
-                      <span>{pg.label}</span>
-                    </span>
-                  );
-                })()}
-              </div>
-              <div className="flex items-center gap-1.5 mt-1">
-                {currentUser.membership.hasNutritionPlan && (
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
-                    🥗 Plan Nutricional
-                  </span>
-                )}
-                {currentUser.membership.personalCoach && (
-                  <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-medium">
-                    🏋️ {currentUser.membership.personalCoach}
-                  </span>
-                )}
+                <span className="text-neutral-300">Cuenta Permanente Kinetix</span>
               </div>
             </div>
           </div>
-
-          <div className="text-right shrink-0">
-            <div className={`text-xs font-mono font-bold ${
-              isSuspended 
-                ? 'text-red-400' 
-                : isExpiringSoon 
-                ? 'text-amber-400' 
-                : 'text-emerald-400'
-            }`}>
-              {isSuspended
-                ? 'SUSPENDIDA'
-                : currentUser.membership.daysUntilExpiry > 0
-                ? `${currentUser.membership.daysUntilExpiry} días restantes`
-                : 'En período de gracia'}
+          <button
+            onClick={() => onNavigateTab('staff')}
+            className="text-[10px] font-bold text-red-400 hover:text-red-300 bg-red-950/80 border border-red-800/80 px-2.5 py-1.5 rounded-xl transition-colors shrink-0 shadow"
+          >
+            Panel Staff &rarr;
+          </button>
+        </div>
+      ) : (
+        <div className={`p-3.5 rounded-2xl border transition-all ${
+          isSuspended
+            ? 'bg-red-950/60 border-red-800/80'
+            : isExpiringSoon
+            ? 'bg-amber-950/60 border-amber-800/70'
+            : 'bg-neutral-900/90 border-neutral-800 hover:border-blue-500/40'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                isSuspended
+                  ? 'bg-red-500/20 text-red-400'
+                  : isExpiringSoon
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-blue-500/20 text-blue-400'
+              }`}>
+                <CreditCard className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                  <span>Tu Próxima Fecha de Pago:</span>
+                  <span className={`font-mono ${
+                    isSuspended ? 'text-red-400' : isExpiringSoon ? 'text-amber-400' : 'text-blue-400 font-extrabold'
+                  }`}>
+                    {currentUser.membership.expiryDate}
+                  </span>
+                </div>
+                <div className="text-[10px] text-neutral-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span>Plan: <strong className="text-neutral-200">{currentUser.membership.planName}</strong></span>
+                  <span>·</span>
+                  {(() => {
+                    const pg = getPaymentGroup(currentUser.membership.billingDayOfMonth);
+                    return (
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
+                        <span>{pg.dotEmoji}</span>
+                        <span>{pg.label}</span>
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {currentUser.membership.hasNutritionPlan && (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
+                      🥗 Plan Nutricional
+                    </span>
+                  )}
+                  {currentUser.membership.personalCoach && (
+                    <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-medium">
+                      🏋️ {currentUser.membership.personalCoach}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => onNavigateTab('membership')}
-              className="text-[10px] text-blue-400 hover:text-blue-300 font-medium block"
-            >
-              Ver estado &rarr;
-            </button>
+
+            <div className="text-right shrink-0">
+              <div className={`text-xs font-mono font-bold ${
+                isSuspended 
+                  ? 'text-red-400' 
+                  : isExpiringSoon 
+                  ? 'text-amber-400' 
+                  : 'text-emerald-400'
+              }`}>
+                {isSuspended
+                  ? 'SUSPENDIDA'
+                  : currentUser.membership.daysUntilExpiry > 0
+                  ? `${currentUser.membership.daysUntilExpiry} días restantes`
+                  : 'En período de gracia'}
+              </div>
+              <button
+                onClick={() => onNavigateTab('membership')}
+                className="text-[10px] text-blue-400 hover:text-blue-300 font-medium block"
+              >
+                Ver estado &rarr;
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Monthly Highlight Stat Cards (2x2 Grid) */}
       <div className="grid grid-cols-2 gap-2.5">
@@ -348,7 +377,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
         </div>
 
         <div className="space-y-2">
-          {latestEval?.strengthRecords.slice(0, 4).map((rec) => (
+          {(latestEval?.strengthRecords || []).slice(0, 4).map((rec) => (
             <div 
               key={rec.exerciseId}
               className="flex items-center justify-between py-2 border-b border-neutral-800/60 last:border-0 text-xs"

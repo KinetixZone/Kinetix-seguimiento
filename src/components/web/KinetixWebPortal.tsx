@@ -93,6 +93,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
+  const isStaff = currentUser.role === 'staff';
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
   const userEvals = evaluations.filter(e => e.userId === currentUser.id);
   const latestBodyComp = userBodyComps[userBodyComps.length - 1] || bodyCompRecords[0];
@@ -132,14 +133,23 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           </button>
 
           <button
-            onClick={() => onSimulatePushNotification(
-              'Recordatorio de Pago Kinetix',
-              `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence el ${currentUser.membership.expiryDate}. Por favor contacta al gimnasio para renovar tu membresía.`
-            )}
+            onClick={() => {
+              if (isStaff) {
+                onSimulatePushNotification(
+                  'Aviso del Coach Kinetix',
+                  'Atención atletas: Mañana tendremos entrenamiento especial de técnica y fuerza funcional. ¡No falten!'
+                );
+              } else {
+                onSimulatePushNotification(
+                  'Recordatorio de Pago Kinetix',
+                  `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.`
+                );
+              }
+            }}
             className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs border border-neutral-700/80 transition-colors flex items-center gap-1.5"
           >
             <Bell className="w-3.5 h-3.5 text-blue-400" />
-            <span>Simular Aviso</span>
+            <span>{isStaff ? 'Simular Aviso General' : 'Simular Aviso'}</span>
           </button>
         </div>
       </div>
@@ -188,7 +198,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
             >
               <option value="user-001">Atleta: Juan Pérez (75kg · 45% músculo)</option>
               <option value="user-002">Atleta: María García (15 Marzo · Cooper 2400m)</option>
-              <option value="user-003">Atleta: Sarah Connor (Recordatorio $89.99)</option>
+              <option value="user-003">Atleta: Sarah Connor (Recordatorio de Pago)</option>
               <option value="user-staff-01">Staff: Coach Roberto Sánchez</option>
             </select>
           </div>
@@ -250,9 +260,9 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
                 <span>Membresías & Pagos</span>
               </div>
               <span className={`text-[10px] px-2 py-0.2 rounded font-mono ${
-                currentUser.membership.status === 'active' ? 'text-emerald-400' : 'text-red-400'
+                isStaff ? 'text-emerald-400 font-bold' : currentUser.membership.status === 'active' ? 'text-emerald-400' : 'text-red-400'
               }`}>
-                {currentUser.membership.status === 'active' ? 'Al día' : 'Pendiente'}
+                {isStaff ? 'Sin Corte' : currentUser.membership.status === 'active' ? 'Al día' : 'Pendiente'}
               </span>
             </button>
 

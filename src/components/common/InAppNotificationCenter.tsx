@@ -8,6 +8,7 @@ interface InAppNotificationCenterProps {
   notifications: PushNotificationSimulation[];
   onMarkAllAsRead: () => void;
   onSimulateNewNotification: () => void;
+  isStaff?: boolean;
 }
 
 export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = ({
@@ -16,6 +17,7 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
   notifications,
   onMarkAllAsRead,
   onSimulateNewNotification,
+  isStaff,
 }) => {
   if (!isOpen) return null;
 
@@ -63,21 +65,38 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
           </button>
         </div>
 
-        {/* Pinned Permanent Payment Due Date Notice */}
-        <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-950/80 via-neutral-900 to-red-950/40 border border-blue-500/40 space-y-1.5 shrink-0 shadow-md">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-white flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-              <span>Aviso Permanente de Pago</span>
-            </span>
-            <span className="text-[10px] text-blue-300 font-mono font-bold bg-blue-600/30 px-2 py-0.5 rounded-full border border-blue-500/40">
-              30 de Mayo, 2024
-            </span>
+        {/* Pinned Permanent Payment Due Date Notice (Solo para atletas; Staff/Coaches cuentan con Acceso Permanente sin cobros) */}
+        {!isStaff ? (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-950/80 via-neutral-900 to-red-950/40 border border-blue-500/40 space-y-1.5 shrink-0 shadow-md">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                <span>Aviso Permanente de Pago</span>
+              </span>
+              <span className="text-[10px] text-blue-300 font-mono font-bold bg-blue-600/30 px-2 py-0.5 rounded-full border border-blue-500/40">
+                30 de Mayo, 2024
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-300 leading-tight">
+              Tu membresía se renueva mensualmente. Cuentas con 5 días naturales de gracia tras el vencimiento.
+            </p>
           </div>
-          <p className="text-[11px] text-neutral-300 leading-tight">
-            Tu membresía se renueva mensualmente ($89.99 USD). Cuentas con 5 días naturales de gracia tras el vencimiento.
-          </p>
-        </div>
+        ) : (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950/40 border border-neutral-800 space-y-1 shrink-0 shadow-md">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-red-400" />
+                <span>Equipo Kinetix · Staff & Coach</span>
+              </span>
+              <span className="text-[10px] text-red-300 font-mono font-bold bg-red-950 px-2 py-0.5 rounded-full border border-red-800">
+                Permanente
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-400 leading-tight">
+              Sin fecha de corte ni cobros. Tienes acceso oficial ilimitado a todas las herramientas.
+            </p>
+          </div>
+        )}
 
         {/* Notifications List */}
         <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">

@@ -56,8 +56,22 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
     (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
   );
 
-  const initialRecord = sortedRecords[0] || null;
-  const latestRecord = sortedRecords[sortedRecords.length - 1] || null;
+  const fallbackRecord: BodyCompositionRecord = {
+    id: `bc-fallback-${currentUser.id}`,
+    userId: currentUser.id,
+    recordedAt: new Date().toISOString().slice(0, 10),
+    weightKg: 75.0,
+    muscleMassPercent: 44.0,
+    bodyFatPercent: 12.5,
+    visceralFatLevel: 3,
+    bmi: 24.2,
+    bmiCategory: 'Normal',
+    notes: 'Medición base de bienvenida.',
+    recordedByRole: 'staff',
+  };
+
+  const initialRecord = sortedRecords[0] || fallbackRecord;
+  const latestRecord = sortedRecords[sortedRecords.length - 1] || fallbackRecord;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

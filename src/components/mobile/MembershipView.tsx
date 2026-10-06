@@ -42,7 +42,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       onUpdateMembershipStatus('active', 30);
       onSimulatePushNotification(
         'Pago Registrado Exitosamente',
-        `Hemos recibido el pago de $${mem.monthlyFee} ${mem.currency}. Tu membresía de Kinetix está activa hasta el 30 de Mayo, 2024.`
+        `Hemos recibido tu pago de mensualidad. Tu membresía de Kinetix está activa hasta el 30 de Mayo, 2024.`
       );
       setTimeout(() => setPaymentSuccess(false), 4000);
     }, 1200);
@@ -59,7 +59,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const handleTriggerSarahReminder = () => {
     onSimulatePushNotification(
       'Recordatorio de Pago Kinetix',
-      `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence el ${mem.expiryDate}. Monto a Pagar: $${mem.monthlyFee}. Por favor contacta al gimnasio para renovar tu membresía.`
+      `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence el ${mem.expiryDate}. Por favor contacta al gimnasio para renovar tu membresía.`
     );
   };
 
@@ -115,119 +115,175 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         </h2>
       </div>
 
-      {/* Main Membership Status Card */}
-      <div className={`p-4 rounded-3xl border transition-all ${
-        mem.status === 'suspended'
-          ? 'bg-red-950/40 border-red-800/80'
-          : mem.status === 'expiring_soon'
-          ? 'bg-amber-950/30 border-amber-800/70'
-          : 'bg-neutral-900/80 border-neutral-800'
-      }`}>
-        <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
-          <div>
-            <h3 className="text-base font-bold text-white">{mem.planName}</h3>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              {mem.hasNutritionPlan && (
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-medium">
-                  🥗 Asesoría Nutricional
-                </span>
-              )}
-              {mem.personalCoach && (
-                <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded font-medium">
-                  🏋️ Personalizado: {mem.personalCoach}
-                </span>
-              )}
-              {(() => {
-                const pg = getPaymentGroup(mem.billingDayOfMonth);
-                return (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
-                    <span>{pg.dotEmoji}</span>
-                    <span>{pg.label}</span>
-                  </span>
-                );
-              })()}
+      {/* Staff Account Info OR Athlete Membership Card */}
+      {currentUser.role === 'staff' ? (
+        <div className="p-5 rounded-3xl border bg-gradient-to-br from-neutral-900 via-neutral-900 to-red-950/40 border-neutral-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-red-600/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-brand">Cuenta Oficial de Staff & Coach</h3>
+                <span className="text-[11px] text-neutral-400">Kinetix Functional Zone · Equipo Directivo</span>
+              </div>
             </div>
+            <span className="text-[10px] bg-red-950 text-red-300 border border-red-800 px-2.5 py-1 rounded-full font-mono font-bold">
+              👑 Sin Fecha de Corte
+            </span>
           </div>
-          <div>{getStatusBadge(mem.status)}</div>
-        </div>
 
-        {/* Warning if paused / suspended */}
-        {mem.status === 'suspended' && (
-          <div className="p-3 my-2 rounded-2xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-start gap-2 shadow-lg">
-            <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <strong className="block text-white font-bold">ACCESO PAUSADO POR EL STAFF</strong>
-              <p className="text-[11px] text-red-300/90 leading-relaxed mt-0.5">
-                Tu acceso a reservas y seguimiento se encuentra temporalmente en pausa. Por favor ponte en contacto con Coach Jorge o acércate a recepción para regularizar tu pago del día {mem.billingDayOfMonth || 15} de cada mes.
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 space-y-1">
+              <span className="text-[10px] text-neutral-400 uppercase tracking-wider block">Estado de Acceso</span>
+              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Acceso Permanente Ilimitado</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-0.5">
+                Los coaches y dueños de Kinetix no tienen fecha de corte, mensualidad ni suspensiones.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 space-y-1">
+              <span className="text-[10px] text-neutral-400 uppercase tracking-wider block">Rol Asignado</span>
+              <div className="font-bold text-white">
+                {currentUser.staffRole === 'owner' || currentUser.id === 'user-staff-01' || currentUser.id === 'user-staff-leslie'
+                  ? 'Dueño / Head Coach (Control Total)'
+                  : 'Coach Operativo (Evaluación & Seguimiento)'}
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-0.5 font-mono">
+                {currentUser.email}
               </p>
             </div>
           </div>
-        )}
 
-        {/* Plan Details & Expiry Date */}
-        <div className="grid grid-cols-2 gap-3 py-3 border-b border-neutral-800/80 text-xs">
-          <div>
-            <span className="text-neutral-400">Modalidad Activa</span>
-            <div className="text-xs font-bold text-white font-brand mt-1 leading-snug">
-              {mem.planName}
-            </div>
-            <span className="text-[10px] text-emerald-400">
-              {mem.hasNutritionPlan ? '🥗 Plan Nutrición Incluido' : 'Entrenamiento Funcional'}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-neutral-400">Fecha Límite de Pago</span>
-            <div className="text-sm font-bold text-blue-400 font-mono mt-1">
-              {mem.expiryDate}
-            </div>
-            <span className="text-[10px] text-neutral-400 font-mono">
-              {mem.daysUntilExpiry > 0 
-                ? `${mem.daysUntilExpiry} días restantes` 
-                : `${Math.abs(mem.daysUntilExpiry)} días en mora`}
-            </span>
-          </div>
-        </div>
-
-        {/* Suspension Rule Explainer */}
-        <div className="pt-3 text-[11px] text-neutral-400 space-y-1.5">
-          <div className="flex items-center gap-1.5 text-neutral-300 font-medium">
-            <Zap className="w-3.5 h-3.5 text-blue-400" />
-            <span>Regla Oficial de Suspensión por Falta de Pago:</span>
-          </div>
-          <p className="leading-relaxed">
-            Se otorga un período de gracia de <strong>{mem.gracePeriodDays} días naturales</strong> tras la fecha de vencimiento. 
-            Al 6º día sin registrar pago a las 00:01 AM, el sistema suspende automáticamente la cuenta y las reservas del atleta.
-          </p>
-        </div>
-
-        {/* Action Button */}
-        <div className="pt-4">
-          <button
-            onClick={handleSimulatePayment}
-            disabled={isProcessingPayment}
-            className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-98 transition-all disabled:opacity-50"
-          >
-            {isProcessingPayment ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Procesando Renovación...</span>
-              </>
-            ) : (
-              <>
-                <CreditCard className="w-4 h-4" />
-                <span>Registrar Pago / Regularizar Membresía</span>
-              </>
+          <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-400">
+            <span>¿Deseas gestionar alumnos o altas?</span>
+            {onBackToDashboard && (
+              <button
+                onClick={onBackToDashboard}
+                className="text-xs font-bold text-blue-400 hover:text-blue-300"
+              >
+                Ir a Inicio &rarr;
+              </button>
             )}
-          </button>
+          </div>
+        </div>
+      ) : (
+        <div className={`p-4 rounded-3xl border transition-all ${
+          mem.status === 'suspended'
+            ? 'bg-red-950/40 border-red-800/80'
+            : mem.status === 'expiring_soon'
+            ? 'bg-amber-950/30 border-amber-800/70'
+            : 'bg-neutral-900/80 border-neutral-800'
+        }`}>
+          <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-white">{mem.planName}</h3>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {mem.hasNutritionPlan && (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-medium">
+                    🥗 Asesoría Nutricional
+                  </span>
+                )}
+                {mem.personalCoach && (
+                  <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded font-medium">
+                    🏋️ Personalizado: {mem.personalCoach}
+                  </span>
+                )}
+                {(() => {
+                  const pg = getPaymentGroup(mem.billingDayOfMonth);
+                  return (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
+                      <span>{pg.dotEmoji}</span>
+                      <span>{pg.label}</span>
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <div>{getStatusBadge(mem.status)}</div>
+          </div>
 
-          {paymentSuccess && (
-            <div className="mt-2 text-center text-xs text-emerald-400 font-medium animate-fade-in">
-              ✓ ¡Membresía renovada con éxito por 30 días!
+          {/* Warning if paused / suspended */}
+          {mem.status === 'suspended' && (
+            <div className="p-3 my-2 rounded-2xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-start gap-2 shadow-lg">
+              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block text-white font-bold">ACCESO PAUSADO POR EL STAFF</strong>
+                <p className="text-[11px] text-red-300/90 leading-relaxed mt-0.5">
+                  Tu acceso a reservas y seguimiento se encuentra temporalmente en pausa. Por favor ponte en contacto con Coach Jorge o acércate a recepción para regularizar tu pago del día {mem.billingDayOfMonth || 15} de cada mes.
+                </p>
+              </div>
             </div>
           )}
+
+          {/* Plan Details & Expiry Date */}
+          <div className="grid grid-cols-2 gap-3 py-3 border-b border-neutral-800/80 text-xs">
+            <div>
+              <span className="text-neutral-400">Modalidad Activa</span>
+              <div className="text-xs font-bold text-white font-brand mt-1 leading-snug">
+                {mem.planName}
+              </div>
+              <span className="text-[10px] text-emerald-400">
+                {mem.hasNutritionPlan ? '🥗 Plan Nutrición Incluido' : 'Entrenamiento Funcional'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-neutral-400">Fecha Límite de Pago</span>
+              <div className="text-sm font-bold text-blue-400 font-mono mt-1">
+                {mem.expiryDate}
+              </div>
+              <span className="text-[10px] text-neutral-400 font-mono">
+                {mem.daysUntilExpiry > 0 
+                  ? `${mem.daysUntilExpiry} días restantes` 
+                  : `${Math.abs(mem.daysUntilExpiry)} días en mora`}
+              </span>
+            </div>
+          </div>
+
+          {/* Suspension Rule Explainer */}
+          <div className="pt-3 text-[11px] text-neutral-400 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-neutral-300 font-medium">
+              <Zap className="w-3.5 h-3.5 text-blue-400" />
+              <span>Regla Oficial de Suspensión por Falta de Pago:</span>
+            </div>
+            <p className="leading-relaxed">
+              Se otorga un período de gracia de <strong>{mem.gracePeriodDays} días naturales</strong> tras la fecha de vencimiento. 
+              Al 6º día sin registrar pago a las 00:01 AM, el sistema suspende automáticamente la cuenta y las reservas del atleta.
+            </p>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-4">
+            <button
+              onClick={handleSimulatePayment}
+              disabled={isProcessingPayment}
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-98 transition-all disabled:opacity-50"
+            >
+              {isProcessingPayment ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Procesando Renovación...</span>
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4" />
+                  <span>Registrar Pago / Regularizar Membresía</span>
+                </>
+              )}
+            </button>
+
+            {paymentSuccess && (
+              <div className="mt-2 text-center text-xs text-emerald-400 font-medium animate-fade-in">
+                ✓ ¡Membresía renovada con éxito por 30 días!
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Staff Direct Controls (Only visible to Staff/Coaches) */}
       {currentUser.role === 'staff' && (

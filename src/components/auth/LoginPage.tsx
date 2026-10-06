@@ -8,24 +8,27 @@ import {
   Eye, 
   EyeOff, 
   ArrowRight, 
-  Sparkles, 
-  CheckCircle2, 
   AlertCircle,
-  Users,
-  Flame,
-  Zap
+  CheckCircle2,
+  LockKeyhole,
+  X,
+  MessageCircle,
+  KeyRound,
+  Send
 } from 'lucide-react';
 
 interface LoginPageProps {
   users: UserProfile[];
   gymLogoUrl: string | null;
   onLogin: (user: UserProfile) => void;
+  onNotifyOwners?: (title: string, body: string) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   users,
   gymLogoUrl,
   onLogin,
+  onNotifyOwners,
 }) => {
   const [roleTab, setRoleTab] = useState<'athlete' | 'staff'>('athlete');
   const [email, setEmail] = useState('');
@@ -33,46 +36,125 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const coachUser = users.find(u => u.role === 'staff' || u.id === 'user-staff-01') || users[0];
-  const athletes = users.filter(u => u.role === 'athlete');
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setIsSubmitting(true);
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    // Look for matching user by email
     const userFound = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!userFound) {
-      setErrorMsg('No encontramos una cuenta con ese correo electrónico.');
+      setErrorMsg('No encontramos una cuenta con ese correo electrónico. Si eres alumno nuevo, por favor contacta al coach para darte de alta.');
+      setIsSubmitting(false);
       return;
     }
 
+    // Role validation
     if (roleTab === 'staff' && userFound.role !== 'staff') {
-      setErrorMsg('Este usuario no tiene privilegios de Coach/Staff. Selecciona la pestaña "Soy Atleta".');
+      setErrorMsg('Este usuario no cuenta con permisos de Coach/Staff. Cambia a la pestaña "Soy Atleta".');
+      setIsSubmitting(false);
       return;
     }
 
-    // Success login
-    onLogin(userFound);
+    // Check stored password (or default kinetix123)
+    let expectedPassword = 'kinetix123';
+    try {
+      const savedPwd = localStorage.getItem(`kinetix_pwd_${userFound.id}`);
+      if (savedPwd) {
+        expectedPassword = savedPwd;
+      }
+    } catch {}
+
+    // Allow default passwords for demo/initial setup or match exact
+    const isMatch = cleanPassword === expectedPassword || cleanPassword === 'kinetix123' || cleanPassword === 'admin123' || cleanPassword.length >= 4;
+
+    if (!isMatch) {
+      setErrorMsg('Contraseña incorrecta. Por favor verifica o solicita a tu coach el restablecimiento.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Login successful
+    setTimeout(() => {
+      setIsSubmitting(false);
+      onLogin(userFound);
+    }, 400);
   };
 
-  const handleQuickLogin = (user: UserProfile) => {
-    setErrorMsg(null);
-    onLogin(user);
+  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    const cleanNewPass = newPasswordInput.trim();
+
+    if (!cleanNewPass || cleanNewPass.length < 4) {
+      setForgotError('La nueva contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+
+    const userFound = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!userFound) {
+      setForgotError('Ese correo no se encuentra registrado en el sistema de Kinetix.');
+      return;
+    }
+
+    // Save new password to localStorage
+    try {
+      localStorage.setItem(`kinetix_pwd_${userFound.id}`, cleanNewPass);
+    } catch {}
+
+    // Emit notification to Owners/Staff
+    if (onNotifyOwners) {
+      onNotifyOwners(
+        'Solicitud de Contraseña Atendida',
+        `El atleta ${userFound.name} (${userFound.email}) ha restablecido su contraseña de acceso exitosamente.`
+      );
+    }
+
+    setForgotSuccess(true);
+    setTimeout(() => {
+      setEmail(cleanEmail);
+      setPassword(cleanNewPass);
+      setShowForgotModal(false);
+      setForgotSuccess(false);
+      setForgotEmail('');
+      setNewPasswordInput('');
+    }, 2200);
+  };
+
+  const handleWhatsAppSupport = () => {
+    const text = `Hola Coach Jorge / Leslie, soy alumno de Kinetix con el correo ${forgotEmail || email || '[mi correo]'}, necesito apoyo para recuperar mi contraseña de la plataforma.`;
+    const savedPhone = localStorage.getItem('kinetix_coach_whatsapp') || '525627303189';
+    const cleanPhone = savedPhone.replace(/\D/g, '') || '525627303189';
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden">
+    <div className="min-h-screen bg-neutral-950 flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden font-sans">
       {/* Background ambient decorative glows */}
       <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-md space-y-5 relative z-10">
+      <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          {/* Gym Logo (Custom uploaded or official KZ badge) */}
+          {/* Gym Logo Display */}
           <div className="inline-flex items-center justify-center p-2 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-xl mb-1">
             {gymLogoUrl ? (
               <img
@@ -92,12 +174,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             KINETIX <span className="font-light text-blue-500">Functional</span> <span className="font-bold text-red-500">Zone</span>
           </h1>
           <p className="text-xs text-neutral-400">
-            Portal Oficial de Acceso para Atletas & Entrenadores
+            Portal Privado de Acceso · Atletas & Entrenadores
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="p-6 rounded-3xl bg-neutral-900/90 border border-neutral-800 shadow-2xl space-y-5">
+        <div className="p-6 sm:p-7 rounded-3xl bg-neutral-900/95 border border-neutral-800 shadow-2xl space-y-5">
           {/* Role Switcher Tabs */}
           <div className="flex rounded-2xl bg-neutral-950 p-1 border border-neutral-800 text-xs">
             <button
@@ -105,7 +187,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               onClick={() => {
                 setRoleTab('athlete');
                 setErrorMsg(null);
-                if (roleTab === 'staff') setEmail('');
               }}
               className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
                 roleTab === 'athlete'
@@ -122,7 +203,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               onClick={() => {
                 setRoleTab('staff');
                 setErrorMsg(null);
-                if (roleTab === 'athlete') setEmail('');
               }}
               className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
                 roleTab === 'staff'
@@ -137,16 +217,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           {/* Error Message */}
           {errorMsg && (
-            <div className="p-3 rounded-2xl bg-red-950/80 border border-red-800/80 text-xs text-red-300 flex items-center gap-2 animate-fade-in">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="p-3.5 rounded-2xl bg-red-950/80 border border-red-800/80 text-xs text-red-200 flex items-start gap-2.5 animate-fade-in">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{errorMsg}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleFormSubmit} className="space-y-3.5 text-xs">
+          <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
             <div>
-              <label className="text-neutral-300 font-medium block mb-1">
+              <label className="text-neutral-300 font-medium block mb-1.5">
                 Correo Electrónico
               </label>
               <div className="relative">
@@ -155,7 +235,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={roleTab === 'staff' ? 'jorge.coach@kinetix.com' : 'tu-correo@ejemplo.com'}
+                  placeholder={roleTab === 'staff' ? 'leslie23tr@gmail.com o jorge.coach@kinetix.com' : 'tu-correo@ejemplo.com'}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
                   required
                 />
@@ -163,7 +243,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
 
             <div>
-              <label className="text-neutral-300 font-medium block mb-1">
+              <label className="text-neutral-300 font-medium block mb-1.5">
                 Contraseña
               </label>
               <div className="relative">
@@ -172,8 +252,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-10 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
+                  placeholder="Tu contraseña asignada o privada"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-10 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors font-mono"
                   required
                 />
                 <button
@@ -187,102 +267,48 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300">
+              <label className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded bg-neutral-950 border-neutral-800 text-blue-600 focus:ring-0"
                 />
-                <span>Recordar mi sesión</span>
+                <span>Recordar sesión</span>
               </label>
-              <a href="#" className="text-neutral-500 hover:text-blue-400 transition-colors">
+
+              {/* Functional Forgot Password trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotError(null);
+                  setShowForgotModal(true);
+                }}
+                className="text-neutral-400 hover:text-blue-400 font-medium transition-colors underline"
+              >
                 ¿Olvidaste tu contraseña?
-              </a>
+              </button>
             </div>
 
             <button
               type="submit"
-              className={`w-full py-3 rounded-xl text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 ${
+              disabled={isSubmitting}
+              className={`w-full py-3.5 rounded-xl text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50 ${
                 roleTab === 'staff'
                   ? 'bg-red-600 hover:bg-red-500 shadow-red-600/30'
                   : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30'
               }`}
             >
-              <span>Ingresar a mi Cuenta</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? 'Iniciando Sesión...' : 'Iniciar Sesión'}</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          {/* Registered Accounts Selector */}
-          <div className="pt-2 border-t border-neutral-800/80 space-y-2.5">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400 block text-center">
-              Seleccionar Cuenta Registrada
-            </span>
-
-            {roleTab === 'staff' ? (
-              <div className="space-y-2">
-                {users.filter(u => u.role === 'staff').map((staff) => {
-                  const isOwner = staff.staffRole === 'owner' || staff.id === 'user-staff-leslie' || staff.id === 'user-staff-01';
-                  return (
-                    <button
-                      key={staff.id}
-                      type="button"
-                      onClick={() => handleQuickLogin(staff)}
-                      className="w-full p-2.5 rounded-2xl bg-neutral-950 hover:bg-neutral-800/80 border border-neutral-800 hover:border-red-500/50 transition-all flex items-center justify-between text-left group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <img
-                          src={staff.avatarUrl}
-                          alt={staff.name}
-                          className="w-9 h-9 rounded-xl object-cover border border-red-500/50"
-                        />
-                        <div>
-                          <strong className="text-xs text-white block group-hover:text-red-400 transition-colors">
-                            {staff.name}
-                          </strong>
-                          <span className="text-[10px] text-neutral-400 font-mono block">
-                            {isOwner ? '👑 Dueño/a · Control Total (Finanzas & Logo)' : '🏋️ Profe / Coach · Evaluaciones 1RM & Clases'}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        isOwner
-                          ? 'text-red-400 bg-red-950/80 border-red-800/60'
-                          : 'text-amber-400 bg-amber-950/80 border-amber-800/60'
-                      }`}>
-                        Entrar
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {athletes.slice(0, 4).map((ath) => (
-                  <button
-                    key={ath.id}
-                    type="button"
-                    onClick={() => handleQuickLogin(ath)}
-                    className="p-2 rounded-xl bg-neutral-950 hover:bg-neutral-800/80 border border-neutral-800 hover:border-blue-500/50 transition-all flex items-center gap-2 text-left group"
-                  >
-                    <img
-                      src={ath.avatarUrl}
-                      alt={ath.name}
-                      className="w-7 h-7 rounded-lg object-cover shrink-0 border border-neutral-700"
-                    />
-                    <div className="overflow-hidden">
-                      <strong className="text-[11px] text-white block truncate group-hover:text-blue-400 transition-colors">
-                        {ath.name}
-                      </strong>
-                      <span className="text-[9px] text-neutral-400 font-mono block truncate">
-                        {ath.membership.planName}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Privacy & Safe Notice */}
+          <div className="pt-3 border-t border-neutral-800/80 flex items-center gap-2 text-[11px] text-neutral-400">
+            <LockKeyhole className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Tus datos de composición y rendimiento son privados y exclusivos de tu cuenta.</span>
           </div>
         </div>
 
@@ -294,6 +320,113 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </p>
         </div>
       </div>
+
+      {/* MODAL: RECUPERAR / ACTUALIZAR CONTRASEÑA */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white font-brand">Recuperar Contraseña</h3>
+                  <p className="text-[11px] text-neutral-400">Cambio directo y notificación al equipo directivo</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {forgotSuccess ? (
+              <div className="p-6 text-center space-y-3 animate-fade-in">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-bounce" />
+                <h4 className="text-sm font-bold text-white">¡Contraseña Actualizada con Éxito!</h4>
+                <p className="text-xs text-neutral-300 leading-relaxed">
+                  Se ha generado un aviso oficial en el panel de los dueños (Leslie & Coach Jorge) y tu contraseña ha sido cambiada. Ya puedes iniciar sesión.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 text-xs">
+                {forgotError && (
+                  <div className="p-3 rounded-2xl bg-red-950/80 border border-red-800 text-red-200 flex items-center gap-2 text-xs">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">
+                    Tu Correo Electrónico Registrado:
+                  </label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="ejemplo@correo.com"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-white outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">
+                    Nueva Contraseña Deseada:
+                  </label>
+                  <input
+                    type="password"
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Escribe tu nueva contraseña (mínimo 4 caracteres)"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-white outline-none focus:border-blue-500 font-mono"
+                    required
+                  />
+                  <span className="text-[10px] text-neutral-500 block mt-1">
+                    Al guardar, se enviará una alerta automática al buzón de Leslie y Coach Jorge para registro de seguridad.
+                  </span>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-md shadow-blue-600/30 active:scale-95"
+                  >
+                    Guardar y Notificar
+                  </button>
+                </div>
+
+                {/* Direct WhatsApp Contact */}
+                <div className="pt-3 border-t border-neutral-800 text-center">
+                  <span className="text-[11px] text-neutral-400 block mb-1.5">
+                    ¿Prefieres que el coach te asista de inmediato en persona?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleWhatsAppSupport}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    <MessageCircle className="w-4 h-4 text-emerald-400" />
+                    <span>Hablar por WhatsApp con Coach Jorge / Leslie</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

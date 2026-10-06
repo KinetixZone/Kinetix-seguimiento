@@ -168,24 +168,13 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
             </div>
           </div>
 
-          {/* Coach Conclusion and Signatures */}
-          <div className="pt-4 border-t border-neutral-800/80 space-y-4 text-xs">
+          {/* Coach Conclusion */}
+          <div className="pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
             <div>
-              <span className="text-[10px] text-neutral-500 uppercase tracking-wider block">Observaciones Médicas y Físicas</span>
-              <p className="text-neutral-300 text-xs italic mt-0.5">
-                "El atleta Juan Pérez presenta una evolución morfológica y atlética sobresaliente. Recomposición con reducción de adiposidad visceral a nivel 3 y ganancia de 5kg de fuerza global. Apto para el ciclo de alta intensidad funcional."
+              <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
+              <p className="text-neutral-300 text-xs italic mt-0.5 leading-relaxed bg-neutral-950 p-3 rounded-2xl border border-neutral-800">
+                "El atleta {athlete.name} presenta una evolución morfológica y atlética sobresaliente. Recomposición corporal continua con excelente constancia y ganancia de fuerza funcional global. Apto para el ciclo de alta intensidad funcional."
               </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-8 pt-8 text-center text-xs">
-              <div className="border-t border-neutral-700 pt-2 space-y-0.5">
-                <strong className="text-white block">Coach Roberto Sánchez</strong>
-                <span className="text-neutral-400 text-[10px]">Head Coach · Kinetix Functional Zone</span>
-              </div>
-              <div className="border-t border-neutral-700 pt-2 space-y-0.5">
-                <strong className="text-white block">{athlete.name}</strong>
-                <span className="text-neutral-400 text-[10px]">Firma de Conformidad del Atleta</span>
-              </div>
             </div>
           </div>
         </div>

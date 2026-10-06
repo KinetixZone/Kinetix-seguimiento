@@ -4,6 +4,7 @@ import { KinetixResponsiveApp } from './components/KinetixResponsiveApp';
 import { LoginPage } from './components/auth/LoginPage';
 import { UserProfileAndLogoModal } from './components/common/UserProfileAndLogoModal';
 import { InAppNotificationCenter } from './components/common/InAppNotificationCenter';
+import { SendNotificationModal } from './components/common/SendNotificationModal';
 import { 
   INITIAL_USERS, 
   ALL_INITIAL_BODY_COMP,
@@ -23,6 +24,7 @@ import {
 export default function App() {
   const [brandTheme] = useState<BrandTheme>('blue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isSendNotificationOpen, setIsSendNotificationOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
   // Authentication State: default authenticated to Leslie (Dueña & Coach)
@@ -312,6 +314,7 @@ export default function App() {
         users={users}
         gymLogoUrl={gymLogoUrl}
         onLogin={handleLogin}
+        onNotifyOwners={(title, body) => handleSimulateNotification(title, body)}
       />
     );
   }
@@ -325,6 +328,7 @@ export default function App() {
         gymLogoUrl={gymLogoUrl}
         unreadNotificationsCount={unreadCount}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenSendNotification={() => setIsSendNotificationOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
         onLogout={handleLogout}
       />
@@ -371,12 +375,24 @@ export default function App() {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         notifications={notifications}
+        isStaff={currentUser?.role === 'staff'}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
         onSimulateNewNotification={() => handleSimulateNotification(
           'Recordatorio de Pago Kinetix',
           'Hola, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.'
         )}
       />
+
+      {/* Send Notification Modal (For Coach/Staff) */}
+      {isSendNotificationOpen && (
+        <SendNotificationModal
+          users={users}
+          onSendNotification={(title, body, targetUserId) => {
+            handleSimulateNotification(title, body);
+          }}
+          onClose={() => setIsSendNotificationOpen(false)}
+        />
+      )}
     </div>
   );
 }

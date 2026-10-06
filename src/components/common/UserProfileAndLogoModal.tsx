@@ -11,7 +11,8 @@ import {
   User, 
   RotateCcw,
   Sparkles,
-  Award
+  Award,
+  MessageCircle
 } from 'lucide-react';
 
 interface UserProfileAndLogoModalProps {
@@ -34,9 +35,20 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
   const [avatarSuccess, setAvatarSuccess] = useState(false);
   const [logoSuccess, setLogoSuccess] = useState(false);
   const [customLogoInput, setCustomLogoInput] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState(() => {
+    return localStorage.getItem('kinetix_coach_whatsapp') || '+52 56 2730 3189';
+  });
+  const [whatsappSaved, setWhatsappSaved] = useState(false);
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveWhatsApp = () => {
+    const trimmed = whatsappNumber.trim();
+    localStorage.setItem('kinetix_coach_whatsapp', trimmed);
+    setWhatsappSaved(true);
+    setTimeout(() => setWhatsappSaved(false), 2500);
+  };
 
   const isStaff = currentUser.role === 'staff';
   const isOwner = isStaff && (currentUser.staffRole === 'owner' || !currentUser.staffRole);
@@ -264,25 +276,113 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
           </div>
         )}
 
-        {/* SECTION 3: ACCOUNT DETAILS */}
-        <div className="p-3.5 rounded-2xl bg-neutral-950/60 border border-neutral-800 text-xs space-y-2">
-          <div className="flex items-center justify-between text-neutral-300">
-            <span>Rol en la plataforma:</span>
-            <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase ${
-              isStaff ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-blue-950 text-blue-400 border border-blue-800'
-            }`}>
-              {isStaff ? 'Coach / Staff' : 'Atleta Oficial'}
+        {/* SECTION 2.5: GYM / COACH WHATSAPP CONFIGURATION (EXCLUSIVA PARA DUEÑOS: LESLIE & JORGE) */}
+        {isOwner && (
+          <div className="p-4 rounded-2xl bg-neutral-950/80 border border-emerald-900/40 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-bold text-white">WhatsApp Oficial de Soporte (Dueños)</span>
+              </div>
+              {whatsappSaved && (
+                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> ¡Guardado con éxito!
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              Número al que los alumnos envían mensaje directo desde la pantalla de acceso cuando tocan <em>"Hablar por WhatsApp con Coach Jorge / Leslie"</em>:
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="Ej. +52 55 5555 1234 (con lada de país)"
+                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 outline-none focus:border-emerald-500 font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveWhatsApp}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all shrink-0"
+              >
+                Guardar Teléfono
+              </button>
+            </div>
+            <span className="text-[10px] text-neutral-500 block">
+              Si lo dejas en blanco, WhatsApp abrirá el selector de contactos del alumno con el mensaje de recuperación pre-redactado.
             </span>
           </div>
-          <div className="flex items-center justify-between text-neutral-300">
-            <span>Membresía:</span>
-            <span className="font-semibold text-white">{currentUser.membership.planName}</span>
+        )}
+
+        {/* SECTION 3: ACCOUNT DETAILS & CHANGE PASSWORD */}
+        <div className="p-3.5 rounded-2xl bg-neutral-950/60 border border-neutral-800 text-xs space-y-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-neutral-300">
+              <span>Rol en la plataforma:</span>
+              <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase ${
+                isStaff ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-blue-950 text-blue-400 border border-blue-800'
+              }`}>
+                {isStaff ? 'Coach / Staff' : 'Atleta Oficial'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-neutral-300">
+              <span>{isStaff ? 'Tipo de Cuenta:' : 'Membresía:'}</span>
+              <span className="font-semibold text-white">{isStaff ? 'Administración & Entrenamiento Kinetix' : currentUser.membership.planName}</span>
+            </div>
+            {!isStaff ? (
+              <div className="flex items-center justify-between text-neutral-300">
+                <span>Corte de Pago:</span>
+                <span className="font-mono text-blue-400 font-bold">
+                  Día {currentUser.membership.billingDayOfMonth || 15} de cada mes
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-neutral-300">
+                <span>Estado de Acceso:</span>
+                <span className="text-emerald-400 font-bold text-[11px] bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded-full">
+                  ✓ Cuenta Permanente · Sin fecha de corte
+                </span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center justify-between text-neutral-300">
-            <span>Corte de Pago:</span>
-            <span className="font-mono text-blue-400 font-bold">
-              Día {currentUser.membership.billingDayOfMonth || 15} de cada mes
+
+          {/* Cambiar Contraseña Segura */}
+          <div className="pt-2 border-t border-neutral-800/80 space-y-1.5">
+            <span className="text-[11px] font-semibold text-neutral-300 flex items-center gap-1.5">
+              <span>🔐 Seguridad · Actualizar Contraseña:</span>
             </span>
+            <div className="flex gap-1.5">
+              <input
+                type="password"
+                value={customLogoInput === '__pwd' ? '' : customLogoInput}
+                onChange={(e) => setCustomLogoInput(e.target.value)}
+                placeholder="Escribe tu nueva contraseña..."
+                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customLogoInput.trim()) {
+                    try {
+                      localStorage.setItem(`kinetix_pwd_${currentUser.id}`, customLogoInput.trim());
+                    } catch {}
+                    setAvatarSuccess(true);
+                    setCustomLogoInput('');
+                    setTimeout(() => setAvatarSuccess(false), 2500);
+                  }
+                }}
+                disabled={!customLogoInput.trim()}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold transition-all"
+              >
+                Actualizar
+              </button>
+            </div>
+            {avatarSuccess && (
+              <span className="text-[10px] text-emerald-400 font-semibold block animate-fade-in">
+                ✓ Contraseña actualizada correctamente en tu dispositivo.
+              </span>
+            )}
           </div>
         </div>
 

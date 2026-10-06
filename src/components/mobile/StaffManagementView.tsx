@@ -31,7 +31,8 @@ import {
   Clock,
   TrendingUp,
   Info,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Bell
 } from 'lucide-react';
 
 interface StaffManagementViewProps {
@@ -60,6 +61,7 @@ interface StaffManagementViewProps {
   onDeleteAthlete?: (userId: string) => void;
   onUpdateAthleteProfile?: (userId: string, updates: Partial<UserProfile>) => void;
   onBackToDashboard?: () => void;
+  onOpenSendNotification?: () => void;
   currentUser?: UserProfile;
 }
 
@@ -75,6 +77,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onDeleteAthlete,
   onUpdateAthleteProfile,
   onBackToDashboard,
+  onOpenSendNotification,
   currentUser,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -103,6 +106,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [heightCm, setHeightCm] = useState<number>(175);
   const [planName, setPlanName] = useState<KinetixPlanName>('Kinetix');
   const [billingDay, setBillingDay] = useState<number>(15);
+  const [initialPassword, setInitialPassword] = useState('kinetix123');
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
 
   // Payment color filter state: 'all' | 5 | 15 | 20 | 30
@@ -202,7 +206,18 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             Control de Atletas & Pagos
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenSendNotification && (
+            <button
+              onClick={onOpenSendNotification}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
+              title="Emitir avisos y recordatorios oficiales a los alumnos"
+            >
+              <Bell className="w-3.5 h-3.5 text-blue-400" />
+              <span>Mandar Avisos</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowExportModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
@@ -333,7 +348,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   />
                   <div className="overflow-hidden">
                     <strong className="text-xs text-white block truncate">{staff.name}</strong>
-                    <span className="text-[10px] text-neutral-400 block truncate font-mono">{staff.email}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-neutral-400 block truncate font-mono">{staff.email}</span>
+                      <span className="text-[9px] text-emerald-400 font-medium">· Sin fecha de corte</span>
+                    </div>
                   </div>
                 </div>
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
@@ -621,6 +639,24 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                     required
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-neutral-300 font-medium block">Contraseña Inicial de Acceso</label>
+                    <span className="text-[10px] text-emerald-400 font-mono font-semibold">Fácil y Segura</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={initialPassword}
+                    onChange={(e) => setInitialPassword(e.target.value)}
+                    placeholder="kinetix123"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                    required
+                  />
+                  <p className="text-[10px] text-neutral-400 mt-1 leading-tight">
+                    💡 Dale esta contraseña al alumno. Podrá ingresar de inmediato desde su celular y cambiarla en cualquier momento desde su perfil sin depender de correos.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

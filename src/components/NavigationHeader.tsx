@@ -7,6 +7,7 @@ interface NavigationHeaderProps {
   gymLogoUrl: string | null;
   unreadNotificationsCount: number;
   onOpenNotifications: () => void;
+  onOpenSendNotification?: () => void;
   onOpenProfileModal: () => void;
   onLogout: () => void;
 }
@@ -16,6 +17,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   gymLogoUrl,
   unreadNotificationsCount,
   onOpenNotifications,
+  onOpenSendNotification,
   onOpenProfileModal,
   onLogout,
 }) => {
@@ -60,6 +62,18 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
 
         {/* Zone 2: User Status & Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Coach Quick Send Alert Button */}
+          {isStaff && onOpenSendNotification && (
+            <button
+              onClick={onOpenSendNotification}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              title="Emitir avisos y alertas a los alumnos"
+            >
+              <Bell className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Mandar Avisos</span>
+            </button>
+          )}
+
           {/* Notification Bell with Badge */}
           <button
             onClick={onOpenNotifications}

@@ -12,7 +12,9 @@ import {
   Instagram, 
   MessageCircle,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ShareableStoryModalProps {
@@ -32,6 +34,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   const [selectedExercise, setSelectedExercise] = useState<string>('squats');
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [instagramStepActive, setInstagramStepActive] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const strengthRecord = latestEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
@@ -46,21 +49,21 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   // Preformatted text for sharing
   const generateShareText = () => {
     if (storyType === 'strength') {
-      return `🔥 ¡Nuevo Récord Personal en Kinetix Functional Zone!
+      return `🔥 ¡Nuevo Récord Personal (PR) en Kinetix Functional Zone!
 🏋️ Ejercicio: ${strengthRecord.exerciseName}
-💪 Peso Levantado: ${strengthRecord.weightKg} ${strengthRecord.weightUnit} (${strengthRecord.reps} reps)
-⚡ 1RM Estimado: ${strengthRecord.estimated1RMKg} kg
+💪 Carga Levantada: ${strengthRecord.weightKg} ${strengthRecord.weightUnit} (${strengthRecord.reps} ${strengthRecord.reps === 1 ? 'rep' : 'reps'})
+⚡ 1RM Estimado Oficial: ${strengthRecord.estimated1RMKg} kg
 👤 Atleta: ${athlete.name}
-📍 @kinetixzone #KinetixFunctional #PR`;
+📍 @kinetixzone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
     } else if (storyType === 'cooper') {
-      return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix!
+      return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix Functional Zone!
 ⚡ Nivel Alcanzado: Nivel ${latestEval?.cooperTest.levelNumber || 5} (${latestEval?.cooperTest.level || 'Élite'})
-🎯 Distancia: ${latestEval?.cooperTest.distanceMeters || 2800} metros
+🎯 Distancia Recorrida: ${latestEval?.cooperTest.distanceMeters || 2800} metros
 👤 Atleta: ${athlete.name}
-📍 @kinetixzone #CooperTest #KinetixFunctional`;
+📍 @kinetixzone #CooperTest #KinetixFunctional #Resistencia`;
     } else {
       return `✨ ¡Progreso y Recomposición Corporal en Kinetix!
-⚖️ Peso: ${latestBodyComp.weightKg} kg (IMC: ${latestBodyComp.bmi})
+⚖️ Peso Actual: ${latestBodyComp.weightKg} kg (IMC: ${latestBodyComp.bmi})
 💪 Masa Muscular: ${latestBodyComp.muscleMassPercent}%
 🔥 Grasa Corporal: ${latestBodyComp.bodyFatPercent}%
 👤 Atleta: ${athlete.name}
@@ -68,48 +71,53 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     }
   };
 
-  // 1. Share directly via Web Share API (Triggers native Instagram, WhatsApp, Stories menu on mobile)
-  const handleNativeShare = async () => {
-    const text = generateShareText();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Progreso Oficial Kinetix · ${athlete.name}`,
-          text: text,
-          url: window.location.href,
-        });
-      } catch (err) {
-        // User cancelled or share failed, fallback to copy
-        handleCopyText();
-      }
-    } else {
-      handleCopyText();
-    }
-  };
-
-  // 2. Open WhatsApp directly with prefilled message
-  const handleOpenWhatsApp = () => {
-    const text = generateShareText();
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  // 3. Copy text to clipboard
+  // Copy text to clipboard
   const handleCopyText = async () => {
     try {
       await navigator.clipboard.writeText(generateShareText());
       setCopiedSuccess(true);
-      setTimeout(() => setCopiedSuccess(false), 2500);
-    } catch {}
+      setTimeout(() => setCopiedSuccess(false), 3000);
+    } catch {
+      // Fallback
+    }
   };
 
-  // 4. Download Card as high-res PNG image
-  const handleDownloadImage = () => {
+  // Helper to wrap text on Canvas
+  const drawWrappedText = (
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    lineHeight: number
+  ) => {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      const testWidth = metrics.width;
+      if (testWidth > maxWidth && n > 0) {
+        ctx.fillText(line.trim(), x, currentY);
+        line = words[n] + ' ';
+        currentY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line.trim(), x, currentY);
+    return currentY + lineHeight;
+  };
+
+  // Download Card as high-res PNG image (1080x1920 Instagram Story format)
+  const handleDownloadImage = (): string => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return '';
 
     // Background Gradient (Dark Sports Aesthetic)
     const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
@@ -121,13 +129,13 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 
     // Glowing Orbs
     const blueGlow = ctx.createRadialGradient(200, 300, 50, 200, 300, 500);
-    blueGlow.addColorStop(0, 'rgba(37, 99, 235, 0.35)');
+    blueGlow.addColorStop(0, 'rgba(37, 99, 235, 0.4)');
     blueGlow.addColorStop(1, 'rgba(37, 99, 235, 0)');
     ctx.fillStyle = blueGlow;
     ctx.fillRect(0, 0, 1080, 1920);
 
     const redGlow = ctx.createRadialGradient(880, 1600, 50, 880, 1600, 500);
-    redGlow.addColorStop(0, 'rgba(220, 38, 38, 0.35)');
+    redGlow.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
     redGlow.addColorStop(1, 'rgba(220, 38, 38, 0)');
     ctx.fillStyle = redGlow;
     ctx.fillRect(0, 0, 1080, 1920);
@@ -160,53 +168,54 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('🔥 NUEVO RÉCORD PERSONAL (PR)', 100, 500);
 
+      // Multi-line wrapped exercise name so long text like "PRESS HORIZONTAL / BANCA" never clips!
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 74px sans-serif';
-      ctx.fillText(strengthRecord.exerciseName.toUpperCase(), 100, 620);
+      ctx.font = 'bold 68px sans-serif';
+      drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 610, 880, 80);
 
       ctx.fillStyle = '#60a5fa';
-      ctx.font = 'bold 150px monospace';
-      ctx.fillText(`${strengthRecord.weightKg} ${strengthRecord.weightUnit}`, 100, 800);
+      ctx.font = 'bold 140px monospace';
+      ctx.fillText(`${strengthRecord.weightKg} ${strengthRecord.weightUnit}`, 100, 820);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '48px monospace';
-      ctx.fillText(`1RM Estimado: ${strengthRecord.estimated1RMKg} kg · ${strengthRecord.reps} repetición(es)`, 100, 920);
+      ctx.font = '46px monospace';
+      ctx.fillText(`1RM Estimado: ${strengthRecord.estimated1RMKg} kg · ${strengthRecord.reps} reps`, 100, 930);
 
       ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 40px monospace';
-      ctx.fillText('✓ Fuerza Máxima Verificada por el Coach', 100, 1040);
+      ctx.font = 'bold 38px monospace';
+      ctx.fillText('✓ Fuerza Máxima Validada por Coach Jorge', 100, 1050);
     } else if (storyType === 'cooper') {
       ctx.fillStyle = '#ef4444';
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('❤️ TEST DE COOPER 12 MINUTOS', 100, 500);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 74px sans-serif';
-      ctx.fillText('POTENCIA AERÓBICA', 100, 620);
+      ctx.font = 'bold 68px sans-serif';
+      drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
 
       ctx.fillStyle = '#f59e0b';
-      ctx.font = 'bold 150px monospace';
-      ctx.fillText(`NIVEL ${latestEval?.cooperTest.levelNumber || 5}`, 100, 800);
+      ctx.font = 'bold 140px monospace';
+      ctx.fillText(`NIVEL ${latestEval?.cooperTest.levelNumber || 5}`, 100, 820);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '48px monospace';
-      ctx.fillText(`${latestEval?.cooperTest.level || 'Élite'} · ${latestEval?.cooperTest.distanceMeters || 2800} metros`, 100, 920);
+      ctx.font = '46px monospace';
+      ctx.fillText(`${latestEval?.cooperTest.level || 'Élite'} · ${latestEval?.cooperTest.distanceMeters || 2800} metros`, 100, 930);
     } else {
       ctx.fillStyle = '#3b82f6';
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('✨ COMPOSICIÓN & SALUD', 100, 500);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 74px sans-serif';
-      ctx.fillText('RECOMPOSICIÓN CORPORAL', 100, 620);
+      ctx.font = 'bold 68px sans-serif';
+      drawWrappedText(ctx, 'RECOMPOSICIÓN CORPORAL', 100, 610, 880, 80);
 
       ctx.fillStyle = '#60a5fa';
       ctx.font = 'bold 120px monospace';
-      ctx.fillText(`${latestBodyComp.weightKg} kg`, 100, 800);
+      ctx.fillText(`${latestBodyComp.weightKg} kg`, 100, 820);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '48px monospace';
-      ctx.fillText(`Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`, 100, 920);
+      ctx.font = '46px monospace';
+      ctx.fillText(`Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`, 100, 930);
     }
 
     // Bottom Athlete Signature
@@ -225,36 +234,95 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     ctx.font = '36px monospace';
     ctx.fillText(`${athlete.membership.planName} · @kinetixzone`, 100, 1785);
 
-    // Download
+    // Download file
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `Kinetix_Historia_${athlete.name.replace(/\s+/g, '_')}.png`;
+    link.download = `Kinetix_Historia_${athlete.name.replace(/\s+/g, '_')}_${storyType}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     setDownloadSuccess(true);
-    setTimeout(() => setDownloadSuccess(false), 2500);
+    setTimeout(() => setDownloadSuccess(false), 3000);
+    return dataUrl;
+  };
+
+  // 1. WhatsApp Direct Share
+  const handleOpenWhatsApp = () => {
+    const text = generateShareText();
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // 2. Telegram Direct Share
+  const handleOpenTelegram = () => {
+    const text = generateShareText();
+    const url = `https://t.me/share/url?url=${encodeURIComponent(window.location.origin)}&text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // 3. Instagram Direct Workflow (Download HD card + copy text + open Instagram + instruction banner)
+  const handleInstagramShare = () => {
+    handleDownloadImage();
+    handleCopyText();
+    setInstagramStepActive(true);
+    // Open Instagram in new window/tab
+    setTimeout(() => {
+      window.open('https://www.instagram.com', '_blank', 'noopener,noreferrer');
+    }, 400);
+  };
+
+  // 4. X (Twitter) Direct Share
+  const handleOpenTwitter = () => {
+    const text = generateShareText();
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // 5. Facebook Direct Share
+  const handleOpenFacebook = () => {
+    const text = generateShareText();
+    const url = `https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}&u=${encodeURIComponent(window.location.origin)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // 6. Native Share Sheet (Works when supported on mobile)
+  const handleNativeShare = async () => {
+    const text = generateShareText();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Progreso Oficial Kinetix · ${athlete.name}`,
+          text: text,
+          url: window.location.href,
+        });
+      } catch (err) {
+        // Fallback to copy
+        handleCopyText();
+      }
+    } else {
+      handleCopyText();
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-3xl p-5 space-y-4 max-h-[94vh] overflow-y-auto shadow-2xl">
+      <div className="w-full max-w-xl bg-neutral-900 border border-neutral-800 rounded-3xl p-4 sm:p-5 space-y-4 max-h-[95vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
               <Share2 className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white font-brand">Compartir en Redes</h3>
-              <p className="text-xs text-neutral-400">Tarjeta para Instagram Stories, WhatsApp y Redes</p>
+              <h3 className="text-base font-bold text-white font-brand">Compartir en Redes Sociales</h3>
+              <p className="text-xs text-neutral-400">Tarjetas oficiales para Instagram Stories, WhatsApp y Redes</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -302,34 +370,37 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
           </button>
         </div>
 
-        {/* Exercise picker if strength */}
+        {/* Exercise picker if strength (Clean wrap so Sentadillas and all exercises are 100% visible) */}
         {storyType === 'strength' && latestEval?.strengthRecords && (
-          <div className="space-y-1">
-            <span className="text-[10px] text-neutral-400 block font-medium">Selecciona el ejercicio:</span>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
+          <div className="space-y-1.5 bg-neutral-950 p-2.5 rounded-2xl border border-neutral-800/80">
+            <span className="text-[11px] text-neutral-300 block font-semibold">
+              Selecciona el ejercicio evaluado:
+            </span>
+            <div className="flex flex-wrap gap-1.5 text-xs">
               {latestEval.strengthRecords.map(rec => (
                 <button
                   key={rec.exerciseId}
                   type="button"
                   onClick={() => setSelectedExercise(rec.exerciseId)}
-                  className={`px-3 py-1.5 rounded-xl whitespace-nowrap border transition-all ${
+                  className={`px-3 py-1.5 rounded-xl border text-left transition-all ${
                     selectedExercise === rec.exerciseId
-                      ? 'bg-blue-950/80 border-blue-500 text-blue-300 font-bold'
-                      : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                      ? 'bg-blue-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500'
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:text-white'
                   }`}
                 >
-                  {rec.exerciseName}: {rec.weightKg}kg
+                  <span className="block leading-tight">{rec.exerciseName}</span>
+                  <span className="text-[10px] text-blue-400 font-mono font-bold block">{rec.weightKg} {rec.weightUnit}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* VISUAL STORY PREVIEW CARD (Never truncates text!) */}
+        {/* VISUAL STORY PREVIEW CARD (Responsive, never truncates text!) */}
         <div className="flex justify-center">
           <div
             ref={cardRef}
-            className="w-full max-w-[340px] min-h-[460px] rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border-2 border-neutral-800 shadow-2xl text-white select-none"
+            className="w-full max-w-[360px] min-h-[440px] rounded-3xl p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border-2 border-neutral-800 shadow-2xl text-white select-none"
           >
             {/* Glowing Brand Accent Orbs */}
             <div className="absolute -top-12 -left-12 w-44 h-44 bg-blue-600/30 rounded-full blur-3xl pointer-events-none" />
@@ -353,8 +424,8 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
               </span>
             </div>
 
-            {/* Middle Main Content with Safe Text Wrap */}
-            <div className="relative z-10 text-center my-auto py-4 space-y-3">
+            {/* Middle Main Content with Safe Full Text Display */}
+            <div className="relative z-10 text-center my-auto py-3 space-y-3">
               {storyType === 'strength' && (
                 <>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600/20 border border-blue-500/40 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
@@ -363,8 +434,8 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    {/* Exercise Name (Full display with break-words so Sentadilla Trasera is always visible) */}
-                    <div className="text-2xl sm:text-3xl font-extrabold font-brand tracking-tight text-white uppercase break-words leading-tight px-1">
+                    {/* Exercise Name - Fully legible, break-words so Sentadillas / Press Horizontal is always complete */}
+                    <div className="text-xl sm:text-2xl font-extrabold font-brand tracking-tight text-white uppercase break-words leading-tight px-2 min-h-[2.5rem] flex items-center justify-center">
                       {strengthRecord.exerciseName}
                     </div>
 
@@ -373,13 +444,13 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     </div>
 
                     <div className="text-xs text-neutral-300 font-mono">
-                      1RM Estimado: <strong className="text-white font-bold">{strengthRecord.estimated1RMKg} kg</strong> ({strengthRecord.reps} reps)
+                      1RM Estimado: <strong className="text-white font-bold">{strengthRecord.estimated1RMKg} kg</strong> ({strengthRecord.reps} {strengthRecord.reps === 1 ? 'rep' : 'reps'})
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <span className="text-[11px] text-emerald-400 font-mono bg-emerald-950/70 border border-emerald-800/80 px-3 py-1 rounded-full inline-block">
-                      ✓ Marca Verificada en Gimnasio
+                      ✓ Marca Verificada por Coach Jorge
                     </span>
                   </div>
                 </>
@@ -405,7 +476,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <span className="text-[11px] text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-3 py-1 rounded-xl block max-w-[260px] mx-auto text-center leading-tight">
                       "Excelente resistencia cardiorrespiratoria y ritmo constante."
                     </span>
@@ -438,7 +509,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="text-xs text-neutral-300 font-mono pt-2">
+                  <div className="text-xs text-neutral-300 font-mono pt-1">
                     Peso: <strong className="text-white">{latestBodyComp.weightKg} kg</strong> · IMC: <strong className="text-white">{latestBodyComp.bmi}</strong>
                   </div>
                 </>
@@ -468,69 +539,123 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
           </div>
         </div>
 
-        {/* REAL WORKING SHARE BUTTONS (WhatsApp, Instagram, Download PNG, Copy) */}
-        <div className="space-y-2 pt-2">
-          {/* Main Action: Native Share Sheet (Triggers Instagram, WhatsApp, Stories menu) */}
-          <button
-            type="button"
-            onClick={handleNativeShare}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:opacity-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>Compartir en Apps (Instagram / WhatsApp / Historias)</span>
-          </button>
+        {/* INSTAGRAM WORKFLOW BANNER (Step-by-step indicator) */}
+        {instagramStepActive && (
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-950/80 to-pink-950/80 border border-pink-500/50 text-xs space-y-1 animate-fade-in">
+            <div className="flex items-center gap-1.5 text-pink-300 font-bold">
+              <CheckCircle2 className="w-4 h-4 text-pink-400" />
+              <span>¡Tarjeta Descargada y Texto Copiado con Éxito!</span>
+            </div>
+            <p className="text-[11px] text-neutral-200 leading-tight">
+              1. Abre Instagram ➡️ 2. Selecciona crear Historia con la imagen descargada en tu galería ➡️ 3. Pega el texto copiado con tus marcas oficiales.
+            </p>
+          </div>
+        )}
 
-          <div className="grid grid-cols-3 gap-2">
-            {/* WhatsApp direct button */}
+        {/* REAL WORKING DIRECT APPS BUTTONS */}
+        <div className="space-y-2.5 pt-1">
+          <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-1">
+            Compartir Directo en Redes:
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* 1. WhatsApp Button */}
             <button
               type="button"
               onClick={handleOpenWhatsApp}
-              className="py-2 px-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-800/80 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
-              title="Abrir WhatsApp directamente"
+              className="py-2.5 px-3 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="Abrir WhatsApp directamente con el mensaje"
             >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <MessageCircle className="w-4 h-4 text-emerald-400" />
               <span>WhatsApp</span>
             </button>
 
-            {/* Download PNG image */}
+            {/* 2. Telegram Button */}
+            <button
+              type="button"
+              onClick={handleOpenTelegram}
+              className="py-2.5 px-3 rounded-2xl bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="Abrir Telegram con el mensaje preparado"
+            >
+              <Send className="w-4 h-4 text-sky-400" />
+              <span>Telegram</span>
+            </button>
+
+            {/* 3. Instagram Stories Button */}
+            <button
+              type="button"
+              onClick={handleInstagramShare}
+              className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-purple-600/30 via-pink-600/30 to-amber-600/30 hover:from-purple-600/40 hover:to-pink-600/40 border border-pink-500/50 text-pink-200 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="Descargar imagen y abrir Instagram"
+            >
+              <Instagram className="w-4 h-4 text-pink-400" />
+              <span>Instagram</span>
+            </button>
+
+            {/* 4. Twitter / X Button */}
+            <button
+              type="button"
+              onClick={handleOpenTwitter}
+              className="py-2.5 px-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="Publicar en X / Twitter"
+            >
+              <span className="font-brand font-black text-xs">𝕏</span>
+              <span>Twitter / X</span>
+            </button>
+          </div>
+
+          {/* Secondary Utilities: Download PNG & Copy Text */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* Download High-Res PNG */}
             <button
               type="button"
               onClick={handleDownloadImage}
-              className="py-2 px-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
-              title="Descargar imagen lista para historias"
+              className="py-2.5 px-3 rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700/80 font-semibold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               {downloadSuccess ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">¡Guardada!</span>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">¡Imagen Descargada!</span>
                 </>
               ) : (
                 <>
-                  <Download className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Bajar PNG</span>
+                  <Download className="w-4 h-4 text-blue-400" />
+                  <span>Bajar Tarjeta PNG</span>
                 </>
               )}
             </button>
 
-            {/* Copy text */}
+            {/* Copy Formatted Text */}
             <button
               type="button"
               onClick={handleCopyText}
-              className="py-2 px-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              className="py-2.5 px-3 rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700/80 font-semibold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               {copiedSuccess ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">¡Copiado!</span>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">¡Texto Copiado!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                  <Copy className="w-4 h-4 text-neutral-400" />
                   <span>Copiar Texto</span>
                 </>
               )}
             </button>
           </div>
+
+          {/* System Share (Mobile Native Sheet) */}
+          {typeof navigator !== 'undefined' && 'share' in navigator && (
+            <button
+              type="button"
+              onClick={handleNativeShare}
+              className="w-full py-2.5 px-4 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Abrir Menú Compartir del Celular</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
