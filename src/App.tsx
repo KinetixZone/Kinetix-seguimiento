@@ -5,6 +5,9 @@ import { LoginPage } from './components/auth/LoginPage';
 import { UserProfileAndLogoModal } from './components/common/UserProfileAndLogoModal';
 import { InAppNotificationCenter } from './components/common/InAppNotificationCenter';
 import { SendNotificationModal } from './components/common/SendNotificationModal';
+import { PrivacyConsentModal } from './components/common/PrivacyConsentModal';
+import { PrivacyPolicyViewerModal } from './components/common/PrivacyPolicyViewerModal';
+import { CURRENT_PRIVACY_NOTICE_VERSION } from './data/privacyNoticeContent';
 import { 
   INITIAL_USERS, 
   DEMO_ATHLETES,
@@ -19,7 +22,8 @@ import {
   MembershipStatus,
   KinetixPlanName,
   PushNotificationSimulation,
-  BrandTheme
+  BrandTheme,
+  PrivacyConsentRecord
 } from './types';
 
 export default function App() {

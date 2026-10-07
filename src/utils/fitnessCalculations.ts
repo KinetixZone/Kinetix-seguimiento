@@ -103,6 +103,118 @@ export function getBMICategory(bmi: number): 'Bajo Peso' | 'Normal' | 'Sobrepeso
   return 'Obesidad III';
 }
 
+export interface RenphoVisceralFatInfo {
+  level: number;
+  category: 'Estándar / Saludable' | 'Alto / Precaución' | 'Excesivo / Peligro';
+  rangeLabel: string;
+  colorHex: string;
+  badgeBg: string;
+  badgeText: string;
+  description: string;
+}
+
+/**
+ * Evaluates Visceral Fat level according to official RENPHO smart scale standards:
+ * - 1 to 9: Estándar (Saludable) - Verde
+ * - 10 to 14: Alto (Alerta / Precaución) - Amarillo / Naranja
+ * - 15 to 59: Excesivo (Peligro) - Rojo
+ */
+export function getRenphoVisceralFatInfo(level: number): RenphoVisceralFatInfo {
+  if (level <= 9) {
+    return {
+      level,
+      category: 'Estándar / Saludable',
+      rangeLabel: '1 – 9',
+      colorHex: '#10b981',
+      badgeBg: 'bg-emerald-500/10 border-emerald-500/30',
+      badgeText: 'text-emerald-400',
+      description: 'Nivel óptimo y saludable. La grasa protege los órganos vitales sin acumulación de riesgo metabólico.',
+    };
+  }
+  if (level <= 14) {
+    return {
+      level,
+      category: 'Alto / Precaución',
+      rangeLabel: '10 – 14',
+      colorHex: '#f59e0b',
+      badgeBg: 'bg-amber-500/10 border-amber-500/30',
+      badgeText: 'text-amber-400',
+      description: 'Nivel elevado en zona intra-abdominal. Alerta de precaución para salud cardiovascular y metabólica.',
+    };
+  }
+  return {
+    level,
+    category: 'Excesivo / Peligro',
+    rangeLabel: '15 – 59',
+    colorHex: '#ef4444',
+    badgeBg: 'bg-rose-500/10 border-rose-500/30',
+    badgeText: 'text-rose-400',
+    description: 'Nivel crítico excesivo según la báscula RENPHO. Requiere plan de nutrición y reestructuración de entrenamiento funcional.',
+  };
+}
+
+export interface RenphoBmiInfo {
+  bmi: number;
+  category: 'Bajo Peso' | 'Estándar / Saludable' | 'Sobrepeso' | 'Obesidad';
+  rangeLabel: string;
+  colorHex: string;
+  badgeBg: string;
+  badgeText: string;
+  description: string;
+}
+
+/**
+ * Evaluates BMI (IMC) according to RENPHO smart scale classification:
+ * - < 18.5: Bajo Peso (Azul)
+ * - 18.5 to 24.9: Estándar / Saludable (Verde)
+ * - 25.0 to 29.9: Sobrepeso (Amarillo)
+ * - >= 30.0: Obesidad (Rojo)
+ */
+export function getRenphoBmiInfo(bmi: number): RenphoBmiInfo {
+  if (bmi < 18.5) {
+    return {
+      bmi,
+      category: 'Bajo Peso',
+      rangeLabel: '< 18.5',
+      colorHex: '#38bdf8',
+      badgeBg: 'bg-sky-500/10 border-sky-500/30',
+      badgeText: 'text-sky-400',
+      description: 'Por debajo del estándar sugerido en la app RENPHO. Evaluar masa muscular e ingesta energética.',
+    };
+  }
+  if (bmi < 25.0) {
+    return {
+      bmi,
+      category: 'Estándar / Saludable',
+      rangeLabel: '18.5 – 24.9',
+      colorHex: '#10b981',
+      badgeBg: 'bg-emerald-500/10 border-emerald-500/30',
+      badgeText: 'text-emerald-400',
+      description: 'Rango estándar óptimo según la escala RENPHO y lineamientos de la OMS.',
+    };
+  }
+  if (bmi < 30.0) {
+    return {
+      bmi,
+      category: 'Sobrepeso',
+      rangeLabel: '25.0 – 29.9',
+      colorHex: '#f59e0b',
+      badgeBg: 'bg-amber-500/10 border-amber-500/30',
+      badgeText: 'text-amber-400',
+      description: 'Rango superior al estándar. En atletas funcionales, cotejar con el % de masa muscular antes de restringir calorías.',
+    };
+  }
+  return {
+    bmi,
+    category: 'Obesidad',
+    rangeLabel: '≥ 30.0',
+    colorHex: '#ef4444',
+    badgeBg: 'bg-rose-500/10 border-rose-500/30',
+    badgeText: 'text-rose-400',
+    description: 'Elevado según la báscula RENPHO. Priorizar recomposición corporal con entrenamiento de fuerza funcional.',
+  };
+}
+
 /**
  * Estimated VO2Max from Cooper Test (12 minutes run in meters)
  * Formula: VO2Max (ml/kg/min) = (Distance in meters - 504.9) / 44.73

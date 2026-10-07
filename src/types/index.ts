@@ -130,3 +130,15 @@ export interface PushNotificationSimulation {
   type: 'payment_reminder' | 'test_results' | 'membership_suspension' | 'milestone';
   read: boolean;
 }
+
+export interface PrivacyConsentRecord {
+  consent_id: string;
+  user_id: string;
+  user_email: string;
+  privacy_notice_version: string;
+  privacy_notice_accepted: boolean;
+  sensitive_data_consent: boolean;
+  accepted_at: string; // ISO timestamp
+  consent_method: string; // e.g. 'authenticated_user_checkbox'
+  platform: string; // 'Kinetix Progress'
+}

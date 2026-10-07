@@ -12,7 +12,9 @@ import {
   RotateCcw,
   Sparkles,
   Award,
-  MessageCircle
+  MessageCircle,
+  FileText,
+  ShieldAlert
 } from 'lucide-react';
 
 interface UserProfileAndLogoModalProps {
@@ -22,6 +24,7 @@ interface UserProfileAndLogoModalProps {
   onUpdateGymLogo: (newLogoUrl: string | null) => void;
   onLogout: () => void;
   onClose: () => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = ({
@@ -31,6 +34,7 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
   onUpdateGymLogo,
   onLogout,
   onClose,
+  onOpenPrivacyPolicy,
 }) => {
   const [avatarSuccess, setAvatarSuccess] = useState(false);
   const [logoSuccess, setLogoSuccess] = useState(false);
@@ -384,6 +388,33 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
                 ✓ Contraseña actualizada correctamente en tu dispositivo.
               </span>
             )}
+          </div>
+
+          {/* Legal y Privacidad: Acceso permanente al Aviso de Privacidad Integral */}
+          <div className="pt-2 border-t border-neutral-800/80 space-y-1.5">
+            <span className="text-[11px] font-semibold text-neutral-300 flex items-center justify-between">
+              <span>⚖️ Legal y Privacidad:</span>
+              <span className="text-[10px] text-blue-400 font-mono">LFPDPPP</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenPrivacyPolicy) {
+                  onClose();
+                  onOpenPrivacyPolicy();
+                }
+              }}
+              className="w-full p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-left flex items-center justify-between transition-colors group"
+            >
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-400 group-hover:text-blue-300" />
+                <div>
+                  <strong className="text-xs text-white block">Aviso de Privacidad Integral</strong>
+                  <span className="text-[10px] text-neutral-400 block">Consulta los términos, finalidades y tu constancia de consentimiento</span>
+                </div>
+              </div>
+              <span className="text-[10px] text-blue-400 font-bold group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+            </button>
           </div>
         </div>
 
