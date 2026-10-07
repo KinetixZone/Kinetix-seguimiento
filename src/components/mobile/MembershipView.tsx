@@ -12,7 +12,6 @@ import {
   DollarSign, 
   Send, 
   Zap, 
-  RefreshCw,
   ArrowLeft
 } from 'lucide-react';
 
@@ -29,24 +28,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   onSimulatePushNotification,
   onBackToDashboard,
 }) => {
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-
   const mem = currentUser.membership;
-
-  const handleSimulatePayment = () => {
-    setIsProcessingPayment(true);
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      setPaymentSuccess(true);
-      onUpdateMembershipStatus('active', 30);
-      onSimulatePushNotification(
-        'Pago Registrado Exitosamente',
-        `Hemos recibido tu pago de mensualidad. Tu membresía de Kinetix está activa hasta el 30 de Mayo, 2024.`
-      );
-      setTimeout(() => setPaymentSuccess(false), 4000);
-    }, 1200);
-  };
 
   const handleTriggerSuspension = () => {
     onUpdateMembershipStatus('suspended', -6);
@@ -256,31 +238,21 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             </p>
           </div>
 
-          {/* Action Button */}
-          <div className="pt-4">
-            <button
-              onClick={handleSimulatePayment}
-              disabled={isProcessingPayment}
-              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-98 transition-all disabled:opacity-50"
-            >
-              {isProcessingPayment ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Procesando Renovación...</span>
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4" />
-                  <span>Registrar Pago / Regularizar Membresía</span>
-                </>
-              )}
-            </button>
-
-            {paymentSuccess && (
-              <div className="mt-2 text-center text-xs text-emerald-400 font-medium animate-fade-in">
-                ✓ ¡Membresía renovada con éxito por 30 días!
+          {/* Payment Guidance: Athletes must pay at gym or to Coach Jorge; only Staff can register payments */}
+          <div className="pt-4 space-y-2">
+            <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-neutral-300 font-semibold text-xs">
+                <CreditCard className="w-4 h-4 text-emerald-400" />
+                <span>¿Cómo realizar o reportar tu pago?</span>
               </div>
-            )}
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                El registro de mensualidad es validado directamente por el Staff y Coaches de Kinetix. Realiza tu pago en recepción o contáctanos por WhatsApp (+52 56 2730 3189) con tu comprobante y el Coach actualizará tu corte de inmediato.
+              </p>
+              <div className="pt-1 flex items-center justify-between text-[10px] text-neutral-500 font-mono">
+                <span>Cobro: Día {mem.billingDayOfMonth || 15} mensual</span>
+                <span className="text-emerald-400 font-bold">Validación exclusiva Coach</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

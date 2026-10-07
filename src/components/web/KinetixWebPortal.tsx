@@ -86,7 +86,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   onDeleteAthlete,
   onUpdateAthleteProfile,
 }) => {
-  const [selectedUserId, setSelectedUserId] = useState<string>('user-001');
+  const [selectedUserId, setSelectedUserId] = useState<string>(() => users[0]?.id || 'user-staff-leslie');
   const [currentSection, setCurrentSection] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff'>('dashboard');
   const [isInspectingAthlete, setIsInspectingAthlete] = useState<boolean>(false);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
@@ -196,10 +196,11 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               }}
               className="w-full bg-neutral-950 border border-neutral-800 text-white text-xs rounded-xl p-2 outline-none focus:border-blue-500 font-medium"
             >
-              <option value="user-001">Atleta: Juan Pérez (75kg · 45% músculo)</option>
-              <option value="user-002">Atleta: María García (15 Marzo · Cooper 2400m)</option>
-              <option value="user-003">Atleta: Sarah Connor (Recordatorio de Pago)</option>
-              <option value="user-staff-01">Staff: Coach Roberto Sánchez</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.role === 'staff' ? '👑 Staff' : '🏃 Atleta'}: {u.name} ({u.membership?.planName})
+                </option>
+              ))}
             </select>
           </div>
 

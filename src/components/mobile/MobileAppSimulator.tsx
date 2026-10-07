@@ -83,8 +83,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   // Device Frame State: 'iphone' | 'pixel' | 'fluid'
   const [deviceModel, setDeviceModel] = useState<'iphone' | 'pixel' | 'fluid'>('iphone');
   
-  // Active Simulated User
-  const [selectedUserId, setSelectedUserId] = useState<string>('user-001'); // Juan Pérez default
+  // Active Simulated User (Defaults to active user or first staff)
+  const [selectedUserId, setSelectedUserId] = useState<string>(() => users[0]?.id || 'user-staff-leslie');
   
   // Offline Simulation State
   const [isOffline, setIsOffline] = useState<boolean>(false);
@@ -167,10 +167,11 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
             }}
             className="bg-neutral-950 border border-neutral-800 text-white text-xs rounded-xl px-2.5 py-1 outline-none focus:border-emerald-500 font-medium"
           >
-            <option value="user-001">Atleta: Juan Pérez</option>
-            <option value="user-002">Atleta: María García</option>
-            <option value="user-003">Atleta: Sarah Connor</option>
-            <option value="user-staff-01">Staff: Coach Roberto</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.role === 'staff' ? '👑 Staff' : '🏃 Atleta'}: {u.name}
+              </option>
+            ))}
           </select>
         </div>
 

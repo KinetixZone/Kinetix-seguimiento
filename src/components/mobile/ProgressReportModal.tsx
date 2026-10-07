@@ -88,7 +88,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] text-neutral-500 uppercase tracking-wider block">Entrenador Responsable</span>
-              <span className="text-emerald-400 font-medium">{latestEval?.coachName || 'Coach Roberto Sánchez'}</span>
+              <span className="text-emerald-400 font-medium">{latestEval?.coachName || 'Coach Jorge'}</span>
             </div>
           </div>
 

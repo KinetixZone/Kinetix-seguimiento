@@ -530,7 +530,7 @@ export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
   {
     id: 'notif-2',
     title: 'Nuevos Resultados de Evaluación Física',
-    body: 'Coach Roberto ha registrado tus resultados del Test Cooper (2,800m - Excelente) y Pruebas de Fuerza 1RM.',
+    body: 'Coach Jorge ha registrado tus resultados del Test Cooper y Pruebas de Fuerza 1RM.',
     timestamp: '2024-03-20 18:30',
     type: 'test_results',
     read: true,
@@ -538,7 +538,7 @@ export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
   {
     id: 'notif-3',
     title: 'Hito Alcanzado: +5kg de Fuerza',
-    body: '¡Felicidades Juan! Tu progreso de fuerza neta superó el objetivo mensual de marzo.',
+    body: '¡Felicidades por tu constancia! Tu progreso de fuerza neta superó el objetivo mensual.',
     timestamp: '2024-03-21 10:15',
     type: 'milestone',
     read: true,

@@ -313,13 +313,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </button>
           )}
 
-          {/* Evaluar Atleta Button (Always accessible) */}
+          {/* Evaluation Action Button */}
           <button
             onClick={handleOpenAddModal}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Evaluar Atleta</span>
+            <span>{currentUser.role === 'staff' ? 'Evaluar Atleta' : 'Registrar Mis Evaluaciones'}</span>
           </button>
         </div>
       </div>
@@ -1081,10 +1081,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div>
                 <span className="text-[10px] font-mono text-blue-400 uppercase font-bold">
-                  Staff Kinetix · Coach Jorge
+                  {currentUser.role === 'staff' ? 'Staff Kinetix · Registro Técnico' : 'Registro de Marca Personal · Kinetix'}
                 </span>
                 <h3 className="text-base font-bold text-white font-brand">
-                  Nueva Evaluación Oficial: {currentUser.name}
+                  {currentUser.role === 'staff' ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
                 </h3>
               </div>
               <button

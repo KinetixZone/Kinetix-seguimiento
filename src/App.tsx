@@ -317,7 +317,10 @@ export default function App() {
 
   const handleClearDemoAthletes = () => {
     // Keep only official staff members (Leslie, Coach Jorge, Coach Gus)
-    setUsers(prev => prev.filter(u => u.role === 'staff'));
+    const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
+    setUsers(prev => prev.filter(u => u.role === 'staff' || !demoIds.includes(u.id)));
+    setBodyCompRecords(prev => prev.filter(b => !demoIds.includes(b.userId)));
+    setEvaluations(prev => prev.filter(e => !demoIds.includes(e.userId)));
   };
 
   const handleRestoreDemoAthletes = () => {

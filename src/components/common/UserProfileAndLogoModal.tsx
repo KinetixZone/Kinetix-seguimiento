@@ -35,6 +35,7 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
   const [avatarSuccess, setAvatarSuccess] = useState(false);
   const [logoSuccess, setLogoSuccess] = useState(false);
   const [customLogoInput, setCustomLogoInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState(() => {
     return localStorage.getItem('kinetix_coach_whatsapp') || '+52 56 2730 3189';
   });
@@ -355,24 +356,24 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
             <div className="flex gap-1.5">
               <input
                 type="password"
-                value={customLogoInput === '__pwd' ? '' : customLogoInput}
-                onChange={(e) => setCustomLogoInput(e.target.value)}
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
                 placeholder="Escribe tu nueva contraseña..."
                 className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500"
               />
               <button
                 type="button"
                 onClick={() => {
-                  if (customLogoInput.trim()) {
+                  if (newPasswordInput.trim()) {
                     try {
-                      localStorage.setItem(`kinetix_pwd_${currentUser.id}`, customLogoInput.trim());
+                      localStorage.setItem(`kinetix_pwd_${currentUser.id}`, newPasswordInput.trim());
                     } catch {}
                     setAvatarSuccess(true);
-                    setCustomLogoInput('');
+                    setNewPasswordInput('');
                     setTimeout(() => setAvatarSuccess(false), 2500);
                   }
                 }}
-                disabled={!customLogoInput.trim()}
+                disabled={!newPasswordInput.trim()}
                 className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold transition-all"
               >
                 Actualizar
