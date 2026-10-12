@@ -32,6 +32,19 @@ export default function App() {
   const [isSendNotificationOpen, setIsSendNotificationOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
+  // Privacy Policy & Consent State
+  const [isPrivacyConsentOpen, setIsPrivacyConsentOpen] = useState<boolean>(false);
+  const [isPrivacyPolicyViewerOpen, setIsPrivacyPolicyViewerOpen] = useState<boolean>(false);
+  
+  // Consent history records stored in localStorage (userId -> PrivacyConsentRecord[])
+  const [consentHistory, setConsentHistory] = useState<Record<string, PrivacyConsentRecord[]>>(() => {
+    try {
+      const saved = localStorage.getItem('kinetix_privacy_consents');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
   // Authentication State: default authenticated to Leslie (Dueña & Coach)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [currentUserId, setCurrentUserId] = useState<string>('user-staff-leslie');
@@ -118,6 +131,43 @@ export default function App() {
   }, [evaluations]);
 
   const currentUser = users.find(u => u.id === currentUserId) || users[0];
+
+  // Helper to check if a user has consented to the current privacy notice version
+  const currentUserHasConsented = (userId: string) => {
+    const list = consentHistory[userId] || [];
+    return list.some(
+      (c) =>
+        c.privacy_notice_version === CURRENT_PRIVACY_NOTICE_VERSION &&
+        c.privacy_notice_accepted &&
+        c.sensitive_data_consent
+    );
+  };
+
+  // Automatically check on currentUser change (first login or switch user or create profile)
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      if (!currentUserHasConsented(currentUser.id)) {
+        setIsPrivacyConsentOpen(true);
+      } else {
+        setIsPrivacyConsentOpen(false);
+      }
+    }
+  }, [currentUserId, isAuthenticated, consentHistory]);
+
+  const handleConsentAccepted = (record: PrivacyConsentRecord) => {
+    setConsentHistory((prev) => {
+      const userList = prev[record.user_id] || [];
+      const updated = {
+        ...prev,
+        [record.user_id]: [...userList, record],
+      };
+      try {
+        localStorage.setItem('kinetix_privacy_consents', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setIsPrivacyConsentOpen(false);
+  };
 
   // Update user avatar (Atletas & Coach)
   const handleUpdateAvatar = (userId: string, newAvatarUrl: string) => {
@@ -317,6 +367,8 @@ export default function App() {
     };
 
     setUsers(prev => [createdUser, ...prev]);
+    // Switch to newly created user so they see their setup and the privacy notice window triggers immediately
+    setCurrentUserId(createdUser.id);
   };
 
   const handleClearDemoAthletes = () => {
@@ -356,12 +408,22 @@ export default function App() {
   // IF NOT AUTHENTICATED: Show the Portal de Acceso (Login Page)
   if (!isAuthenticated) {
     return (
-      <LoginPage
-        users={users}
-        gymLogoUrl={gymLogoUrl}
-        onLogin={handleLogin}
-        onNotifyOwners={(title, body) => handleSimulateNotification(title, body)}
-      />
+      <>
+        <LoginPage
+          users={users}
+          gymLogoUrl={gymLogoUrl}
+          onLogin={handleLogin}
+          onNotifyOwners={(title, body) => handleSimulateNotification(title, body)}
+          onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
+        />
+        {/* Full Digital Privacy Notice Viewer Modal on Login Screen */}
+        <PrivacyPolicyViewerModal
+          currentUser={currentUser}
+          consentRecord={null}
+          isOpen={isPrivacyPolicyViewerOpen}
+          onClose={() => setIsPrivacyPolicyViewerOpen(false)}
+        />
+      </>
     );
   }
 
@@ -376,6 +438,7 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         onOpenSendNotification={() => setIsSendNotificationOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -403,6 +466,7 @@ export default function App() {
           onClearDemoAthletes={handleClearDemoAthletes}
           onRestoreDemoAthletes={handleRestoreDemoAthletes}
           onSwitchUser={(u) => setCurrentUserId(u.id)}
+          onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
         />
       </main>
 
@@ -415,6 +479,7 @@ export default function App() {
           onUpdateGymLogo={handleUpdateGymLogo}
           onLogout={handleLogout}
           onClose={() => setIsProfileModalOpen(false)}
+          onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
         />
       )}
 
@@ -441,6 +506,21 @@ export default function App() {
           onClose={() => setIsSendNotificationOpen(false)}
         />
       )}
+
+      {/* Privacy Consent Modal (First-time blocking modal with 2 checkboxes) */}
+      <PrivacyConsentModal
+        currentUser={currentUser}
+        isOpen={isPrivacyConsentOpen}
+        onConsentAccepted={handleConsentAccepted}
+      />
+
+      {/* Full Digital Privacy Notice Viewer Modal (Digital document + evidence certificate + print physical format) */}
+      <PrivacyPolicyViewerModal
+        currentUser={currentUser}
+        consentRecord={consentHistory[currentUser.id]?.slice(-1)[0] || null}
+        isOpen={isPrivacyPolicyViewerOpen}
+        onClose={() => setIsPrivacyPolicyViewerOpen(false)}
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ interface LoginPageProps {
   gymLogoUrl: string | null;
   onLogin: (user: UserProfile) => void;
   onNotifyOwners?: (title: string, body: string) => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
@@ -29,6 +30,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   gymLogoUrl,
   onLogin,
   onNotifyOwners,
+  onOpenPrivacyPolicy,
 }) => {
   const [roleTab, setRoleTab] = useState<'athlete' | 'staff'>('athlete');
   const [email, setEmail] = useState('');
@@ -313,8 +315,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="text-center text-[11px] text-neutral-500 space-y-1">
+        <div className="text-center text-[11px] text-neutral-500 space-y-1.5">
           <p>Kinetix Functional Zone · Plataforma Deportiva Oficial</p>
+          {onOpenPrivacyPolicy && (
+            <div>
+              <button
+                type="button"
+                onClick={onOpenPrivacyPolicy}
+                className="text-blue-400 hover:text-blue-300 underline font-semibold text-[11px] transition-colors"
+              >
+                Aviso de Privacidad Integral (LFPDPPP)
+              </button>
+            </div>
+          )}
           <p className="text-[10px] text-neutral-600">
             Diseñada para dispositivos móviles (iOS / Android) y computadoras de escritorio.
           </p>

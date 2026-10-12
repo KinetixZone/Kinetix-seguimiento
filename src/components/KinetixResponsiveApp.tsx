@@ -28,8 +28,15 @@ import {
   SlidersHorizontal,
   Scale,
   Send,
-  UserCheck
+  UserCheck,
+  Lock,
+  FileText,
+  Printer
 } from 'lucide-react';
+import { 
+  OFFICIAL_PRIVACY_NOTICE_DOCUMENT, 
+  CURRENT_PRIVACY_NOTICE_VERSION 
+} from '../data/privacyNoticeContent';
 
 interface KinetixResponsiveAppProps {
   currentUser: UserProfile;
@@ -67,6 +74,7 @@ interface KinetixResponsiveAppProps {
   onClearDemoAthletes?: () => void;
   onRestoreDemoAthletes?: () => void;
   onSwitchUser: (user: UserProfile) => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -91,9 +99,10 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onClearDemoAthletes,
   onRestoreDemoAthletes,
   onSwitchUser,
+  onOpenPrivacyPolicy,
 }) => {
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff'>('dashboard');
-  const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff')[]>(['dashboard']);
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
+  const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
   const [showSendNotificationModal, setShowSendNotificationModal] = useState<boolean>(false);
@@ -108,7 +117,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   const latestEval = userEvals[userEvals.length - 1] || evaluations[0];
 
   // Navigation handlers with History Stack
-  const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff') => {
+  const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
     if (tab === currentTab) return;
     setTabHistory(prev => [...prev, tab]);
     setCurrentTab(tab);
@@ -164,13 +173,14 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
     setCurrentTab('body');
   };
 
-  const getTabTitle = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff') => {
+  const getTabTitle = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
     switch (tab) {
       case 'dashboard': return 'Inicio · Rendimiento';
       case 'body': return 'Composición Corporal & IMC';
       case 'tests': return 'Pruebas Físicas & Fuerza 1RM';
       case 'membership': return 'Membresía & Pagos';
       case 'staff': return 'Panel del Entrenador (Staff)';
+      case 'privacy': return 'Aviso de Privacidad Integral';
       default: return 'Inicio';
     }
   };
@@ -249,6 +259,19 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             >
               <CreditCard className="w-4 h-4" />
               <span>Membresía & Pagos</span>
+            </button>
+
+            {/* Desktop Privacy Tab */}
+            <button
+              onClick={() => handleNavigateTab('privacy')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all ${
+                currentTab === 'privacy'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Aviso de Privacidad</span>
             </button>
 
             {isStaff && (
@@ -439,7 +462,114 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onBackToDashboard={handleGoHome}
           />
         )}
+
+        {/* VIEW 6: AVISO DE PRIVACIDAD INTEGRAL DIGITAL (Permanent Tab) */}
+        {currentTab === 'privacy' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Header */}
+            <div className="p-4 sm:p-6 bg-gradient-to-r from-blue-950/70 via-neutral-900 to-red-950/40 rounded-3xl border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold shrink-0">
+                  <ShieldCheck className="w-6 h-6 text-blue-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                      LFPDPPP · México
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      {CURRENT_PRIVACY_NOTICE_VERSION}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white font-brand mt-1">
+                    Aviso de Privacidad Integral
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  title="Imprimir versión con formato físico de firma"
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Imprimir Formato Físico</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Document Body */}
+            <div className="p-5 sm:p-8 rounded-3xl bg-neutral-900/80 border border-neutral-800 space-y-6 text-xs text-neutral-300 leading-relaxed shadow-xl">
+              <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800/80 space-y-2 font-mono text-[11px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-2">
+                  <span className="font-bold text-white">KINETIX FUNCTIONAL ZONE</span>
+                  <span className="text-blue-400">Versión Oficial: {CURRENT_PRIVACY_NOTICE_VERSION}</span>
+                </div>
+                <div className="text-neutral-400">
+                  Genovevo Rivas 3-81, San Felipe de Jesús Nte., Gustavo A. Madero, C.P. 07510, CDMX.
+                </div>
+                <div className="text-[10px] text-neutral-500">
+                  Contacto de Privacidad y Ejercicio ARCO: <strong className="text-blue-400">kinetix.zone@gmail.com</strong>
+                </div>
+              </div>
+
+              <div className="whitespace-pre-line text-xs font-sans text-neutral-200 leading-relaxed space-y-4">
+                {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.fullMarkdown}
+              </div>
+
+              {/* Physical Print Signature Box (Visible on print) */}
+              <div className="hidden print:block pt-8 border-t-2 border-black space-y-6 text-black">
+                <h4 className="font-bold text-sm uppercase">
+                  CONSENTIMIENTO POR ESCRITO (FORMATO IMPRESO)
+                </h4>
+                <p className="text-xs leading-relaxed">
+                  Manifiesto que he leído y conozco el contenido del presente Aviso de Privacidad Integral y que he sido informado sobre el tratamiento y las finalidades de mis datos personales. Asimismo, otorgo expresamente mi consentimiento para el tratamiento de mis datos personales sensibles.
+                </p>
+                <div className="pt-6 space-y-6 text-xs">
+                  <div>Nombre completo del titular: ____________________________________________________</div>
+                  <div>Firma autógrafa del titular: _____________________________________________________</div>
+                  <div>Fecha: __________________________________________________________________________</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Persistent Page Footer (Legal & Privacidad LFPDPPP) */}
+      <footer className="mt-auto py-6 px-4 border-t border-neutral-900 bg-neutral-950/90 text-center text-xs text-neutral-400 no-print pb-24 md:pb-8">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span className="font-bold text-white font-brand">KINETIX Functional Zone</span>
+            <span className="text-neutral-600">·</span>
+            <span className="text-neutral-500 font-mono text-[10px]">Kinetix Progress {CURRENT_PRIVACY_NOTICE_VERSION}</span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[11px]">
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenPrivacyPolicy) {
+                  onOpenPrivacyPolicy();
+                } else {
+                  handleNavigateTab('privacy');
+                }
+              }}
+              className="text-blue-400 hover:text-blue-300 font-semibold underline flex items-center gap-1.5 transition-colors"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Aviso de Privacidad Integral</span>
+            </button>
+            <span className="text-neutral-700 hidden sm:inline">|</span>
+            <span className="text-neutral-500 font-mono text-[10px]">
+              Ejercicio ARCO: kinetix.zone@gmail.com
+            </span>
+          </div>
+        </div>
+      </footer>
 
       {/* MOBILE BOTTOM NAVIGATION BAR (Visible on mobile screens < md) */}
       <div 
@@ -486,6 +616,17 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
         >
           <CreditCard className="w-4 h-4" />
           <span className="text-[9px] font-medium tracking-tight mt-1">{isStaff ? 'Cuenta' : 'Pagos'}</span>
+        </button>
+
+        {/* Mobile Bottom Privacy Tab */}
+        <button
+          onClick={() => handleNavigateTab('privacy')}
+          className={`flex flex-col items-center justify-center h-full transition-colors ${
+            currentTab === 'privacy' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
+          }`}
+        >
+          <Lock className="w-4 h-4" />
+          <span className="text-[9px] font-medium tracking-tight mt-1">Privacidad</span>
         </button>
 
         {isStaff && (

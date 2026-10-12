@@ -9,6 +9,7 @@ interface NavigationHeaderProps {
   onOpenNotifications: () => void;
   onOpenSendNotification?: () => void;
   onOpenProfileModal: () => void;
+  onOpenPrivacyPolicy?: () => void;
   onLogout: () => void;
 }
 
@@ -19,6 +20,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
   onOpenNotifications,
   onOpenSendNotification,
   onOpenProfileModal,
+  onOpenPrivacyPolicy,
   onLogout,
 }) => {
   const isStaff = currentUser.role === 'staff';
@@ -62,6 +64,18 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
 
         {/* Zone 2: User Status & Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Direct Privacy Link */}
+          {onOpenPrivacyPolicy && (
+            <button
+              onClick={onOpenPrivacyPolicy}
+              className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+              title="Aviso de Privacidad Integral (LFPDPPP)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden md:inline">Aviso de Privacidad</span>
+            </button>
+          )}
+
           {/* Coach Quick Send Alert Button */}
           {isStaff && onOpenSendNotification && (
             <button

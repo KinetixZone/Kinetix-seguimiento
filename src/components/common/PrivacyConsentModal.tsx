@@ -111,37 +111,47 @@ export const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
 
           {/* Legal Checkboxes (Must start unchecked) */}
           <div className="space-y-3 pt-2">
-            <label 
+            <button
+              type="button"
               onClick={() => setAcceptedNotice(!acceptedNotice)}
-              className="flex items-start gap-3 p-3 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 cursor-pointer transition-all"
+              className={`w-full text-left flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${
+                acceptedNotice 
+                  ? 'bg-blue-950/30 border-blue-500/50 text-white' 
+                  : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-300'
+              }`}
             >
               <div className="mt-0.5 shrink-0 text-blue-500">
                 {acceptedNotice ? (
-                  <CheckSquare className="w-5 h-5 text-blue-500 fill-blue-500/10" />
+                  <CheckSquare className="w-5 h-5 text-blue-400 fill-blue-500/20" />
                 ) : (
                   <Square className="w-5 h-5 text-neutral-500" />
                 )}
               </div>
-              <span className="text-xs text-neutral-200 select-none leading-snug">
+              <span className="text-xs select-none leading-snug">
                 He leído y conozco el <strong>Aviso de Privacidad Integral</strong> de Kinetix Progress.
               </span>
-            </label>
+            </button>
 
-            <label 
+            <button
+              type="button"
               onClick={() => setAcceptedSensitive(!acceptedSensitive)}
-              className="flex items-start gap-3 p-3 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 cursor-pointer transition-all"
+              className={`w-full text-left flex items-start gap-3 p-3.5 rounded-2xl border transition-all ${
+                acceptedSensitive 
+                  ? 'bg-red-950/30 border-red-500/50 text-white' 
+                  : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-300'
+              }`}
             >
               <div className="mt-0.5 shrink-0 text-red-500">
                 {acceptedSensitive ? (
-                  <CheckSquare className="w-5 h-5 text-red-500 fill-red-500/10" />
+                  <CheckSquare className="w-5 h-5 text-red-400 fill-red-500/20" />
                 ) : (
                   <Square className="w-5 h-5 text-neutral-500" />
                 )}
               </div>
-              <span className="text-xs text-neutral-200 select-none leading-snug">
+              <span className="text-xs select-none leading-snug">
                 Otorgo expresamente mi consentimiento para el tratamiento de mis <strong>datos personales sensibles</strong> para las finalidades señaladas en el Aviso de Privacidad Integral.
               </span>
-            </label>
+            </button>
           </div>
 
           {!canContinue && (
