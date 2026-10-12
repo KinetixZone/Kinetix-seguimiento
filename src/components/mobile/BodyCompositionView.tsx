@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { BodyCompositionRecord, UserProfile } from '../../types';
-import { calculateBMI, getBMICategory } from '../../utils/fitnessCalculations';
+import { 
+  calculateBMI, 
+  getBMICategory, 
+  getRenphoVisceralFatInfo, 
+  getRenphoBmiInfo 
+} from '../../utils/fitnessCalculations';
 import { PrivateProgressPhotosView } from './PrivateProgressPhotosView';
 import { 
   Scale, 
@@ -15,7 +20,10 @@ import {
   X,
   Camera,
   Lock,
-  ArrowLeft
+  ArrowLeft,
+  HelpCircle,
+  Activity,
+  Sparkles
 } from 'lucide-react';
 
 interface BodyCompositionViewProps {
@@ -36,6 +44,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   onBackToDashboard,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showRenphoGuide, setShowRenphoGuide] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<BodyCompositionRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
 
@@ -109,18 +118,28 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       )}
 
       {/* Header and Add Action */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <span className="text-[11px] font-medium text-blue-400 uppercase tracking-wider">
-            Antropometría & Bioimpedancia
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium text-blue-400 uppercase tracking-wider">
+              Antropometría & Bioimpedancia
+            </span>
+            <button
+              onClick={() => setShowRenphoGuide(true)}
+              className="text-[10px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors"
+              title="Ver cómo mide la báscula RENPHO el IMC y Grasa Visceral"
+            >
+              <HelpCircle className="w-3 h-3 text-emerald-400" />
+              <span>Guía RENPHO</span>
+            </button>
+          </div>
           <h2 className="text-xl font-bold text-white font-brand">
             Composición Corporal
           </h2>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all shrink-0"
         >
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Nuevo Registro</span>
@@ -266,30 +285,114 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
             </div>
           </div>
 
-          {/* Current Body Metrics Summary */}
-          {latestRecord && (
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="p-3.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-1">
-                <span className="text-[11px] text-neutral-400">Grasa Visceral</span>
-                <div className="text-2xl font-bold text-white font-mono">
-                  Nivel {latestRecord.visceralFatLevel}
-                </div>
-                <div className="text-[10px] text-emerald-400">
-                  Rango Saludable (1–9)
-                </div>
-              </div>
+          {/* Current Body Metrics Summary with Official RENPHO Indicators */}
+          {latestRecord && (() => {
+            const renphoVisceral = getRenphoVisceralFatInfo(latestRecord.visceralFatLevel);
+            const renphoBmi = getRenphoBmiInfo(latestRecord.bmi);
 
-              <div className="p-3.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-1">
-                <span className="text-[11px] text-neutral-400">IMC (Índice Masa Corporal)</span>
-                <div className="text-2xl font-bold text-white font-mono">
-                  {latestRecord.bmi}
+            // Calculate percentage position for Visceral Fat marker (scale 1 to 25 visual max)
+            const visceralPercent = Math.min(Math.max(((latestRecord.visceralFatLevel - 1) / 24) * 100, 4), 96);
+            // Calculate percentage position for BMI marker (scale 15 to 35 visual range)
+            const bmiPercent = Math.min(Math.max(((latestRecord.bmi - 15) / 20) * 100, 4), 96);
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* RENPHO Visceral Fat Gauge Card */}
+                <div className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                      <Activity className="w-3 h-3 text-emerald-400" />
+                      <span>Grasa Visceral</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${renphoVisceral.badgeBg} ${renphoVisceral.badgeText}`}>
+                      {renphoVisceral.category}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-2xl font-bold text-white font-mono">
+                      Nivel {latestRecord.visceralFatLevel}
+                    </div>
+                    <button
+                      onClick={() => setShowRenphoGuide(true)}
+                      className="text-[10px] text-neutral-500 hover:text-emerald-400 underline font-mono"
+                    >
+                      Escala 1–59 Renpho
+                    </button>
+                  </div>
+
+                  {/* Renpho Segmented Scale Bar */}
+                  <div className="space-y-1">
+                    <div className="relative h-2 w-full rounded-full bg-neutral-950 overflow-hidden flex">
+                      <div className="w-[36%] bg-emerald-500" title="1-9 Estándar / Saludable" />
+                      <div className="w-[24%] bg-amber-500" title="10-14 Alto / Precaución" />
+                      <div className="w-[40%] bg-rose-500" title="15+ Excesivo / Peligro" />
+                    </div>
+                    {/* Visual indicator pin */}
+                    <div className="relative h-2 w-full">
+                      <div
+                        className="absolute -top-1.5 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md border-2 border-black"
+                        style={{ left: `${visceralPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-neutral-500 font-mono">
+                      <span className="text-emerald-400">1–9 Saludable</span>
+                      <span className="text-amber-400">10–14 Alto</span>
+                      <span className="text-rose-400">15+ Crítico</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] text-emerald-400">
-                  {latestRecord.bmiCategory} (OMS)
+
+                {/* RENPHO BMI (IMC) Gauge Card */}
+                <div className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                      <Scale className="w-3 h-3 text-blue-400" />
+                      <span>IMC (Índice Masa Corporal)</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${renphoBmi.badgeBg} ${renphoBmi.badgeText}`}>
+                      {renphoBmi.category}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-2xl font-bold text-white font-mono">
+                      {latestRecord.bmi}
+                    </div>
+                    <button
+                      onClick={() => setShowRenphoGuide(true)}
+                      className="text-[10px] text-neutral-500 hover:text-blue-400 underline font-mono"
+                    >
+                      OMS / Báscula Renpho
+                    </button>
+                  </div>
+
+                  {/* Renpho Segmented Scale Bar */}
+                  <div className="space-y-1">
+                    <div className="relative h-2 w-full rounded-full bg-neutral-950 overflow-hidden flex">
+                      <div className="w-[20%] bg-sky-500" title="<18.5 Bajo Peso" />
+                      <div className="w-[35%] bg-emerald-500" title="18.5-24.9 Estándar" />
+                      <div className="w-[25%] bg-amber-500" title="25.0-29.9 Sobrepeso" />
+                      <div className="w-[20%] bg-rose-500" title=">=30.0 Obesidad" />
+                    </div>
+                    {/* Visual indicator pin */}
+                    <div className="relative h-2 w-full">
+                      <div
+                        className="absolute -top-1.5 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md border-2 border-black"
+                        style={{ left: `${bmiPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-neutral-500 font-mono">
+                      <span className="text-sky-400">&lt;18.5 Bajo</span>
+                      <span className="text-emerald-400">18.5–24.9 Normal</span>
+                      <span className="text-amber-400">25–29.9</span>
+                      <span className="text-rose-400">&ge;30 Obesidad</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -598,6 +701,166 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* RENPHO OFFICIAL MEASUREMENT GUIDE MODAL */}
+      {showRenphoGuide && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in select-none">
+          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-950/70 via-neutral-900 to-blue-950/50 border-b border-neutral-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold font-mono">
+                  R
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold block">
+                    Báscula Inteligente RENPHO · Bioimpedancia
+                  </span>
+                  <h3 className="text-base font-bold text-white font-brand">
+                    Cómo se miden el IMC y la Grasa Visceral
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRenphoGuide(false)}
+                className="p-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="p-5 space-y-5 overflow-y-auto text-xs text-neutral-300 leading-relaxed">
+              {/* Introduction Pill */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-1.5">
+                <p className="font-semibold text-white">
+                  ¿Cómo interpreta Kinetix Progress tus mediciones de la app RENPHO?
+                </p>
+                <p className="text-[11px] text-neutral-400">
+                  La báscula Renpho utiliza electrodos de bioimpedancia eléctrica para estimar tu composición corporal a partir de la resistencia del tejido muscular y adiposo. A continuación te mostramos la escala exacta que utiliza Renpho para clasificar cada métrica:
+                </p>
+              </div>
+
+              {/* SECTION 1: GRASA VISCERAL */}
+              <div className="space-y-2.5 bg-neutral-950/60 p-4 rounded-2xl border border-neutral-800">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    <span>1. Grasa Visceral (Escala 1 a 59)</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    Marcador Clave
+                  </span>
+                </div>
+                
+                <p className="text-[11px] text-neutral-400">
+                  Es la grasa que se almacena en la cavidad intra-abdominal rodeando los órganos vitales (hígado, estómago e intestinos). A diferencia de la grasa subcutánea (debajo de la piel), un exceso de grasa visceral aumenta el riesgo cardiovascular y la resistencia a la insulina.
+                </p>
+
+                {/* Renpho Visceral Scale Visual */}
+                <div className="space-y-2 pt-1">
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start justify-between">
+                    <div>
+                      <strong className="text-emerald-400 block text-[11px]">Nivel 1 a 9 · Estándar / Saludable (Verde)</strong>
+                      <span className="text-[10px] text-neutral-300">
+                        Nivel fisiológico óptimo. La grasa protege los órganos vitales sin inducir sobrecarga metabólica.
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs text-emerald-400 font-bold ml-2">ÓPTIMO</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start justify-between">
+                    <div>
+                      <strong className="text-amber-400 block text-[11px]">Nivel 10 a 14 · Alto / Alerta (Amarillo / Naranja)</strong>
+                      <span className="text-[10px] text-neutral-300">
+                        Señal de advertencia. Acumulación adiposa en el abdomen que requiere ajuste en la ingesta calórica y mayor volumen de ejercicio aeróbico/funcional.
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs text-amber-400 font-bold ml-2">ALERTA</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 flex items-start justify-between">
+                    <div>
+                      <strong className="text-rose-400 block text-[11px]">Nivel 15 a 59 · Excesivo / Peligro (Rojo)</strong>
+                      <span className="text-[10px] text-neutral-300">
+                        Nivel crítico severo en la app Renpho. Riesgo de hígado graso e hipertensión. Es prioridad absoluta reducirlo con el coach y plan nutricional.
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs text-rose-400 font-bold ml-2">PELIGRO</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: IMC (ÍNDICE DE MASA CORPORAL) */}
+              <div className="space-y-2.5 bg-neutral-950/60 p-4 rounded-2xl border border-neutral-800">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                    <Scale className="w-4 h-4 text-blue-400" />
+                    <span>2. IMC (Índice de Masa Corporal / BMI)</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                    Peso / Altura²
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-neutral-400">
+                  Renpho calcula automáticamente tu IMC con la fórmula <code className="text-white font-mono bg-neutral-900 px-1 py-0.5 rounded">Peso (kg) / [Estatura (m)]²</code> y lo colorea en la barra según los estándares de la OMS:
+                </p>
+
+                {/* Renpho BMI Scale Visual */}
+                <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+                  <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/30">
+                    <span className="text-sky-400 font-bold block">&lt; 18.5 · Bajo Peso</span>
+                    <span className="text-neutral-400 font-sans">Color Azul Renpho</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30">
+                    <span className="text-emerald-400 font-bold block">18.5 – 24.9 · Estándar</span>
+                    <span className="text-neutral-400 font-sans">Color Verde Renpho (Saludable)</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30">
+                    <span className="text-amber-400 font-bold block">25.0 – 29.9 · Sobrepeso</span>
+                    <span className="text-neutral-400 font-sans">Color Amarillo Renpho</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30">
+                    <span className="text-rose-400 font-bold block">&ge; 30.0 · Obesidad</span>
+                    <span className="text-neutral-400 font-sans">Color Rojo Renpho</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-500/20 text-[10px] text-blue-300">
+                  <strong>💡 Nota clave para atletas funcionales de Kinetix:</strong> En deportistas con elevado desarrollo de masa muscular y fuerza, el IMC puede ubicarse en rango de sobrepeso (&gt; 25) aun teniendo baja grasa corporal. Por eso en Kinetix siempre contrastamos tu IMC con tu % de masa muscular y tu nivel de Grasa Visceral.
+                </div>
+              </div>
+
+              {/* SECTION 3: PASOS PARA COPIAR TU MEDICIÓN */}
+              <div className="p-4 rounded-2xl bg-neutral-950/60 border border-neutral-800 space-y-2">
+                <h4 className="font-bold text-white text-xs">
+                  Pasos para sincronizar tus mediciones en Kinetix:
+                </h4>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-neutral-400">
+                  <li>Súbete descalzo a tu báscula RENPHO con la app abierta en tu teléfono.</li>
+                  <li>Espera a que los números se fijen y se complete el escaneo de bioimpedancia.</li>
+                  <li>En Kinetix Progress pulsa <strong className="text-white">+ Nuevo Registro</strong>.</li>
+                  <li>Introduce tu <strong>Peso</strong>, tu <strong>% Músculo</strong>, tu <strong>% Grasa</strong> y tu <strong>Nivel de Grasa Visceral</strong>.</li>
+                  <li>Kinetix Progress calculará y graficará de inmediato tu IMC con los mismos colores de tu app Renpho.</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-neutral-950 border-t border-neutral-800 flex justify-end">
+              <button
+                onClick={() => setShowRenphoGuide(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-colors"
+              >
+                Entendido
+              </button>
+            </div>
           </div>
         </div>
       )}
