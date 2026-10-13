@@ -49,48 +49,44 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
 
   // New Record Form State
-  const [weight, setWeight] = useState<number>(74.5);
-  const [muscle, setMuscle] = useState<number>(45.2);
-  const [bodyFat, setBodyFat] = useState<number>(11.8);
-  const [visceralFat, setVisceralFat] = useState<number>(3);
-  const [recordedDate, setRecordedDate] = useState<string>('2024-04-15');
-  const [notes, setNotes] = useState<string>('Medición matutina con bioimpedancia post-entrenamiento.');
+  const [weight, setWeight] = useState<number | ''>(() => {
+    return records.length > 0 ? records[records.length - 1].weightKg : '';
+  });
+  const [muscle, setMuscle] = useState<number | ''>(() => {
+    return records.length > 0 ? records[records.length - 1].muscleMassPercent : '';
+  });
+  const [bodyFat, setBodyFat] = useState<number | ''>(() => {
+    return records.length > 0 ? records[records.length - 1].bodyFatPercent : '';
+  });
+  const [visceralFat, setVisceralFat] = useState<number>(() => {
+    return records.length > 0 ? records[records.length - 1].visceralFatLevel : 1;
+  });
+  const [recordedDate, setRecordedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState<string>('');
 
   // Live calculated BMI
-  const liveBmi = calculateBMI(weight, currentUser.heightCm);
-  const liveBmiCategory = getBMICategory(liveBmi);
+  const liveBmi = weight ? calculateBMI(Number(weight), currentUser.heightCm) : 0;
+  const liveBmiCategory = weight ? getBMICategory(liveBmi) : 'Normal';
 
   // Sorting records chronologically
   const sortedRecords = [...records].sort(
     (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
   );
 
-  const fallbackRecord: BodyCompositionRecord = {
-    id: `bc-fallback-${currentUser.id}`,
-    userId: currentUser.id,
-    recordedAt: new Date().toISOString().slice(0, 10),
-    weightKg: 75.0,
-    muscleMassPercent: 44.0,
-    bodyFatPercent: 12.5,
-    visceralFatLevel: 3,
-    bmi: 24.2,
-    bmiCategory: 'Normal',
-    notes: 'Medición base de bienvenida.',
-    recordedByRole: 'staff',
-  };
-
-  const initialRecord = sortedRecords[0] || fallbackRecord;
-  const latestRecord = sortedRecords[sortedRecords.length - 1] || fallbackRecord;
+  const initialRecord = sortedRecords.length > 0 ? sortedRecords[0] : null;
+  const latestRecord = sortedRecords.length > 0 ? sortedRecords[sortedRecords.length - 1] : null;
+  const hasRecords = sortedRecords.length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!weight) return;
     onAddRecord({
       userId: currentUser.id,
       recordedAt: recordedDate,
       weightKg: Number(weight),
-      muscleMassPercent: Number(muscle),
-      bodyFatPercent: Number(bodyFat),
-      visceralFatLevel: Number(visceralFat),
+      muscleMassPercent: Number(muscle) || 0,
+      bodyFatPercent: Number(bodyFat) || 0,
+      visceralFatLevel: Number(visceralFat) || 1,
       bmi: liveBmi,
       bmiCategory: liveBmiCategory,
       notes: notes,
@@ -100,9 +96,9 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   };
 
   // Deltas between initial and latest
-  const deltaWeight = latestRecord && initialRecord ? (latestRecord.weightKg - initialRecord.weightKg).toFixed(1) : 0;
-  const deltaMuscle = latestRecord && initialRecord ? (latestRecord.muscleMassPercent - initialRecord.muscleMassPercent).toFixed(1) : 0;
-  const deltaFat = latestRecord && initialRecord ? (latestRecord.bodyFatPercent - initialRecord.bodyFatPercent).toFixed(1) : 0;
+  const deltaWeight = latestRecord && initialRecord ? (latestRecord.weightKg - initialRecord.weightKg).toFixed(1) : '0.0';
+  const deltaMuscle = latestRecord && initialRecord ? (latestRecord.muscleMassPercent - initialRecord.muscleMassPercent).toFixed(1) : '0.0';
+  const deltaFat = latestRecord && initialRecord ? (latestRecord.bodyFatPercent - initialRecord.bodyFatPercent).toFixed(1) : '0.0';
 
   return (
     <div className="space-y-4 pb-20 px-4 pt-2">
@@ -214,78 +210,102 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
               </div>
             </div>
 
-            {/* Custom Interactive SVG Line Chart */}
-            <div className="h-44 w-full relative pt-2">
-              <svg className="w-full h-full overflow-visible" viewBox="0 0 320 120">
-                {/* Horizontal guide lines */}
-                <line x1="0" y1="20" x2="320" y2="20" stroke="#262626" strokeDasharray="3 3" />
-                <line x1="0" y1="60" x2="320" y2="60" stroke="#262626" strokeDasharray="3 3" />
-                <line x1="0" y1="100" x2="320" y2="100" stroke="#262626" strokeDasharray="3 3" />
+            {/* Custom Interactive SVG Line Chart or Empty State */}
+            {!hasRecords ? (
+              <div className="py-8 px-4 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto shadow-inner">
+                  <Scale className="w-6 h-6 text-blue-400" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white font-brand">Inicia tu primer registro</h4>
+                  <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                    Aún no cuentas con registros de composición corporal. Registra tu peso, % de músculo, % de grasa y grasa visceral (Báscula Renpho) para activar tus gráficas de evolución física.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 active:scale-95 transition-all inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Iniciar Primer Registro Antropométrico</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="h-44 w-full relative pt-2">
+                  <svg className="w-full h-full overflow-visible" viewBox="0 0 320 120">
+                    {/* Horizontal guide lines */}
+                    <line x1="0" y1="20" x2="320" y2="20" stroke="#262626" strokeDasharray="3 3" />
+                    <line x1="0" y1="60" x2="320" y2="60" stroke="#262626" strokeDasharray="3 3" />
+                    <line x1="0" y1="100" x2="320" y2="100" stroke="#262626" strokeDasharray="3 3" />
 
-                {/* Plot Muscle % (Kinetix Blue Line) */}
-                <polyline
-                  fill="none"
-                  stroke="#0055ff"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={sortedRecords.map((r, i) => {
-                    const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                    const y = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
-                    return `${x},${y}`;
-                  }).join(' ')}
-                />
+                    {/* Plot Muscle % (Kinetix Blue Line) */}
+                    <polyline
+                      fill="none"
+                      stroke="#0055ff"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={sortedRecords.map((r, i) => {
+                        const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
+                        const y = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                    />
 
-                {/* Plot Body Fat % (Kinetix Red Line) */}
-                <polyline
-                  fill="none"
-                  stroke="#ff1e27"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={sortedRecords.map((r, i) => {
-                    const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                    const y = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
-                    return `${x},${y}`;
-                  }).join(' ')}
-                />
+                    {/* Plot Body Fat % (Kinetix Red Line) */}
+                    <polyline
+                      fill="none"
+                      stroke="#ff1e27"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={sortedRecords.map((r, i) => {
+                        const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
+                        const y = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                    />
 
-                {/* Render Dots & Values */}
-                {sortedRecords.map((r, i) => {
-                  const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                  const yM = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
-                  const yF = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
-                  return (
-                    <g key={r.id}>
-                      {/* Muscle Point */}
-                      <circle cx={x} cy={yM} r="4" fill="#0055ff" stroke="#000" strokeWidth="1.5" />
-                      <text x={x} y={yM - 7} fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">
-                        {r.muscleMassPercent}%
-                      </text>
-                      
-                      {/* Fat Point */}
-                      <circle cx={x} cy={yF} r="4" fill="#ff1e27" stroke="#000" strokeWidth="1.5" />
-                      <text x={x} y={yF + 12} fill="#ef4444" fontSize="9" fontWeight="bold" textAnchor="middle">
-                        {r.bodyFatPercent}%
-                      </text>
+                    {/* Render Dots & Values */}
+                    {sortedRecords.map((r, i) => {
+                      const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
+                      const yM = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
+                      const yF = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
+                      return (
+                        <g key={r.id}>
+                          {/* Muscle Point */}
+                          <circle cx={x} cy={yM} r="4" fill="#0055ff" stroke="#000" strokeWidth="1.5" />
+                          <text x={x} y={yM - 7} fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">
+                            {r.muscleMassPercent}%
+                          </text>
+                          
+                          {/* Fat Point */}
+                          <circle cx={x} cy={yF} r="4" fill="#ff1e27" stroke="#000" strokeWidth="1.5" />
+                          <text x={x} y={yF + 12} fill="#ef4444" fontSize="9" fontWeight="bold" textAnchor="middle">
+                            {r.bodyFatPercent}%
+                          </text>
 
-                      {/* X Axis Date Label */}
-                      <text x={x} y="118" fill="#737373" fontSize="8" textAnchor="middle">
-                        {r.recordedAt.slice(5)}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
+                          {/* X Axis Date Label */}
+                          <text x={x} y="118" fill="#737373" fontSize="8" textAnchor="middle">
+                            {r.recordedAt.slice(5)}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
 
-            <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
-              <span>Tendencia: Recomposición corporal exitosa</span>
-              <span className="text-blue-400 font-semibold">+3.8% masa magra neta</span>
-            </div>
+                <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                  <span>Tendencia: Recomposición corporal</span>
+                  <span className="text-blue-400 font-semibold">{deltaMuscle}% masa magra</span>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Current Body Metrics Summary with Official RENPHO Indicators */}
+          {/* Current Body Metrics Summary with Official RENPHO Indicators (Only displayed once the athlete registers measurements) */}
           {latestRecord && (() => {
             const renphoVisceral = getRenphoVisceralFatInfo(latestRecord.visceralFatLevel);
             const renphoBmi = getRenphoBmiInfo(latestRecord.bmi);
@@ -397,9 +417,28 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       )}
 
       {/* VIEW 2: BEFORE & AFTER COMPARISON */}
-      {activeTab === 'compare' && initialRecord && latestRecord && (
+      {activeTab === 'compare' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-4">
+          {!initialRecord || !latestRecord || sortedRecords.length < 2 ? (
+            <div className="p-8 rounded-3xl bg-neutral-900/60 border border-neutral-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-neutral-800 border border-neutral-700 flex items-center justify-center mx-auto text-neutral-400">
+                <SlidersHorizontal className="w-6 h-6 text-blue-400" />
+              </div>
+              <h4 className="text-sm font-bold text-white font-brand">Comparativa Antes vs Después</h4>
+              <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                Necesitas tener al menos 2 mediciones registradas en diferentes fechas para comparar tu recomposición corporal y evolución física.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Registrar Nueva Medición</span>
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-4">
             <div className="flex items-center justify-between text-xs border-b border-neutral-800 pb-2">
               <span className="font-semibold text-white">Comparativa Antes vs Después</span>
               <span className="text-neutral-500 font-mono text-[11px]">
@@ -462,13 +501,33 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
               </div>
             </div>
           </div>
+        )}
         </div>
       )}
 
       {/* VIEW 3: FULL HISTORY LOG */}
       {activeTab === 'history' && (
         <div className="space-y-2">
-          {sortedRecords.slice().reverse().map((rec) => (
+          {sortedRecords.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-neutral-900/60 border border-neutral-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-neutral-800 border border-neutral-700 flex items-center justify-center mx-auto text-neutral-400">
+                <Calendar className="w-6 h-6 text-blue-400" />
+              </div>
+              <h4 className="text-sm font-bold text-white font-brand">Historial de Mediciones</h4>
+              <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                Aún no tienes registros en tu historial. Al capturar tu primera medición aparecerá aquí con fecha y detalle de composición.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Iniciar Primer Registro</span>
+              </button>
+            </div>
+          ) : (
+            sortedRecords.slice().reverse().map((rec) => (
             <div
               key={rec.id}
               className="p-3.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 text-xs space-y-2"
@@ -519,8 +578,9 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </div>
               )}
             </div>
-          ))}
-        </div>
+          )))
+        }
+      </div>
       )}
 
       {/* Delete Confirmation Modal */}

@@ -175,7 +175,7 @@ export const PrivateProgressPhotosView: React.FC<PrivateProgressPhotosViewProps>
             )}
           </div>
           <p className="text-[11px] text-neutral-400 leading-relaxed">
-            Sin fotos de prueba genéricas. Estas fotografías son exclusivas para tu control personal y no son públicas ni accesibles para terceros.
+            Fotografías confidenciales y privadas para el control y seguimiento personal de tu evolución física.
           </p>
         </div>
       </div>
@@ -229,10 +229,10 @@ export const PrivateProgressPhotosView: React.FC<PrivateProgressPhotosViewProps>
           </div>
           <div className="max-w-xs mx-auto space-y-1.5">
             <h3 className="text-sm font-bold text-white font-brand">
-              Álbum Privado Vacío
+              Álbum Privado de Fotos de Progreso
             </h3>
             <p className="text-[11px] text-neutral-400 leading-relaxed">
-              Hemos retirado las fotos de prueba para respetar tu privacidad. Puedes tomar o subir tu propia fotografía en ángulo frontal, lateral o espalda.
+              Inicia tu primer registro fotográfico: captura o sube tu fotografía en ángulo frontal, lateral o espalda para registrar tu evolución personal.
             </p>
           </div>
           <button

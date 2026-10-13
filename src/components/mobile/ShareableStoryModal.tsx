@@ -19,8 +19,8 @@ import {
 
 interface ShareableStoryModalProps {
   athlete: UserProfile;
-  latestBodyComp: BodyCompositionRecord;
-  latestEval?: PhysicalEvaluationRecord;
+  latestBodyComp?: BodyCompositionRecord | null;
+  latestEval?: PhysicalEvaluationRecord | null;
   onClose: () => void;
 }
 
@@ -38,17 +38,14 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   const cardRef = useRef<HTMLDivElement>(null);
 
   const strengthRecord = latestEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
-    latestEval?.strengthRecords[0] || {
-      exerciseName: 'Sentadillas',
-      weightKg: 120,
-      reps: 1,
-      estimated1RMKg: 120,
-      weightUnit: 'kg'
-    };
+    latestEval?.strengthRecords[0] || null;
 
   // Preformatted text for sharing
   const generateShareText = () => {
     if (storyType === 'strength') {
+      if (!strengthRecord) {
+        return `🔥 ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional #Fuerza`;
+      }
       return `🔥 ¡Nuevo Récord Personal (PR) en Kinetix Functional Zone!
 🏋️ Ejercicio: ${strengthRecord.exerciseName}
 💪 Carga Levantada: ${strengthRecord.weightKg} ${strengthRecord.weightUnit} (${strengthRecord.reps} ${strengthRecord.reps === 1 ? 'rep' : 'reps'})
@@ -56,12 +53,18 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 👤 Atleta: ${athlete.name}
 📍 @kinetixzone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
     } else if (storyType === 'cooper') {
+      if (!latestEval?.cooperTest) {
+        return `🏃‍♂️ ¡Entrenando en Kinetix Functional Zone! 👤 Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional`;
+      }
       return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix Functional Zone!
-⚡ Nivel Alcanzado: Nivel ${latestEval?.cooperTest.levelNumber || 5} (${latestEval?.cooperTest.level || 'Élite'})
-🎯 Distancia Recorrida: ${latestEval?.cooperTest.distanceMeters || 2800} metros
+⚡ Nivel Alcanzado: Nivel ${latestEval.cooperTest.levelNumber} (${latestEval.cooperTest.level})
+🎯 Distancia Recorrida: ${latestEval.cooperTest.distanceMeters} metros
 👤 Atleta: ${athlete.name}
 📍 @kinetixzone #CooperTest #KinetixFunctional #Resistencia`;
     } else {
+      if (!latestBodyComp) {
+        return `✨ ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional`;
+      }
       return `✨ ¡Progreso y Recomposición Corporal en Kinetix!
 ⚖️ Peso Actual: ${latestBodyComp.weightKg} kg (IMC: ${latestBodyComp.bmi})
 💪 Masa Muscular: ${latestBodyComp.muscleMassPercent}%
@@ -168,54 +171,81 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('🔥 NUEVO RÉCORD PERSONAL (PR)', 100, 500);
 
-      // Multi-line wrapped exercise name so long text like "PRESS HORIZONTAL / BANCA" never clips!
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 68px sans-serif';
-      drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 610, 880, 80);
+      if (strengthRecord) {
+        // Multi-line wrapped exercise name
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 68px sans-serif';
+        drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 610, 880, 80);
 
-      ctx.fillStyle = '#60a5fa';
-      ctx.font = 'bold 140px monospace';
-      ctx.fillText(`${strengthRecord.weightKg} ${strengthRecord.weightUnit}`, 100, 820);
+        ctx.fillStyle = '#60a5fa';
+        ctx.font = 'bold 140px monospace';
+        ctx.fillText(`${strengthRecord.weightKg} ${strengthRecord.weightUnit}`, 100, 820);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '46px monospace';
-      ctx.fillText(`1RM Estimado: ${strengthRecord.estimated1RMKg} kg · ${strengthRecord.reps} reps`, 100, 930);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '46px monospace';
+        ctx.fillText(`1RM Estimado: ${strengthRecord.estimated1RMKg} kg · ${strengthRecord.reps} reps`, 100, 930);
 
-      ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 38px monospace';
-      ctx.fillText('✓ Fuerza Máxima Validada por Coach Jorge', 100, 1050);
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 38px monospace';
+        ctx.fillText('✓ Fuerza Máxima Validada por Coach Jorge', 100, 1050);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 60px sans-serif';
+        drawWrappedText(ctx, 'EVALUACIÓN DE FUERZA PENDIENTE', 100, 610, 880, 80);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '40px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer registro con el Coach para desbloquear tu tarjeta.', 100, 750, 880, 60);
+      }
     } else if (storyType === 'cooper') {
       ctx.fillStyle = '#ef4444';
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('❤️ TEST DE COOPER 12 MINUTOS', 100, 500);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 68px sans-serif';
-      drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
+      if (latestEval?.cooperTest) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 68px sans-serif';
+        drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
 
-      ctx.fillStyle = '#f59e0b';
-      ctx.font = 'bold 140px monospace';
-      ctx.fillText(`NIVEL ${latestEval?.cooperTest.levelNumber || 5}`, 100, 820);
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 140px monospace';
+        ctx.fillText(`NIVEL ${latestEval.cooperTest.levelNumber}`, 100, 820);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '46px monospace';
-      ctx.fillText(`${latestEval?.cooperTest.level || 'Élite'} · ${latestEval?.cooperTest.distanceMeters || 2800} metros`, 100, 930);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '46px monospace';
+        ctx.fillText(`${latestEval.cooperTest.level} · ${latestEval.cooperTest.distanceMeters} metros`, 100, 930);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 60px sans-serif';
+        drawWrappedText(ctx, 'TEST DE COOPER PENDIENTE', 100, 610, 880, 80);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '40px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer test de 12 minutos para medir tu nivel aeróbico.', 100, 750, 880, 60);
+      }
     } else {
       ctx.fillStyle = '#3b82f6';
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('✨ COMPOSICIÓN & SALUD', 100, 500);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 68px sans-serif';
-      drawWrappedText(ctx, 'RECOMPOSICIÓN CORPORAL', 100, 610, 880, 80);
+      if (latestBodyComp) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 68px sans-serif';
+        drawWrappedText(ctx, 'RECOMPOSICIÓN CORPORAL', 100, 610, 880, 80);
 
-      ctx.fillStyle = '#60a5fa';
-      ctx.font = 'bold 120px monospace';
-      ctx.fillText(`${latestBodyComp.weightKg} kg`, 100, 820);
+        ctx.fillStyle = '#60a5fa';
+        ctx.font = 'bold 120px monospace';
+        ctx.fillText(`${latestBodyComp.weightKg} kg`, 100, 820);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '46px monospace';
-      ctx.fillText(`Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`, 100, 930);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '46px monospace';
+        ctx.fillText(`Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`, 100, 930);
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 60px sans-serif';
+        drawWrappedText(ctx, 'COMPOSICIÓN CORPORAL', 100, 610, 880, 80);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '40px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer registro antropométrico para activar tu tarjeta.', 100, 750, 880, 60);
+      }
     }
 
     // Bottom Athlete Signature
@@ -433,26 +463,34 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>NUEVO RÉCORD PERSONAL (PR)</span>
                   </div>
 
-                  <div className="space-y-1.5">
-                    {/* Exercise Name - Fully legible, break-words so Sentadillas / Press Horizontal is always complete */}
-                    <div className="text-xl sm:text-2xl font-extrabold font-brand tracking-tight text-white uppercase break-words leading-tight px-2 min-h-[2.5rem] flex items-center justify-center">
-                      {strengthRecord.exerciseName}
+                  {!latestEval || !latestEval.strengthRecords || latestEval.strengthRecords.length === 0 || !strengthRecord ? (
+                    <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
+                      <p className="text-xs text-neutral-300 font-medium">Aún no hay marcas de fuerza registradas</p>
+                      <p className="text-[10px] text-neutral-500">Inicia tu primera evaluación técnica con el Coach para generar tu tarjeta de 1RM.</p>
                     </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <div className="text-xl sm:text-2xl font-extrabold font-brand tracking-tight text-white uppercase break-words leading-tight px-2 min-h-[2.5rem] flex items-center justify-center">
+                          {strengthRecord.exerciseName}
+                        </div>
 
-                    <div className="text-5xl sm:text-6xl font-black font-mono tracking-tight text-blue-400 drop-shadow-md">
-                      {strengthRecord.weightKg} <span className="text-2xl font-normal text-white">{strengthRecord.weightUnit}</span>
-                    </div>
+                        <div className="text-5xl sm:text-6xl font-black font-mono tracking-tight text-blue-400 drop-shadow-md">
+                          {strengthRecord.weightKg} <span className="text-2xl font-normal text-white">{strengthRecord.weightUnit}</span>
+                        </div>
 
-                    <div className="text-xs text-neutral-300 font-mono">
-                      1RM Estimado: <strong className="text-white font-bold">{strengthRecord.estimated1RMKg} kg</strong> ({strengthRecord.reps} {strengthRecord.reps === 1 ? 'rep' : 'reps'})
-                    </div>
-                  </div>
+                        <div className="text-xs text-neutral-300 font-mono">
+                          1RM Estimado: <strong className="text-white font-bold">{strengthRecord.estimated1RMKg} kg</strong> ({strengthRecord.reps} {strengthRecord.reps === 1 ? 'rep' : 'reps'})
+                        </div>
+                      </div>
 
-                  <div className="pt-1">
-                    <span className="text-[11px] text-emerald-400 font-mono bg-emerald-950/70 border border-emerald-800/80 px-3 py-1 rounded-full inline-block">
-                      ✓ Marca Verificada por Coach Jorge
-                    </span>
-                  </div>
+                      <div className="pt-1">
+                        <span className="text-[11px] text-emerald-400 font-mono bg-emerald-950/70 border border-emerald-800/80 px-3 py-1 rounded-full inline-block">
+                          ✓ Marca Verificada por Coach Jorge
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -463,24 +501,33 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>TEST DE COOPER 12 MIN</span>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-neutral-400 font-mono uppercase">Potencia Aeróbica Alcanzada</div>
-                    <div className="text-4xl sm:text-5xl font-black font-brand tracking-tight text-white">
-                      NIVEL {latestEval?.cooperTest.levelNumber || 5}
+                  {!latestEval?.cooperTest ? (
+                    <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
+                      <p className="text-xs text-neutral-300 font-medium">Aún no hay Test de Cooper registrado</p>
+                      <p className="text-[10px] text-neutral-500">Realiza tu test de 12 minutos con el Coach para desbloquear tu tarjeta de nivel aeróbico.</p>
                     </div>
-                    <div className="text-base font-bold text-red-400 font-brand">
-                      {latestEval?.cooperTest.level || 'Nivel 5 (Élite)'}
-                    </div>
-                    <div className="text-xs text-neutral-300 font-mono">
-                      Distancia Recorrida: <strong className="text-white">{latestEval?.cooperTest.distanceMeters || 2800} m</strong>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-neutral-400 font-mono uppercase">Potencia Aeróbica Alcanzada</div>
+                        <div className="text-4xl sm:text-5xl font-black font-brand tracking-tight text-white">
+                          NIVEL {latestEval.cooperTest.levelNumber}
+                        </div>
+                        <div className="text-base font-bold text-red-400 font-brand">
+                          {latestEval.cooperTest.level}
+                        </div>
+                        <div className="text-xs text-neutral-300 font-mono">
+                          Distancia Recorrida: <strong className="text-white">{latestEval.cooperTest.distanceMeters} m</strong>
+                        </div>
+                      </div>
 
-                  <div className="pt-1">
-                    <span className="text-[11px] text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-3 py-1 rounded-xl block max-w-[260px] mx-auto text-center leading-tight">
-                      "Excelente resistencia cardiorrespiratoria y ritmo constante."
-                    </span>
-                  </div>
+                      <div className="pt-1">
+                        <span className="text-[11px] text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-3 py-1 rounded-xl block max-w-[260px] mx-auto text-center leading-tight">
+                          "{latestEval.cooperTest.notes || 'Excelente resistencia cardiorrespiratoria y ritmo constante.'}"
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -491,27 +538,36 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>RECOMPOSICIÓN CORPORAL</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-2 text-center">
-                    <div className="p-3 rounded-2xl bg-neutral-900/90 border border-neutral-800">
-                      <span className="text-[10px] text-neutral-400 block font-medium">Masa Muscular</span>
-                      <span className="text-3xl font-black font-mono text-blue-400 block my-0.5">
-                        {latestBodyComp.muscleMassPercent}%
-                      </span>
-                      <span className="text-[10px] text-emerald-400 font-mono font-semibold">+Ganancia</span>
+                  {!latestBodyComp ? (
+                    <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
+                      <p className="text-xs text-neutral-300 font-medium">Aún no hay mediciones registradas</p>
+                      <p className="text-[10px] text-neutral-500">Inicia tu primer registro para compartir tus métricas de composición corporal.</p>
                     </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-2.5 pt-2 text-center">
+                        <div className="p-3 rounded-2xl bg-neutral-900/90 border border-neutral-800">
+                          <span className="text-[10px] text-neutral-400 block font-medium">Masa Muscular</span>
+                          <span className="text-3xl font-black font-mono text-blue-400 block my-0.5">
+                            {latestBodyComp.muscleMassPercent}%
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-semibold">+Ganancia</span>
+                        </div>
 
-                    <div className="p-3 rounded-2xl bg-neutral-900/90 border border-neutral-800">
-                      <span className="text-[10px] text-neutral-400 block font-medium">Grasa Corporal</span>
-                      <span className="text-3xl font-black font-mono text-red-400 block my-0.5">
-                        {latestBodyComp.bodyFatPercent}%
-                      </span>
-                      <span className="text-[10px] text-emerald-400 font-mono font-semibold">-Reducción</span>
-                    </div>
-                  </div>
+                        <div className="p-3 rounded-2xl bg-neutral-900/90 border border-neutral-800">
+                          <span className="text-[10px] text-neutral-400 block font-medium">Grasa Corporal</span>
+                          <span className="text-3xl font-black font-mono text-red-400 block my-0.5">
+                            {latestBodyComp.bodyFatPercent}%
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-semibold">-Reducción</span>
+                        </div>
+                      </div>
 
-                  <div className="text-xs text-neutral-300 font-mono pt-1">
-                    Peso: <strong className="text-white">{latestBodyComp.weightKg} kg</strong> · IMC: <strong className="text-white">{latestBodyComp.bmi}</strong>
-                  </div>
+                      <div className="text-xs text-neutral-300 font-mono pt-1">
+                        Peso: <strong className="text-white">{latestBodyComp.weightKg} kg</strong> · IMC: <strong className="text-white">{latestBodyComp.bmi}</strong>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>

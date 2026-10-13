@@ -139,6 +139,9 @@ export interface PrivacyConsentRecord {
   privacy_notice_accepted: boolean;
   sensitive_data_consent: boolean;
   accepted_at: string; // ISO timestamp
+  consent_date?: string; // Formato dd/mm/aaaa
+  consent_time?: string; // Formato hh:mm
   consent_method: string; // e.g. 'authenticated_user_checkbox'
+  medio?: string; // 'Kinetix Progress'
   platform: string; // 'Kinetix Progress'
 }

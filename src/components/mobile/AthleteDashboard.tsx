@@ -21,9 +21,9 @@ import {
 
 interface AthleteDashboardProps {
   currentUser: UserProfile;
-  latestBodyComp: BodyCompositionRecord;
+  latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord;
-  onNavigateTab: (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff') => void;
+  onNavigateTab: (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => void;
   onOpenReport: () => void;
   onOpenShareStory?: () => void;
 }
@@ -200,6 +200,27 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
         </div>
       )}
 
+      {/* Banner when user has no body composition records yet */}
+      {!latestBodyComp && (
+        <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0">
+              <Scale className="w-4 h-4 text-blue-400" />
+            </div>
+            <div>
+              <strong className="text-xs text-white block">Inicia tu primer registro</strong>
+              <span className="text-[11px] text-neutral-400 block">Registra tu peso y grasa visceral (Báscula Renpho) para activar tus métricas</span>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab('body')}
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shrink-0 shadow-md transition-all active:scale-95"
+          >
+            Registrar
+          </button>
+        </div>
+      )}
+
       {/* Monthly Highlight Stat Cards (2x2 Grid) */}
       <div className="grid grid-cols-2 gap-2.5">
         {/* Weight & BMI Card */}
@@ -218,14 +239,20 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-mono">
-              {latestBodyComp.weightKg}
+              {latestBodyComp ? latestBodyComp.weightKg : '0.0'}
             </span>
             <span className="text-xs text-neutral-400">kg</span>
           </div>
           <div className="text-[11px] text-neutral-400 flex items-center gap-1.5 pt-1">
-            <span>IMC {latestBodyComp.bmi}</span>
-            <span>·</span>
-            <span className="text-blue-400 font-medium">{latestBodyComp.bmiCategory}</span>
+            {latestBodyComp ? (
+              <>
+                <span>IMC {latestBodyComp.bmi}</span>
+                <span>·</span>
+                <span className="text-blue-400 font-medium">{latestBodyComp.bmiCategory}</span>
+              </>
+            ) : (
+              <span className="text-neutral-500">Inicia tu primer registro</span>
+            )}
           </div>
         </div>
 
@@ -239,15 +266,15 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
               Masa Muscular
             </span>
-            <span className="text-[10px] text-cyan-400 font-mono">+1.2%</span>
+            {latestBodyComp && <span className="text-[10px] text-cyan-400 font-mono">+1.2%</span>}
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-mono">
-              {latestBodyComp.muscleMassPercent}%
+              {latestBodyComp ? `${latestBodyComp.muscleMassPercent}%` : '0.0%'}
             </span>
           </div>
           <div className="text-[11px] text-neutral-400 pt-1">
-            <span>Grasa Visceral: Nivel {latestBodyComp.visceralFatLevel}</span>
+            <span>Grasa Visceral: {latestBodyComp ? `Nivel ${latestBodyComp.visceralFatLevel}` : '--'}</span>
           </div>
         </div>
 
@@ -261,15 +288,15 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               <Activity className="w-3.5 h-3.5 text-purple-400" />
               Grasa Corporal
             </span>
-            <span className="text-[10px] text-emerald-400 font-mono">-1.5%</span>
+            {latestBodyComp && <span className="text-[10px] text-emerald-400 font-mono">-1.5%</span>}
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-mono">
-              {latestBodyComp.bodyFatPercent}%
+              {latestBodyComp ? `${latestBodyComp.bodyFatPercent}%` : '0.0%'}
             </span>
           </div>
           <div className="text-[11px] text-neutral-400 pt-1">
-            <span>Nivel Atlético Óptimo</span>
+            <span>{latestBodyComp ? 'Nivel Atlético Óptimo' : 'Inicia tu primer registro'}</span>
           </div>
         </div>
 
@@ -284,16 +311,16 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               Test Cooper
             </span>
             <span className="text-[10px] text-red-500 font-bold uppercase">
-              {latestEval?.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Élite'}
+              {latestEval?.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Sin evaluar'}
             </span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-brand">
-              NIVEL {latestEval?.cooperTest.levelNumber || 5}
+              {latestEval?.cooperTest ? `NIVEL ${latestEval.cooperTest.levelNumber}` : 'NIVEL 0'}
             </span>
           </div>
           <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
-            <span className="text-blue-400 font-medium">Asignado por Coach</span>
+            <span className="text-blue-400 font-medium">{latestEval ? 'Asignado por Coach' : 'Inicia tu primer registro'}</span>
             <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">Detalle &rarr;</span>
           </div>
         </div>

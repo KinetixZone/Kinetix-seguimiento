@@ -68,11 +68,12 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
           {onOpenPrivacyPolicy && (
             <button
               onClick={onOpenPrivacyPolicy}
-              className="px-2 sm:px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold"
+              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold shadow-sm"
               title="Aviso de Privacidad Integral (LFPDPPP)"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden md:inline">Aviso de Privacidad</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="text-[11px] font-medium hidden sm:inline">Aviso de Privacidad</span>
+              <span className="text-[11px] font-medium sm:hidden">Privacidad</span>
             </button>
           )}
 

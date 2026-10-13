@@ -51,6 +51,7 @@ interface MobileAppSimulatorProps {
     heightCm: number;
     billingDayOfMonth?: number;
     expiryDate?: string;
+    password?: string;
   }) => void;
   onUpdateUserMembership?: (
     userId: string, 
@@ -90,7 +91,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   const [isOffline, setIsOffline] = useState<boolean>(false);
   
   // Navigation Tab inside mobile app
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [isInspectingAthlete, setIsInspectingAthlete] = useState<boolean>(false);
 
   // Interactive Push Banner Popup

@@ -8,6 +8,7 @@ import { SendNotificationModal } from './components/common/SendNotificationModal
 import { PrivacyConsentModal } from './components/common/PrivacyConsentModal';
 import { PrivacyPolicyViewerModal } from './components/common/PrivacyPolicyViewerModal';
 import { CURRENT_PRIVACY_NOTICE_VERSION } from './data/privacyNoticeContent';
+import { saveConsentRecord } from './services/privacyConsentService';
 import { 
   INITIAL_USERS, 
   DEMO_ATHLETES,
@@ -45,9 +46,22 @@ export default function App() {
     return {};
   });
 
-  // Authentication State: default authenticated to Leslie (Dueña & Coach)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [currentUserId, setCurrentUserId] = useState<string>('user-staff-leslie');
+  // Authentication State: persistent session (requires password on fresh visit or after logout)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const savedSession = localStorage.getItem('kinetix_auth_session');
+      return savedSession === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [currentUserId, setCurrentUserId] = useState<string>(() => {
+    try {
+      const savedUser = localStorage.getItem('kinetix_active_user_id');
+      if (savedUser) return savedUser;
+    } catch {}
+    return 'user-staff-leslie';
+  });
 
   // Custom Gym Logo (Persisted in localStorage)
   const [gymLogoUrl, setGymLogoUrl] = useState<string | null>(() => {
@@ -155,6 +169,7 @@ export default function App() {
   }, [currentUserId, isAuthenticated, consentHistory]);
 
   const handleConsentAccepted = (record: PrivacyConsentRecord) => {
+    saveConsentRecord(record);
     setConsentHistory((prev) => {
       const userList = prev[record.user_id] || [];
       const updated = {
@@ -194,12 +209,19 @@ export default function App() {
     setCurrentUserId(user.id);
     setIsAuthenticated(true);
     setIsProfileModalOpen(false);
+    try {
+      localStorage.setItem('kinetix_auth_session', 'true');
+      localStorage.setItem('kinetix_active_user_id', user.id);
+    } catch {}
   };
 
   // Logout handler
   const handleLogout = () => {
     setIsAuthenticated(false);
     setIsProfileModalOpen(false);
+    try {
+      localStorage.removeItem('kinetix_auth_session');
+    } catch {}
   };
 
   // Add Body Comp Record
@@ -320,6 +342,8 @@ export default function App() {
     heightCm: number;
     billingDayOfMonth?: number;
     expiryDate?: string;
+    password?: string;
+    switchToCreatedUser?: boolean;
   }) => {
     const fee = newUser.planName === 'Entrenos Personalizados (Coach Jorge)' 
       ? 149.99 
@@ -366,9 +390,76 @@ export default function App() {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
+    // Save initial password in localStorage
+    const pwd = newUser.password || 'kinetix123';
+    try {
+      localStorage.setItem(`kinetix_pwd_${createdUser.id}`, pwd);
+    } catch {}
+
     setUsers(prev => [createdUser, ...prev]);
-    // Switch to newly created user so they see their setup and the privacy notice window triggers immediately
-    setCurrentUserId(createdUser.id);
+
+    if (newUser.switchToCreatedUser) {
+      setCurrentUserId(createdUser.id);
+      setIsAuthenticated(true);
+      try {
+        localStorage.setItem('kinetix_auth_session', 'true');
+        localStorage.setItem('kinetix_active_user_id', createdUser.id);
+      } catch {}
+      setIsPrivacyConsentOpen(true);
+    }
+  };
+
+  // Athlete Self-Registration Handler (from Login portal)
+  const handleRegisterAthlete = (newUser: {
+    name: string;
+    email: string;
+    password: string;
+    gender: 'male' | 'female';
+    heightCm: number;
+  }) => {
+    const createdUser: UserProfile = {
+      id: `user-${Date.now()}`,
+      name: newUser.name,
+      email: newUser.email,
+      role: 'athlete',
+      phone: '+52 (55) 0000-0000',
+      avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80`,
+      birthDate: '1998-01-01',
+      gender: newUser.gender,
+      heightCm: newUser.heightCm,
+      weightUnit: 'kg',
+      emergencyContact: {
+        name: 'Pendiente',
+        phone: 'Pendiente',
+        relationship: 'Familiar',
+      },
+      membership: {
+        id: `mem-${Date.now()}`,
+        planName: 'Kinetix',
+        status: 'active',
+        startDate: new Date().toISOString().slice(0, 10),
+        expiryDate: '2024-05-15',
+        monthlyFee: 79.99,
+        currency: 'USD',
+        autoRenew: true,
+        gracePeriodDays: 5,
+        daysUntilExpiry: 30,
+        lastPaymentDate: new Date().toISOString().slice(0, 10),
+        nextPaymentDate: '2024-05-15',
+        billingDayOfMonth: 15,
+        hasNutritionPlan: false,
+        paymentReminderSent: false,
+      },
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    // Save personal password in localStorage
+    try {
+      localStorage.setItem(`kinetix_pwd_${createdUser.id}`, newUser.password);
+    } catch {}
+
+    // Register user in the database/state. The athlete will now log in with their password
+    setUsers(prev => [createdUser, ...prev]);
   };
 
   const handleClearDemoAthletes = () => {
@@ -413,6 +504,7 @@ export default function App() {
           users={users}
           gymLogoUrl={gymLogoUrl}
           onLogin={handleLogin}
+          onRegisterAthlete={handleRegisterAthlete}
           onNotifyOwners={(title, body) => handleSimulateNotification(title, body)}
           onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
         />
@@ -467,6 +559,7 @@ export default function App() {
           onRestoreDemoAthletes={handleRestoreDemoAthletes}
           onSwitchUser={(u) => setCurrentUserId(u.id)}
           onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
+          consentHistory={consentHistory}
         />
       </main>
 

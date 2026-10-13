@@ -38,6 +38,7 @@ export const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
   const handleAcceptAndContinue = () => {
     if (!canContinue) return;
 
+    const now = new Date();
     const consentRecord: PrivacyConsentRecord = {
       consent_id: `consent-${currentUser.id}-${Date.now()}`,
       user_id: currentUser.id,
@@ -45,8 +46,11 @@ export const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
       privacy_notice_version: CURRENT_PRIVACY_NOTICE_VERSION,
       privacy_notice_accepted: true,
       sensitive_data_consent: true,
-      accepted_at: new Date().toISOString(),
+      accepted_at: now.toISOString(),
+      consent_date: now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      consent_time: now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }),
       consent_method: 'authenticated_user_checkbox',
+      medio: 'Kinetix Progress',
       platform: 'Kinetix Progress',
     };
 
@@ -211,8 +215,35 @@ export const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
                 <div className="text-neutral-500">Versión: {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.version} · {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.effectiveDate}</div>
               </div>
 
-              <div className="whitespace-pre-line text-xs font-sans text-neutral-300 space-y-3">
-                {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.fullMarkdown}
+              <div className="space-y-4 text-xs font-sans text-neutral-300">
+                {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.sections.map((section) => (
+                  <div key={section.id} className="space-y-1.5 p-3 rounded-xl bg-neutral-950/60 border border-neutral-800">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      {section.number && (
+                        <span className="text-blue-400 font-mono text-[10px]">{section.number}.</span>
+                      )}
+                      <span>{section.title}</span>
+                    </h4>
+                    {section.paragraphs?.map((p, idx) => (
+                      <p key={idx} className="text-neutral-300 leading-relaxed text-[11px]">{p}</p>
+                    ))}
+                    {section.subsections?.map((sub, sIdx) => (
+                      <div key={sIdx} className="pl-2 border-l-2 border-blue-500/40 space-y-1 my-1.5">
+                        <span className="text-[11px] font-semibold text-blue-300 block">{sub.letter ? `${sub.letter}) ` : ''}{sub.title}</span>
+                        {sub.items && (
+                          <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-neutral-400">
+                            {sub.items.map((it, iIdx) => <li key={iIdx}>{it}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                    {section.numberedList && (
+                      <ol className="list-decimal pl-4 space-y-0.5 text-[10px] text-neutral-400">
+                        {section.numberedList.map((it, nIdx) => <li key={nIdx}>{it}</li>)}
+                      </ol>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 

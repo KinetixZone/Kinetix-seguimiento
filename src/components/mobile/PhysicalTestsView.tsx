@@ -144,7 +144,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     generalCoachNotes: 'Listo para registrar su primera sesión oficial de evaluación.',
   };
 
-  const latestEval = sortedEvals[sortedEvals.length - 1] || evaluations.find(e => e.userId === currentUser.id) || evaluations[0] || fallbackEval;
+  const latestEval = sortedEvals[sortedEvals.length - 1] || null;
   const prevEval = sortedEvals.length > 1 ? sortedEvals[sortedEvals.length - 2] : null;
 
   // Helpers para parsear tiempos de resistencia (ej. "7:14 min" o "07:14")
@@ -158,20 +158,20 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     return 0;
   };
 
-  const latestEnduranceSec = latestEval?.enduranceTest?.result ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : 434;
-  const prevEnduranceSec = prevEval?.enduranceTest?.result ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : (latestEnduranceSec > 0 ? latestEnduranceSec + 28 : 0);
+  const latestEnduranceSec = latestEval?.enduranceTest?.result ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : 0;
+  const prevEnduranceSec = prevEval?.enduranceTest?.result ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : 0;
   const enduranceDeltaSec = prevEnduranceSec > 0 && latestEnduranceSec > 0 ? prevEnduranceSec - latestEnduranceSec : 0;
   const endurancePercentImprovement = prevEnduranceSec > 0 && enduranceDeltaSec > 0 ? ((enduranceDeltaSec / prevEnduranceSec) * 100).toFixed(1) : null;
 
   // Reset Form for New Evaluation
   const handleOpenAddModal = () => {
     setEvalDate(new Date().toISOString().slice(0, 10));
-    setSelectedCooperLevel(latestEval ? (latestEval.cooperTest.levelNumber || 5) : 5);
-    setOptionalDistance(latestEval?.cooperTest.distanceMeters || 2800);
-    setEnduranceExerciseName(latestEval?.enduranceTest.name || 'Evaluación de Resistencia Funcional');
+    setSelectedCooperLevel(latestEval ? (latestEval.cooperTest.levelNumber || 3) : 3);
+    setOptionalDistance(latestEval?.cooperTest.distanceMeters || 2200);
+    setEnduranceExerciseName(latestEval?.enduranceTest?.name || 'Evaluación de Resistencia Funcional');
     setEnduranceMinutes(7);
-    setEnduranceSeconds(14);
-    setEnduranceScoreLevel('Avanzado');
+    setEnduranceSeconds(0);
+    setEnduranceScoreLevel('Intermedio');
     
     // Copy latest 1RMs as baseline
     if (latestEval?.strengthRecords) {
@@ -396,6 +396,31 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           Historial Staff
         </button>
       </div>
+
+      {/* EMPTY STATE WHEN ATHLETE HAS NO EVALUATIONS YET */}
+      {!latestEval && (
+        <div className="py-12 px-6 text-center space-y-4 rounded-3xl bg-neutral-900/60 border border-neutral-800">
+          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center mx-auto shadow-inner">
+            <Heart className="w-7 h-7 text-red-500" />
+          </div>
+          <div className="space-y-1.5 max-w-sm mx-auto">
+            <h4 className="text-base font-bold text-white font-brand">Inicia tu primer registro de evaluación</h4>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Aún no cuentas con evaluaciones técnicas capturadas. Realiza con tu Coach el Test de Cooper (12 Min) y tus pruebas de fuerza máxima 1RM para activar tus niveles y comparativas de evolución.
+            </p>
+          </div>
+          {currentUser.role === 'staff' && (
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md shadow-red-600/30 active:scale-95 transition-all inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Registrar Primera Evaluación de Campo</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: VISIÓN GENERAL DE PROGRESO (EL DASHBOARD COMPLETO QUE EL USUARIO PIDIÓ) */}

@@ -5,7 +5,8 @@ import {
   PhysicalEvaluationRecord, 
   PushNotificationSimulation,
   MembershipStatus,
-  KinetixPlanName
+  KinetixPlanName,
+  PrivacyConsentRecord
 } from '../types';
 import { AthleteDashboard } from './mobile/AthleteDashboard';
 import { BodyCompositionView } from './mobile/BodyCompositionView';
@@ -75,6 +76,7 @@ interface KinetixResponsiveAppProps {
   onRestoreDemoAthletes?: () => void;
   onSwitchUser: (user: UserProfile) => void;
   onOpenPrivacyPolicy?: () => void;
+  consentHistory?: Record<string, PrivacyConsentRecord[]>;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -100,6 +102,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onRestoreDemoAthletes,
   onSwitchUser,
   onOpenPrivacyPolicy,
+  consentHistory,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
@@ -113,8 +116,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
 
   const userBodyComps = bodyCompRecords.filter(b => b.userId === effectiveUser.id);
   const userEvals = evaluations.filter(e => e.userId === effectiveUser.id);
-  const latestBodyComp = userBodyComps[userBodyComps.length - 1] || bodyCompRecords[0];
-  const latestEval = userEvals[userEvals.length - 1] || evaluations[0];
+  const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
+  const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
 
   // Navigation handlers with History Stack
   const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
@@ -460,6 +463,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onClearDemoAthletes={onClearDemoAthletes}
             onRestoreDemoAthletes={onRestoreDemoAthletes}
             onBackToDashboard={handleGoHome}
+            onSwitchUser={onSwitchUser}
+            consentHistory={consentHistory}
           />
         )}
 
@@ -515,8 +520,51 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
                 </div>
               </div>
 
-              <div className="whitespace-pre-line text-xs font-sans text-neutral-200 leading-relaxed space-y-4">
-                {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.fullMarkdown}
+              <div className="space-y-5 text-xs font-sans text-neutral-300 leading-relaxed">
+                {OFFICIAL_PRIVACY_NOTICE_DOCUMENT.sections.map((section) => (
+                  <div key={section.id} className="space-y-2 p-3.5 rounded-2xl bg-neutral-950/60 border border-neutral-800/60">
+                    <div className="flex items-center gap-2 border-b border-neutral-800 pb-1.5">
+                      {section.number && (
+                        <span className="w-5 h-5 rounded-md bg-blue-600/20 text-blue-400 font-bold font-mono text-[10px] flex items-center justify-center shrink-0">
+                          {section.number}
+                        </span>
+                      )}
+                      <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                        {section.title}
+                      </h3>
+                    </div>
+
+                    {section.paragraphs?.map((p, idx) => (
+                      <p key={idx} className="text-neutral-300 text-xs leading-relaxed">{p}</p>
+                    ))}
+
+                    {section.subsections?.map((sub, sIdx) => (
+                      <div key={sIdx} className="pl-2 border-l-2 border-blue-500/40 space-y-1 my-1.5">
+                        <span className="text-xs font-semibold text-blue-300 block">{sub.letter ? `${sub.letter}) ` : ''}{sub.title}</span>
+                        {sub.items && (
+                          <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-neutral-400">
+                            {sub.items.map((it, iIdx) => <li key={iIdx}>{it}</li>)}
+                          </ul>
+                        )}
+                        {sub.note && (
+                          <p className="text-[10px] text-neutral-500 italic pl-1">{sub.note}</p>
+                        )}
+                      </div>
+                    ))}
+
+                    {section.numberedList && (
+                      <ol className="list-decimal pl-5 space-y-1 text-xs text-neutral-400">
+                        {section.numberedList.map((it, nIdx) => <li key={nIdx}>{it}</li>)}
+                      </ol>
+                    )}
+
+                    {section.highlight && (
+                      <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 font-medium leading-relaxed">
+                        {section.highlight}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* Physical Print Signature Box (Visible on print) */}
@@ -575,7 +623,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
       <div 
         className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-neutral-950/95 backdrop-blur-lg border-t border-neutral-800/80 grid items-center px-1 z-40 transition-all"
         style={{
-          gridTemplateColumns: isStaff ? 'repeat(5, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))'
+          gridTemplateColumns: isStaff ? 'repeat(6, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))'
         }}
       >
         <button

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord, MembershipStatus, KinetixPlanName } from '../../types';
+import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord, MembershipStatus, KinetixPlanName, PrivacyConsentRecord } from '../../types';
+import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
 import { 
@@ -49,6 +50,8 @@ interface StaffManagementViewProps {
     heightCm: number;
     billingDayOfMonth?: number;
     expiryDate?: string;
+    password?: string;
+    switchToCreatedUser?: boolean;
   }) => void;
   onOpenTestEntryForUser: (user: UserProfile) => void;
   onOpenBodyCompForUser?: (user: UserProfile) => void;
@@ -66,6 +69,8 @@ interface StaffManagementViewProps {
   onBackToDashboard?: () => void;
   onOpenSendNotification?: () => void;
   currentUser?: UserProfile;
+  onSwitchUser?: (user: UserProfile) => void;
+  consentHistory?: Record<string, PrivacyConsentRecord[]>;
 }
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
@@ -84,6 +89,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onBackToDashboard,
   onOpenSendNotification,
   currentUser,
+  onSwitchUser,
+  consentHistory,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -112,6 +119,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [planName, setPlanName] = useState<KinetixPlanName>('Kinetix');
   const [billingDay, setBillingDay] = useState<number>(15);
   const [initialPassword, setInitialPassword] = useState('kinetix123');
+  const [switchToAthlete, setSwitchToAthlete] = useState(true);
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
 
   // Payment color filter state: 'all' | 5 | 15 | 20 | 30
@@ -153,6 +161,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       planName,
       billingDayOfMonth: billingDay,
       expiryDate: expiry,
+      password: initialPassword || 'kinetix123',
+      switchToCreatedUser: switchToAthlete,
     });
     setCreatedSuccessMsg(true);
     setTimeout(() => {
@@ -572,6 +582,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <span>·</span>
                     <span className={`${pg.badgeText} font-semibold`}>Corte Día {athlete.membership.billingDayOfMonth || 15} de cada mes</span>
                   </div>
+                  {/* LFPDPPP Consent Status Indicator */}
+                  <div className="text-[10px] flex items-center gap-1.5 pt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span className="text-neutral-400">Privacidad:</span>
+                    {consentHistory?.[athlete.id]?.some(c => c.privacy_notice_version === CURRENT_PRIVACY_NOTICE_VERSION && c.privacy_notice_accepted && c.sensitive_data_consent) ? (
+                      <span className="text-emerald-400 font-semibold">✓ Aceptado ({CURRENT_PRIVACY_NOTICE_VERSION})</span>
+                    ) : (
+                      <span className="text-amber-400 font-medium">⚠️ Pendiente (1er acceso)</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Staff Actions for this Athlete */}
@@ -620,6 +640,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <SlidersHorizontal className="w-3 h-3 text-blue-400" />
                     <span>Editar</span>
                   </button>
+
+                  {onSwitchUser && (
+                    <button
+                      onClick={() => onSwitchUser(athlete)}
+                      className="px-2 py-1 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                      title="Probar pantalla y flujo de este alumno (Aparece consentimiento si es 1ª vez)"
+                    >
+                      <span>Probar Cuenta</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => onSelectUserToInspect(athlete)}
@@ -787,6 +817,28 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     El atleta y el coach verán este código de color y la fecha fija de vencimiento en su app oficial.
                   </p>
                 </div>
+
+                {/* Legal Consent Preview Notice */}
+                <div className="p-3 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-[11px] text-blue-200 space-y-1">
+                  <div className="font-semibold text-blue-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>Aviso Previo de Consentimiento LFPDPPP</span>
+                  </div>
+                  <p className="text-neutral-300 text-[10px] leading-relaxed">
+                    Al completar el alta, la cuenta queda creada. Al primer acceso del alumno, el sistema le desplegará de forma obligatoria e ineludible la pantalla de consentimiento del <strong>Aviso de Privacidad Integral</strong> para autorizar el tratamiento de sus datos sensibles antes de capturar datos de composición corporal o salud.
+                  </p>
+                </div>
+
+                {/* Switch to athlete immediately toggle */}
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300 p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={switchToAthlete}
+                    onChange={(e) => setSwitchToAthlete(e.target.checked)}
+                    className="rounded bg-neutral-900 border-neutral-700 text-red-600 focus:ring-0"
+                  />
+                  <span className="text-[11px]">Iniciar sesión inmediatamente como este alumno para verificar la pantalla de consentimiento</span>
+                </label>
 
                 <div className="pt-2 flex items-center gap-2">
                   <button
