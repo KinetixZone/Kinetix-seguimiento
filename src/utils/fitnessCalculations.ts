@@ -1,8 +1,8 @@
 import { CooperLevel, CooperRating, Gender } from '../types';
 
 export interface CooperLevelDetail {
-  levelNumber: 1 | 2 | 3 | 4 | 5;
-  levelName: CooperLevel;
+  levelNumber: number;
+  levelName: string;
   badgeLabel: string;
   description: string;
   coachingRecommendation: string;
@@ -10,56 +10,192 @@ export interface CooperLevelDetail {
   colorHex: string;
 }
 
-export const COOPER_LEVELS_CATALOG: Record<1 | 2 | 3 | 4 | 5, CooperLevelDetail> = {
+export const COOPER_LEVELS_CATALOG: Record<number, CooperLevelDetail> = {
   1: {
     levelNumber: 1,
-    levelName: 'Nivel 1 (Inicial)',
-    badgeLabel: 'NIVEL 1 · INICIAL',
-    description: 'Fase de acondicionamiento básico. Capacidad aeróbica en adaptación inicial neuromuscular.',
-    coachingRecommendation: 'Priorizar intervalos aeróbicos en Zona 2 (60-70% FCM) de 25 a 35 minutos.',
-    referenceDistance: '< 1,800 m',
-    colorHex: '#ef4444', // Red
+    levelName: 'Nivel 1 (Adaptación Inicial)',
+    badgeLabel: 'NIVEL 1 · ADAPTACIÓN INICIAL',
+    description: 'Fase de adaptación neuromuscular básica. Iniciando acondicionamiento cardiovascular.',
+    coachingRecommendation: 'Caminata rápida y trote ligero en Zona 1-2 (50-60% FCM) de 20 a 25 min.',
+    referenceDistance: '< 1,500 m',
+    colorHex: '#ef4444',
   },
   2: {
     levelNumber: 2,
-    levelName: 'Nivel 2 (Básico)',
-    badgeLabel: 'NIVEL 2 · BÁSICO',
-    description: 'Base funcional establecida. Tolerancia al esfuerzo cardiovascular continuo en progreso.',
-    coachingRecommendation: 'Incorporar series de intervalos tempo de 400m con descansos activos.',
-    referenceDistance: '1,800 m – 2,199 m',
-    colorHex: '#f97316', // Orange
+    levelName: 'Nivel 2 (Acondicionamiento Base)',
+    badgeLabel: 'NIVEL 2 · ACONDICIONAMIENTO BASE',
+    description: 'Tolerancia al esfuerzo continuo en progreso gradual.',
+    coachingRecommendation: 'Intervalos aeróbicos suaves con descansos completos.',
+    referenceDistance: '1,500 m – 1,649 m',
+    colorHex: '#f87171',
   },
   3: {
     levelNumber: 3,
-    levelName: 'Nivel 3 (Intermedio)',
-    badgeLabel: 'NIVEL 3 · INTERMEDIO',
-    description: 'Nivel óptimo para el entrenamiento funcional continuo de alta intensidad (WODs y circuitos).',
-    coachingRecommendation: 'Mantener volumen aeróbico e introducir trabajo de umbral anaeróbico.',
-    referenceDistance: '2,200 m – 2,499 m',
-    colorHex: '#eab308', // Amber/Yellow
+    levelName: 'Nivel 3 (Iniciación Funcional)',
+    badgeLabel: 'NIVEL 3 · INICIACIÓN FUNCIONAL',
+    description: 'Capacidad para sostener cadencia constante en carrera continua.',
+    coachingRecommendation: 'Series de 300m continuos manteniendo ritmo aeróbico controlado.',
+    referenceDistance: '1,650 m – 1,799 m',
+    colorHex: '#fb923c',
   },
   4: {
     levelNumber: 4,
-    levelName: 'Nivel 4 (Avanzado)',
-    badgeLabel: 'NIVEL 4 · AVANZADO',
-    description: 'Excelente potencia aeróbica y rápida recuperación entre series de fuerza pesada.',
-    coachingRecommendation: 'Trabajo específico de potencia en remo y carrera en Zona 4/5.',
-    referenceDistance: '2,500 m – 2,799 m',
-    colorHex: '#3b82f6', // Blue
+    levelName: 'Nivel 4 (Básico 1)',
+    badgeLabel: 'NIVEL 4 · BÁSICO 1',
+    description: 'Base funcional establecida. Respiración y pulsaciones en control.',
+    coachingRecommendation: 'Trote continuo en Zona 2 (60-70% FCM) durante 30 minutos.',
+    referenceDistance: '1,800 m – 1,949 m',
+    colorHex: '#f97316',
   },
   5: {
     levelNumber: 5,
-    levelName: 'Nivel 5 (Excelente / Élite)',
-    badgeLabel: 'NIVEL 5 · ÉLITE KINETIX',
-    description: 'Capacidad cardiorrespiratoria de alto rendimiento. Eficiencia neuromuscular sobresaliente.',
-    coachingRecommendation: 'Mantenimiento y preparación para competencias funcionales de resistencia.',
-    referenceDistance: '≥ 2,800 m',
-    colorHex: '#ff6600', // Kinetix Flame
+    levelName: 'Nivel 5 (Básico 2)',
+    badgeLabel: 'NIVEL 5 · BÁSICO 2',
+    description: 'Consistencia aeróbica adecuada para entrenamientos funcionales grupales.',
+    coachingRecommendation: 'Introducir cambios de ritmo de 1 minuto rápido por 2 suaves.',
+    referenceDistance: '1,950 m – 2,099 m',
+    colorHex: '#ea580c',
+  },
+  6: {
+    levelNumber: 6,
+    levelName: 'Nivel 6 (Intermedio Inicial)',
+    badgeLabel: 'NIVEL 6 · INTERMEDIO INICIAL',
+    description: 'Buena resistencia muscular periférica durante la carrera.',
+    coachingRecommendation: 'Carrera tempo sostenida a ritmo de 6:00 min/km.',
+    referenceDistance: '2,100 m – 2,249 m',
+    colorHex: '#facc15',
+  },
+  7: {
+    levelNumber: 7,
+    levelName: 'Nivel 7 (Intermedio Regular)',
+    badgeLabel: 'NIVEL 7 · INTERMEDIO REGULAR',
+    description: 'Capacidad para acelerar en el último tercio de la prueba.',
+    coachingRecommendation: 'Series en Zona 3 (70-80% FCM) combinadas con ejercicios de peso corporal.',
+    referenceDistance: '2,250 m – 2,349 m',
+    colorHex: '#eab308',
+  },
+  8: {
+    levelNumber: 8,
+    levelName: 'Nivel 8 (Intermedio Sólido)',
+    badgeLabel: 'NIVEL 8 · INTERMEDIO SÓLIDO',
+    description: 'Eficiencia cardiovascular óptima para los WODs de Kinetix.',
+    coachingRecommendation: 'Trabajo de umbral aeróbico y potencia en remo concept2.',
+    referenceDistance: '2,350 m – 2,449 m',
+    colorHex: '#ca8a04',
+  },
+  9: {
+    levelNumber: 9,
+    levelName: 'Nivel 9 (Intermedio Superior)',
+    badgeLabel: 'NIVEL 9 · INTERMEDIO SUPERIOR',
+    description: 'Umbral anaeróbico elevado; excelente tolerancia al ácido láctico.',
+    coachingRecommendation: 'Intervalos cortos de alta intensidad (HIIT) 30s max / 30s rec.',
+    referenceDistance: '2,450 m – 2,549 m',
+    colorHex: '#a3e635',
+  },
+  10: {
+    levelNumber: 10,
+    levelName: 'Nivel 10 (Avanzado 1)',
+    badgeLabel: 'NIVEL 10 · AVANZADO 1',
+    description: 'Rendimiento aeróbico destacado. Ritmo estable por debajo de 4:50 min/km.',
+    coachingRecommendation: 'Series de 800m fraccionadas a ritmo competitivo con descansos cortos.',
+    referenceDistance: '2,550 m – 2,649 m',
+    colorHex: '#84cc16',
+  },
+  11: {
+    levelNumber: 11,
+    levelName: 'Nivel 11 (Avanzado 2)',
+    badgeLabel: 'NIVEL 11 · AVANZADO 2',
+    description: 'Alta capacidad glucolítica y rápida disipación de la fatiga.',
+    coachingRecommendation: 'Entrenamiento en Zona 4 (80-90% FCM) sostenido.',
+    referenceDistance: '2,650 m – 2,749 m',
+    colorHex: '#65a30d',
+  },
+  12: {
+    levelNumber: 12,
+    levelName: 'Nivel 12 (Avanzado Superior)',
+    badgeLabel: 'NIVEL 12 · AVANZADO SUPERIOR',
+    description: 'Condición física sobresaliente; supera los estándares promedio de atletas funcionales.',
+    coachingRecommendation: 'Simulacros de competencia Hyrox / CrossTraining con carrera pesada.',
+    referenceDistance: '2,750 m – 2,849 m',
+    colorHex: '#10b981',
+  },
+  13: {
+    levelNumber: 13,
+    levelName: 'Nivel 13 (Pre-Élite 1)',
+    badgeLabel: 'NIVEL 13 · PRE-ÉLITE 1',
+    description: 'VO2Max estimado superior a 52 ml/kg/min. Excelente economía de carrera.',
+    coachingRecommendation: 'Mantenimiento de potencia máxima con transiciones de fuerza.',
+    referenceDistance: '2,850 m – 2,949 m',
+    colorHex: '#059669',
+  },
+  14: {
+    levelNumber: 14,
+    levelName: 'Nivel 14 (Pre-Élite 2)',
+    badgeLabel: 'NIVEL 14 · PRE-ÉLITE 2',
+    description: 'Dominio de esfuerzos aeróbicos de alta intensidad sin caída de cadencia.',
+    coachingRecommendation: 'Bloques de ritmo sostenido en Zona 4/5 con chaleco lastrado opcional.',
+    referenceDistance: '2,950 m – 3,049 m',
+    colorHex: '#06b6d4',
+  },
+  15: {
+    levelNumber: 15,
+    levelName: 'Nivel 15 (Élite Kinetix)',
+    badgeLabel: 'NIVEL 15 · ÉLITE KINETIX',
+    description: 'Nivel de competencia deportiva. Resistencia cardiorrespiratoria de alto nivel.',
+    coachingRecommendation: 'Periodización específica para eventos y carreras de resistencia.',
+    referenceDistance: '3,050 m – 3,149 m',
+    colorHex: '#0284c7',
+  },
+  16: {
+    levelNumber: 16,
+    levelName: 'Nivel 16 (Élite Superior)',
+    badgeLabel: 'NIVEL 16 · ÉLITE SUPERIOR',
+    description: 'Capacidad de sostener menos de 3:55 min/km en los 12 minutos completos.',
+    coachingRecommendation: 'Potencia metabólica pura y resistencia anaeróbica láctica.',
+    referenceDistance: '3,150 m – 3,249 m',
+    colorHex: '#3b82f6',
+  },
+  17: {
+    levelNumber: 17,
+    levelName: 'Nivel 17 (Master Competidor)',
+    badgeLabel: 'NIVEL 17 · MASTER COMPETIDOR',
+    description: 'Nivel de podio en competencias funcionales regionales.',
+    coachingRecommendation: 'Optimización de recuperación neuromuscular y nutrición deportiva avanzada.',
+    referenceDistance: '3,250 m – 3,349 m',
+    colorHex: '#6366f1',
+  },
+  18: {
+    levelNumber: 18,
+    levelName: 'Nivel 18 (Pro Athlete 1)',
+    badgeLabel: 'NIVEL 18 · PRO ATHLETE 1',
+    description: 'Consumo máximo de oxígeno privilegiado. Eficiencia biomecánica superior.',
+    coachingRecommendation: 'Entrenamiento de precisión por vatios y zonas individualizadas.',
+    referenceDistance: '3,350 m – 3,449 m',
+    colorHex: '#8b5cf6',
+  },
+  19: {
+    levelNumber: 19,
+    levelName: 'Nivel 19 (Pro Athlete 2)',
+    badgeLabel: 'NIVEL 19 · PRO ATHLETE 2',
+    description: 'Rendimiento extraordinario; marca de calibre profesional.',
+    coachingRecommendation: 'Microciclos de pico de rendimiento competitivo.',
+    referenceDistance: '3,450 m – 3,549 m',
+    colorHex: '#ec4899',
+  },
+  20: {
+    levelNumber: 20,
+    levelName: 'Nivel 20 (Ultra Élite Kinetix)',
+    badgeLabel: 'NIVEL 20 · ULTRA ÉLITE KINETIX',
+    description: 'Récord histórico de resistencia en Kinetix Functional Zone. Capacidad cardiorrespiratoria insuperable.',
+    coachingRecommendation: 'Mantenimiento del estatus de Atleta Leyenda en Kinetix.',
+    referenceDistance: '≥ 3,550 m',
+    colorHex: '#ff5500',
   },
 };
 
-export function getCooperLevelInfo(levelNumber: 1 | 2 | 3 | 4 | 5): CooperLevelDetail {
-  return COOPER_LEVELS_CATALOG[levelNumber] || COOPER_LEVELS_CATALOG[3];
+export function getCooperLevelInfo(levelNumber: number): CooperLevelDetail {
+  const num = Math.max(1, Math.min(20, Math.round(levelNumber || 10)));
+  return COOPER_LEVELS_CATALOG[num] || COOPER_LEVELS_CATALOG[10];
 }
 
 /**
@@ -301,10 +437,25 @@ export function lbsToKg(lbs: number): number {
 /**
  * Calculates days remaining or days past due for a membership
  */
-export function calculateDaysUntilExpiry(expiryDateStr: string, referenceDateStr: string = '2024-04-15'): number {
+export function calculateDaysUntilExpiry(expiryDateStr: string, referenceDateStr?: string): number {
+  if (!expiryDateStr) return 0;
   const expiry = new Date(expiryDateStr);
-  const ref = new Date(referenceDateStr);
+  const ref = referenceDateStr ? new Date(referenceDateStr) : new Date();
+  
+  // Set both to midnight to count pure calendar days
+  expiry.setHours(0, 0, 0, 0);
+  ref.setHours(0, 0, 0, 0);
+  
   const diffTime = expiry.getTime() - ref.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
+}
+
+/**
+ * The warning banner "Tu membresía vence pronto" should ONLY display when
+ * there are 15 days or less remaining until expiry (15 to 0 days).
+ * If more than 15 days remain, the user is in good standing and no warning is shown.
+ */
+export function isMembershipExpiringSoon(daysRemaining: number): boolean {
+  return daysRemaining <= 15 && daysRemaining >= 0;
 }

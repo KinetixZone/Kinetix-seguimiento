@@ -77,6 +77,7 @@ interface KinetixResponsiveAppProps {
   onSwitchUser: (user: UserProfile) => void;
   onOpenPrivacyPolicy?: () => void;
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
+  gymLogoUrl?: string | null;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -103,6 +104,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onSwitchUser,
   onOpenPrivacyPolicy,
   consentHistory,
+  gymLogoUrl,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
@@ -696,6 +698,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           athlete={effectiveUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          gymLogoUrl={gymLogoUrl}
           onClose={() => setShowReportModal(false)}
         />
       )}
@@ -705,6 +708,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           athlete={effectiveUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          gymLogoUrl={gymLogoUrl}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

@@ -101,7 +101,8 @@ export default function App() {
       if (saved) {
         const parsed: BodyCompositionRecord[] = JSON.parse(saved);
         const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
-        const clean = parsed.filter(b => !demoIds.includes(b.userId));
+        // Filter out demo athletes and legacy dummy coach records
+        const clean = parsed.filter(b => !demoIds.includes(b.userId) && !b.id.startsWith('bc-coach-'));
         localStorage.setItem('kinetix_body_comp_data', JSON.stringify(clean));
         return clean;
       }
@@ -115,7 +116,8 @@ export default function App() {
       if (saved) {
         const parsed: PhysicalEvaluationRecord[] = JSON.parse(saved);
         const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
-        const clean = parsed.filter(e => !demoIds.includes(e.userId));
+        // Filter out demo athletes and legacy dummy coach evaluations
+        const clean = parsed.filter(e => !demoIds.includes(e.userId) && !e.id.startsWith('eval-coach-'));
         localStorage.setItem('kinetix_evaluations_data', JSON.stringify(clean));
         return clean;
       }
@@ -148,18 +150,37 @@ export default function App() {
 
   // Helper to check if a user has consented to the current privacy notice version
   const currentUserHasConsented = (userId: string) => {
+    // Check direct persistent flag
+    try {
+      if (localStorage.getItem(`kinetix_consent_given_${userId}`) === 'true') {
+        return true;
+      }
+    } catch {}
+
     const list = consentHistory[userId] || [];
-    return list.some(
+    const consented = list.some(
       (c) =>
         c.privacy_notice_version === CURRENT_PRIVACY_NOTICE_VERSION &&
         c.privacy_notice_accepted &&
         c.sensitive_data_consent
     );
+
+    if (consented) {
+      try {
+        localStorage.setItem(`kinetix_consent_given_${userId}`, 'true');
+      } catch {}
+    }
+    return consented;
   };
 
-  // Automatically check on currentUser change (first login or switch user or create profile)
+  // Automatically check on currentUser change (first login only, never prompts again if accepted)
   useEffect(() => {
     if (isAuthenticated && currentUser) {
+      // Staff members (Leslie & Jorge) have master access and are not blocked
+      if (currentUser.role === 'staff') {
+        setIsPrivacyConsentOpen(false);
+        return;
+      }
       if (!currentUserHasConsented(currentUser.id)) {
         setIsPrivacyConsentOpen(true);
       } else {
@@ -169,6 +190,9 @@ export default function App() {
   }, [currentUserId, isAuthenticated, consentHistory]);
 
   const handleConsentAccepted = (record: PrivacyConsentRecord) => {
+    try {
+      localStorage.setItem(`kinetix_consent_given_${record.user_id}`, 'true');
+    } catch {}
     saveConsentRecord(record);
     setConsentHistory((prev) => {
       const userList = prev[record.user_id] || [];
@@ -560,6 +584,7 @@ export default function App() {
           onSwitchUser={(u) => setCurrentUserId(u.id)}
           onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
           consentHistory={consentHistory}
+          gymLogoUrl={gymLogoUrl}
         />
       </main>
 
@@ -611,6 +636,7 @@ export default function App() {
       <PrivacyPolicyViewerModal
         currentUser={currentUser}
         consentRecord={consentHistory[currentUser.id]?.slice(-1)[0] || null}
+        gymLogoUrl={gymLogoUrl}
         isOpen={isPrivacyPolicyViewerOpen}
         onClose={() => setIsPrivacyPolicyViewerOpen(false)}
       />

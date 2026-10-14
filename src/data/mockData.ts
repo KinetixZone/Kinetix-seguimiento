@@ -412,135 +412,23 @@ export const INITIAL_PHYSICAL_EVAL_MARIA: PhysicalEvaluationRecord[] = [
   },
 ];
 
-// Historical body composition for Coach Jorge (Head Coach self-tracking)
-export const INITIAL_BODY_COMP_COACH: BodyCompositionRecord[] = [
-  {
-    id: 'bc-coach-001',
-    userId: 'user-staff-01',
-    recordedAt: '2024-01-10',
-    weightKg: 85.0,
-    muscleMassPercent: 47.8,
-    bodyFatPercent: 11.2,
-    visceralFatLevel: 2,
-    bmi: 25.6,
-    bmiCategory: 'Sobrepeso',
-    notes: 'Medición base de pretemporada y fuerza funcional.',
-    recordedByRole: 'staff',
-  },
-  {
-    id: 'bc-coach-002',
-    userId: 'user-staff-01',
-    recordedAt: '2024-03-25',
-    weightKg: 83.5,
-    muscleMassPercent: 49.2,
-    bodyFatPercent: 9.8,
-    visceralFatLevel: 2,
-    bmi: 25.2,
-    bmiCategory: 'Sobrepeso',
-    notes: 'Definición neuromuscular lograda: sube músculo magro y baja a un dígito de grasa.',
-    recordedByRole: 'staff',
-  },
-];
+// No invented data for Coach/Staff profiles - real metrics must be entered by staff
+export const INITIAL_BODY_COMP_COACH: BodyCompositionRecord[] = [];
 
-export const ALL_INITIAL_BODY_COMP: BodyCompositionRecord[] = [
-  ...INITIAL_BODY_COMP_COACH,
-];
+export const ALL_INITIAL_BODY_COMP: BodyCompositionRecord[] = [];
 
-// Physical evaluations for Coach Jorge (Coach self-evaluation)
-export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [
-  {
-    id: 'eval-coach-001',
-    userId: 'user-staff-01',
-    evaluationDate: '2024-01-12',
-    coachId: 'user-staff-01',
-    coachName: 'Coach Jorge (Auto-evaluación)',
-    cooperTest: {
-      level: 'Nivel 5 (Excelente / Élite)',
-      levelNumber: 5,
-      description: 'Potencia aeróbica y resistencia máxima de entrenador de alto rendimiento.',
-      targetZoneRecommendation: 'Mantener trabajo de intervalos en Zona 5 para pacing de competencia.',
-      distanceMeters: 3000,
-      estimatedVo2Max: 54.5,
-      rating: 'Excelente',
-      notes: 'Ritmo demoledor a 4:00/km sostenido.',
-    },
-    enduranceTest: {
-      name: 'Evaluación de Resistencia Funcional',
-      result: '06:15 min',
-      timeSeconds: 375,
-      scoreScoreLevel: 'Élite',
-      notes: 'Ritmo continuo sin romper posición de plancha.',
-    },
-    strengthRecords: [
-      { exerciseId: 'squats', exerciseName: 'Sentadillas', weightKg: 155, reps: 1, estimated1RMKg: 155, weightUnit: 'kg' },
-      { exerciseId: 'deadlift', exerciseName: 'Peso Muerto', weightKg: 180, reps: 1, estimated1RMKg: 180, weightUnit: 'kg' },
-      { exerciseId: 'hip_thrust', exerciseName: 'Hip Thrust', weightKg: 190, reps: 1, estimated1RMKg: 190, weightUnit: 'kg' },
-      { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 120, reps: 1, estimated1RMKg: 120, weightUnit: 'kg' },
-      { exerciseId: 'pullups_or_rows', exerciseName: 'Dominadas Lastradas', weightKg: 105, reps: 10, estimated1RMKg: 135, weightUnit: 'kg' },
-    ],
-    generalCoachNotes: 'Excelente control motor. Continuar demostrando los estándares de técnica a los alumnos.',
-  },
-  {
-    id: 'eval-coach-002',
-    userId: 'user-staff-01',
-    evaluationDate: '2024-03-28',
-    coachId: 'user-staff-01',
-    coachName: 'Coach Jorge (Auto-evaluación)',
-    cooperTest: {
-      level: 'Nivel 5 (Excelente / Élite)',
-      levelNumber: 5,
-      description: 'Condición cardiovascular impecable en nivel élite.',
-      targetZoneRecommendation: 'Excelente base aeróbica.',
-      distanceMeters: 3120,
-      estimatedVo2Max: 56.2,
-      rating: 'Excelente',
-      notes: 'Supera los 3,100 metros en 12 minutos (+120m vs test previo).',
-    },
-    enduranceTest: {
-      name: 'Evaluación de Resistencia Funcional',
-      result: '05:48 min',
-      timeSeconds: 348,
-      scoreScoreLevel: 'Élite',
-      notes: '¡27 segundos más rápido que en enero! Excelente cadencia.',
-    },
-    strengthRecords: [
-      { exerciseId: 'squats', exerciseName: 'Sentadillas', weightKg: 165, reps: 1, estimated1RMKg: 165, weightUnit: 'kg' },
-      { exerciseId: 'deadlift', exerciseName: 'Peso Muerto', weightKg: 190, reps: 1, estimated1RMKg: 190, weightUnit: 'kg' },
-      { exerciseId: 'hip_thrust', exerciseName: 'Hip Thrust', weightKg: 205, reps: 1, estimated1RMKg: 205, weightUnit: 'kg' },
-      { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 125, reps: 1, estimated1RMKg: 125, weightUnit: 'kg' },
-      { exerciseId: 'pullups_or_rows', exerciseName: 'Dominadas Lastradas', weightKg: 110, reps: 12, estimated1RMKg: 145, weightUnit: 'kg' },
-    ],
-    generalCoachNotes: 'Progresión personal sobresaliente. +10kg en sentadillas y test de resistencia completado en 5:48 min.',
-  },
-];
+// Physical evaluations for Coach Jorge
+export const INITIAL_PHYSICAL_EVAL_COACH: PhysicalEvaluationRecord[] = [];
 
-export const ALL_INITIAL_PHYSICAL_EVALS: PhysicalEvaluationRecord[] = [
-  ...INITIAL_PHYSICAL_EVAL_COACH,
-];
+export const ALL_INITIAL_PHYSICAL_EVALS: PhysicalEvaluationRecord[] = [];
 
 export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
   {
     id: 'notif-welcome',
     title: 'Bienvenido al Portal Kinetix',
-    body: 'Plataforma oficial activa. Registra tus evaluaciones de Cooper, RM de fuerza y seguimiento funcional.',
-    timestamp: '2024-04-15 09:00',
+    body: 'Plataforma oficial activa. Sistema de seguimiento funcional y evaluaciones.',
+    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16),
     type: 'milestone',
     read: false,
-  },
-  {
-    id: 'notif-2',
-    title: 'Nuevos Resultados de Evaluación Física',
-    body: 'Coach Jorge ha registrado tus resultados del Test Cooper y Pruebas de Fuerza 1RM.',
-    timestamp: '2024-03-20 18:30',
-    type: 'test_results',
-    read: true,
-  },
-  {
-    id: 'notif-3',
-    title: 'Hito Alcanzado: +5kg de Fuerza',
-    body: '¡Felicidades por tu constancia! Tu progreso de fuerza neta superó el objetivo mensual.',
-    timestamp: '2024-03-21 10:15',
-    type: 'milestone',
-    read: true,
   },
 ];

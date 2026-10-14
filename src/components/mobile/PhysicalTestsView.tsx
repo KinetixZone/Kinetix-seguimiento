@@ -32,7 +32,8 @@ import {
   Edit3,
   AlertTriangle,
   Clock,
-  Sparkles
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 
 interface PhysicalTestsViewProps {
@@ -84,7 +85,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Form State for New Evaluation Entry (Staff)
   const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [selectedCooperLevel, setSelectedCooperLevel] = useState<1 | 2 | 3 | 4 | 5>(5);
+  const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
   
   // Test de Resistencia (Por tiempo)
@@ -102,8 +103,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [hipThrustReps, setHipThrustReps] = useState<number>(1);
   const [pressWeight, setPressWeight] = useState<number>(90);
   const [pressReps, setPressReps] = useState<number>(1);
-  const [rowWeight, setRowWeight] = useState<number>(85);
-  const [rowReps, setRowReps] = useState<number>(14);
+  // Remo vs Dominadas Selector & Weight
+  const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
+  const [rowWeight, setRowWeight] = useState<number>(75);
+  const [rowReps, setRowReps] = useState<number>(12);
   const [coachNotes, setCoachNotes] = useState<string>('Progreso sostenido en cadencia de resistencia muscular y ganancias de fuerza máxima.');
 
   // Evaluaciones del atleta actual ordenadas cronológicamente
@@ -184,7 +187,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       const pr = latestEval.strengthRecords.find(s => s.exerciseId === 'horizontal_press');
       if (pr) { setPressWeight(pr.weightKg); setPressReps(pr.reps); }
       const rw = latestEval.strengthRecords.find(s => s.exerciseId === 'pullups_or_rows');
-      if (rw) { setRowWeight(rw.weightKg); setRowReps(rw.reps); }
+      if (rw) {
+        setRowWeight(rw.weightKg);
+        setRowReps(rw.reps);
+        if (rw.exerciseType) {
+          setRowExerciseType(rw.exerciseType);
+        } else if (rw.exerciseName.toLowerCase().includes('dominad')) {
+          setRowExerciseType('dominadas');
+        } else {
+          setRowExerciseType('remo');
+        }
+      }
     }
     setCoachNotes('Excelente control motor y velocidad de ejecución en el reto.');
     setShowAddEvalModal(true);
@@ -207,9 +220,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         description: levelInfo.description,
         targetZoneRecommendation: levelInfo.coachingRecommendation,
         distanceMeters: optionalDistance,
-        estimatedVo2Max: 50.0 + (selectedCooperLevel * 1.2),
-        rating: selectedCooperLevel >= 4 ? 'Excelente' : 'Bueno',
-        notes: `Nivel asignado por evaluación de campo: ${levelInfo.badgeLabel}`,
+        estimatedVo2Max: Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)),
+        rating: selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular',
+        notes: `Nivel asignado por evaluación técnica oficial: ${levelInfo.badgeLabel}`,
       },
       enduranceTest: {
         name: enduranceExerciseName,
@@ -253,7 +266,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         },
         {
           exerciseId: 'pullups_or_rows',
-          exerciseName: 'Dominadas / Remo',
+          exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+          exerciseType: rowExerciseType,
           weightKg: rowWeight,
           reps: rowReps,
           estimated1RMKg: calculate1RM(rowWeight, rowReps),
@@ -313,14 +327,22 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </button>
           )}
 
-          {/* Evaluation Action Button */}
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>{currentUser.role === 'staff' ? 'Evaluar Atleta' : 'Registrar Mis Evaluaciones'}</span>
-          </button>
+          {/* Evaluation Action Button - Only Coach / Dueño */}
+          {currentUser.role === 'staff' ? (
+            <button
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Evaluar Atleta (Staff)</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-400">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Dictamen emitido por Coach Jorge</span>
+              <span className="sm:hidden">Dictamen Coach</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -691,22 +713,28 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               </div>
             </div>
 
-            {/* 5-Step Visual Level Progression Bar */}
+            {/* 20-Step Visual Level Progression Bar */}
             <div className="space-y-1.5 pt-1">
               <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
-                <span>Nivel 1 (Inicial)</span>
-                <span>Nivel 3 (Medio)</span>
-                <span className="text-blue-400 font-bold">Nivel 5 (Élite)</span>
+                <span>Nivel 1 (Adaptación)</span>
+                <span>Nivel 10 (Avanzado)</span>
+                <span className="text-red-500 font-bold">Nivel 20 (Ultra Élite)</span>
               </div>
-              <div className="grid grid-cols-5 gap-1.5 h-2.5">
-                {[1, 2, 3, 4, 5].map((lvl) => {
-                  const currentLvl = latestEval.cooperTest.levelNumber || 5;
+              <div className="grid grid-cols-20 gap-0.5 h-2.5 bg-neutral-900 rounded-full p-0.5 border border-neutral-800">
+                {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
+                  const currentLvl = latestEval.cooperTest.levelNumber || 10;
                   const isReached = lvl <= currentLvl;
+                  const isCurrent = lvl === currentLvl;
                   return (
                     <div
                       key={lvl}
-                      className={`h-full rounded-full transition-all ${
-                        isReached ? 'bg-blue-500 shadow-sm shadow-blue-500/40' : 'bg-neutral-800'
+                      title={`Nivel ${lvl}`}
+                      className={`h-full rounded-sm transition-all ${
+                        isCurrent
+                          ? 'bg-red-500 shadow-sm shadow-red-500/80 scale-y-125'
+                          : isReached
+                          ? 'bg-blue-500'
+                          : 'bg-neutral-800/80'
                       }`}
                     />
                   );
@@ -1133,48 +1161,54 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 />
               </div>
 
-              {/* SECCIÓN 1: TEST DE COOPER (NIVEL 1 AL 5) */}
+              {/* SECCIÓN 1: TEST DE COOPER (NIVELES 1 AL 20) */}
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-white flex items-center gap-1.5">
                     <Heart className="w-3.5 h-3.5 text-red-500" />
-                    <span>1. Nivel en Test de Cooper (12 Minutos)</span>
+                    <span>1. Nivel en Test de Cooper (12 Minutos) — Escala 1 al 20</span>
                   </span>
-                  <span className="text-[11px] text-blue-400 font-mono font-bold">
-                    Nivel {selectedCooperLevel} Elegido
+                  <span className="text-[11px] text-blue-400 font-mono font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">
+                    Nivel {selectedCooperLevel} de 20
                   </span>
                 </div>
 
-                <div className="grid grid-cols-5 gap-1.5">
-                  {([1, 2, 3, 4, 5] as const).map((lvl) => {
+                <div className="grid grid-cols-10 gap-1">
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
                     const isSelected = selectedCooperLevel === lvl;
                     return (
                       <button
                         type="button"
                         key={lvl}
                         onClick={() => setSelectedCooperLevel(lvl)}
-                        className={`py-2 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                        className={`py-1.5 rounded-lg border flex flex-col items-center justify-center transition-all ${
                           isSelected
-                            ? 'bg-blue-600 border-blue-500 text-white font-bold shadow-md'
-                            : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                            ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-md shadow-blue-500/30 scale-105'
+                            : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
                         }`}
+                        title={`Nivel ${lvl}`}
                       >
-                        <span className="text-sm font-bold">{lvl}</span>
-                        <span className="text-[9px] uppercase tracking-tighter">
-                          {lvl === 1 && 'Inicial'}
-                          {lvl === 2 && 'Básico'}
-                          {lvl === 3 && 'Medio'}
-                          {lvl === 4 && 'Avanz.'}
-                          {lvl === 5 && 'Élite'}
-                        </span>
+                        <span className="text-xs font-bold">{lvl}</span>
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="text-[11px] text-neutral-400 bg-neutral-900/60 p-2.5 rounded-xl border border-neutral-800">
-                  <strong className="text-white block mb-0.5">{COOPER_LEVELS_CATALOG[selectedCooperLevel].levelName}:</strong>
-                  {COOPER_LEVELS_CATALOG[selectedCooperLevel].description}
+                <div className="text-[11px] text-neutral-300 bg-neutral-900/80 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <strong className="text-white">
+                      {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.levelName || `Nivel ${selectedCooperLevel}`}
+                    </strong>
+                    <span className="text-emerald-400 font-mono font-semibold text-[10px]">
+                      {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.referenceDistance}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-snug">
+                    {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.description}
+                  </p>
+                  <div className="text-[10px] text-blue-400 pt-0.5">
+                    Pauta de entreno: {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.coachingRecommendation}
+                  </div>
                 </div>
               </div>
 
@@ -1309,32 +1343,76 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
 
                   {/* Remo / Dominadas */}
-                  <div className="grid grid-cols-3 gap-2 items-center bg-neutral-900 p-2 rounded-xl">
-                    <span className="text-neutral-300 font-medium text-xs">Remo / Domin.</span>
-                    <input
-                      type="number"
-                      value={rowWeight}
-                      onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs"
-                      placeholder="kg"
-                    />
-                    <span className="text-[10px] text-neutral-400 text-right">
-                      1RM: {calculate1RM(rowWeight, rowReps)}kg
-                    </span>
+                  {/* 5. Remo o Dominadas con selector y peso */}
+                  <div className="bg-neutral-900 p-2.5 rounded-xl space-y-2 border border-neutral-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-300 font-semibold text-xs flex items-center gap-1.5">
+                        <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>5. Tracción (Remo o Dominadas)</span>
+                      </span>
+
+                      {/* Selector de Ejercicio */}
+                      <div className="flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setRowExerciseType('remo')}
+                          className={`px-2.5 py-1 rounded font-bold transition-all ${
+                            rowExerciseType === 'remo'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Remo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRowExerciseType('dominadas')}
+                          className={`px-2.5 py-1 rounded font-bold transition-all ${
+                            rowExerciseType === 'dominadas'
+                              ? 'bg-red-600 text-white shadow-sm'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Dominadas
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-5 text-[11px] text-neutral-300 font-medium">
+                        {rowExerciseType === 'remo' ? 'Remo (Barra / Polea)' : 'Dominadas (Pull-ups)'}
+                      </div>
+                      <div className="col-span-4">
+                        <input
+                          type="number"
+                          value={rowWeight}
+                          onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs focus:border-blue-500 outline-none"
+                          placeholder={rowExerciseType === 'remo' ? 'Peso (kg)' : 'Peso / Lastre kg'}
+                        />
+                      </div>
+                      <div className="col-span-3 text-right">
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          1RM: <strong className="text-white">{calculate1RM(rowWeight, rowReps)}kg</strong>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Dictamen del Coach Jorge */}
               <div>
-                <label className="text-neutral-300 font-medium block mb-1">
-                  Dictamen Técnico y Recomendaciones (Coach Jorge)
+                <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                  <span>Dictamen Técnico y Recomendaciones ({currentUser.role === 'staff' ? currentUser.name : 'Coach Jorge'})</span>
+                  <span className="text-[10px] text-red-400 font-mono font-semibold">Exclusivo Staff / Coach</span>
                 </label>
                 <textarea
                   rows={2}
                   value={coachNotes}
+                  disabled={currentUser.role !== 'staff'}
                   onChange={(e) => setCoachNotes(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-blue-500 resize-none"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-blue-500 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                   placeholder="Feedback de ritmo, potencia y técnica..."
                 />
               </div>
@@ -1395,17 +1473,20 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               </div>
 
               <div>
-                <label className="text-neutral-300 font-medium block mb-1">Nivel Cooper (1-5)</label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {([1, 2, 3, 4, 5] as const).map((lvl) => (
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-neutral-300 font-medium">Nivel Cooper (1 al 20)</label>
+                  <span className="text-[10px] text-blue-400 font-mono font-bold">Nivel {selectedCooperLevel} de 20</span>
+                </div>
+                <div className="grid grid-cols-10 gap-1">
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
                     <button
                       type="button"
                       key={lvl}
                       onClick={() => setSelectedCooperLevel(lvl)}
-                      className={`py-2 rounded-xl border text-center font-bold text-xs ${
+                      className={`py-1.5 rounded-lg border text-center font-bold text-xs transition-all ${
                         selectedCooperLevel === lvl
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                          ? 'bg-blue-600 border-blue-400 text-white shadow-md'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                       }`}
                     >
                       {lvl}

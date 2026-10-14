@@ -132,25 +132,20 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
             <span>Crear Historia</span>
           </button>
 
-          <button
-            onClick={() => {
-              if (isStaff) {
+          {isStaff && (
+            <button
+              onClick={() => {
                 onSimulatePushNotification(
                   'Aviso del Coach Kinetix',
                   'Atención atletas: Mañana tendremos entrenamiento especial de técnica y fuerza funcional. ¡No falten!'
                 );
-              } else {
-                onSimulatePushNotification(
-                  'Recordatorio de Pago Kinetix',
-                  `Hola ${currentUser.name.split(' ')[0]}, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.`
-                );
-              }
-            }}
-            className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs border border-neutral-700/80 transition-colors flex items-center gap-1.5"
-          >
-            <Bell className="w-3.5 h-3.5 text-blue-400" />
-            <span>{isStaff ? 'Simular Aviso General' : 'Simular Aviso'}</span>
-          </button>
+              }}
+              className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs border border-neutral-700/80 transition-colors flex items-center gap-1.5"
+            >
+              <Bell className="w-3.5 h-3.5 text-red-400" />
+              <span>Emitir Aviso Staff</span>
+            </button>
+          )}
         </div>
       </div>
 

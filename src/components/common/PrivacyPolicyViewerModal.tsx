@@ -17,6 +17,7 @@ import {
 interface PrivacyPolicyViewerModalProps {
   currentUser: UserProfile;
   consentRecord?: PrivacyConsentRecord | null;
+  gymLogoUrl?: string | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -24,6 +25,7 @@ interface PrivacyPolicyViewerModalProps {
 export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> = ({
   currentUser,
   consentRecord,
+  gymLogoUrl,
   isOpen,
   onClose,
 }) => {
@@ -35,11 +37,11 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
 
   return (
     <div className="privacy-policy-overlay fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in print:p-0 print:bg-white print:static print:inset-auto print:block print:overflow-visible">
-      {/* Print styles injection to guarantee the whole document prints multi-page without getting cropped */}
+      {/* Print styles injection to guarantee the whole document prints multi-page without getting cropped or abruptly cut */}
       <style>{`
         @media print {
           @page {
-            margin: 15mm;
+            margin: 12mm 15mm;
             size: letter portrait;
           }
           html, body {
@@ -101,7 +103,15 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
           .print-section {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
-            margin-bottom: 14pt !important;
+            margin-bottom: 12pt !important;
+          }
+          p, li {
+            orphans: 3 !important;
+            widows: 3 !important;
+          }
+          h1, h2, h3, h4 {
+            break-after: avoid !important;
+            page-break-after: avoid !important;
           }
         }
       `}</style>
@@ -153,7 +163,15 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
           <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800/80 space-y-2 font-mono text-[11px] print:border print:border-black print:bg-white print:p-3 print:rounded-none">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 print:border-black pb-2">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded bg-blue-600 print:bg-black text-white font-bold flex items-center justify-center text-[10px]">KZ</span>
+                {gymLogoUrl ? (
+                  <img
+                    src={gymLogoUrl}
+                    alt="Logo Kinetix"
+                    className="w-6 h-6 object-contain rounded print:filter-none"
+                  />
+                ) : (
+                  <span className="w-5 h-5 rounded bg-blue-600 print:bg-black text-white font-bold flex items-center justify-center text-[10px]">KZ</span>
+                )}
                 <span className="font-bold text-white print:text-black text-xs">KINETIX FUNCTIONAL ZONE</span>
               </div>
               <span className="text-blue-400 print:text-black font-semibold">
@@ -328,7 +346,7 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
               </div>
               <div className="border-t border-black pt-1">
                 <span className="block font-semibold">Fecha:</span>
-                <span className="text-neutral-600 print:text-black">____ de ______________ de 2026</span>
+                <span className="text-neutral-600 print:text-black">____ de ______________ de {new Date().getFullYear()}</span>
               </div>
             </div>
           </div>

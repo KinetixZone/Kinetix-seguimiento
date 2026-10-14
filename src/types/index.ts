@@ -2,7 +2,7 @@ export type UserRole = 'athlete' | 'staff' | 'admin';
 
 export type StaffRole = 'owner' | 'coach'; // 'owner': Leslie & Jorge (Control Total) | 'coach': Gus (Evaluador & Seguimiento)
 
-export type MembershipStatus = 'active' | 'expiring_soon' | 'expired' | 'suspended';
+export type MembershipStatus = 'active' | 'expiring_soon' | 'expired' | 'suspended' | 'canceled';
 
 export type Gender = 'male' | 'female';
 
@@ -71,18 +71,13 @@ export interface BodyCompositionRecord {
   };
 }
 
-export type CooperLevel = 
-  | 'Nivel 1 (Inicial)' 
-  | 'Nivel 2 (Básico)' 
-  | 'Nivel 3 (Intermedio)' 
-  | 'Nivel 4 (Avanzado)' 
-  | 'Nivel 5 (Excelente / Élite)';
+export type CooperLevel = string;
 
 export type CooperRating = 'Muy Malo' | 'Malo' | 'Regular' | 'Bueno' | 'Excelente' | 'Superior';
 
 export interface CooperTestRecord {
-  level: CooperLevel;
-  levelNumber: 1 | 2 | 3 | 4 | 5;
+  level: string; // e.g., 'Nivel 1 (Adaptación Inicial)' to 'Nivel 20 (Ultra Élite Kinetix)'
+  levelNumber: number; // 1 to 20
   description: string;
   targetZoneRecommendation?: string;
   distanceMeters?: number; // Opcional de referencia para el staff
@@ -96,10 +91,12 @@ export type BrandTheme = 'blue' | 'red';
 export interface StrengthMaxRecord {
   exerciseId: 'squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows';
   exerciseName: string;
+  exerciseType?: 'remo' | 'dominadas'; // Selector explícito solicitado por el usuario
   weightKg: number;
   reps: number;
   estimated1RMKg: number;
   weightUnit: 'kg' | 'lbs';
+  notes?: string;
 }
 
 export interface EnduranceTimeTestRecord {

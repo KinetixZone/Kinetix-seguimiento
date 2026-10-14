@@ -37,11 +37,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   users,
   gymLogoUrl,
   onLogin,
-  onRegisterAthlete,
   onNotifyOwners,
   onOpenPrivacyPolicy,
 }) => {
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [roleTab, setRoleTab] = useState<'athlete' | 'staff'>('athlete');
   
   // Login form state
@@ -52,13 +50,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Register form state
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regGender, setRegGender] = useState<'male' | 'female'>('male');
-  const [regHeightCm, setRegHeightCm] = useState(170);
 
   // Forgot password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -79,7 +70,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     const userFound = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!userFound) {
-      setErrorMsg('No encontramos una cuenta con ese correo electrónico. Si eres alumno nuevo, puedes registrar tu perfil aquí mismo en la pestaña "Crear Perfil".');
+      setErrorMsg('No encontramos una cuenta con ese correo electrónico. Las altas de alumnos las realizan exclusivamente los Dueños o Coaches en recepción.');
       setIsSubmitting(false);
       return;
     }
@@ -116,57 +107,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setIsSubmitting(false);
       onLogin(userFound);
     }, 350);
-  };
-
-  const handleRegisterSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    const cleanEmail = regEmail.trim().toLowerCase();
-    const cleanName = regName.trim();
-    const cleanPassword = regPassword.trim();
-
-    if (!cleanName) {
-      setErrorMsg('Por favor introduce tu nombre completo.');
-      return;
-    }
-
-    if (cleanPassword.length < 4) {
-      setErrorMsg('La contraseña debe tener al menos 4 caracteres.');
-      return;
-    }
-
-    // Check if email already exists
-    const exists = users.some(u => u.email.toLowerCase() === cleanEmail);
-    if (exists) {
-      setErrorMsg('Ya existe una cuenta registrada con este correo. Inicia sesión con tu contraseña.');
-      return;
-    }
-
-    if (onRegisterAthlete) {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        onRegisterAthlete({
-          name: cleanName,
-          email: cleanEmail,
-          password: cleanPassword,
-          gender: regGender,
-          heightCm: regHeightCm,
-        });
-
-        // Switch to login tab, prefill email, clear password and show security instructions
-        setAuthMode('login');
-        setRoleTab('athlete');
-        setEmail(cleanEmail);
-        setPassword('');
-        setRegName('');
-        setRegEmail('');
-        setRegPassword('');
-        setSuccessMsg('¡Cuenta de atleta creada exitosamente! Por favor ingresa tu contraseña para iniciar sesión de forma segura.');
-      }, 400);
-    }
   };
 
   const handleResetPasswordSubmit = (e: React.FormEvent) => {
@@ -255,77 +195,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
         {/* Login / Register Card */}
         <div className="p-6 sm:p-7 rounded-3xl bg-neutral-900/95 border border-neutral-800 shadow-2xl space-y-5">
-          {/* Main Mode Toggle: Iniciar Sesión vs Crear Cuenta */}
+          {/* Role Switcher: Soy Atleta vs Coach / Staff */}
           <div className="flex rounded-2xl bg-neutral-950 p-1 border border-neutral-800 text-xs">
             <button
               type="button"
               onClick={() => {
-                setAuthMode('login');
+                setRoleTab('athlete');
                 setErrorMsg(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
-                authMode === 'login'
+              className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                roleTab === 'athlete'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Iniciar Sesión</span>
+              <Dumbbell className="w-3.5 h-3.5" />
+              <span>Soy Atleta</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
-                setAuthMode('register');
+                setRoleTab('staff');
                 setErrorMsg(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 ${
-                authMode === 'register'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+              className={`flex-1 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                roleTab === 'staff'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Crear Perfil Atleta</span>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Coach / Dueño</span>
             </button>
           </div>
-
-          {/* If In Login Mode: Show Role Switcher */}
-          {authMode === 'login' && (
-            <div className="flex rounded-xl bg-neutral-950/80 p-1 border border-neutral-800/80 text-[11px]">
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('athlete');
-                  setErrorMsg(null);
-                }}
-                className={`flex-1 py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                  roleTab === 'athlete'
-                    ? 'bg-neutral-800 text-white shadow-sm'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <Dumbbell className="w-3 h-3 text-blue-400" />
-                <span>Soy Atleta</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('staff');
-                  setErrorMsg(null);
-                }}
-                className={`flex-1 py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                  roleTab === 'staff'
-                    ? 'bg-neutral-800 text-red-300 shadow-sm'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <ShieldCheck className="w-3 h-3 text-red-400" />
-                <span>Coach / Staff</span>
-              </button>
-            </div>
-          )}
 
           {/* Error Message */}
           {errorMsg && (
@@ -343,177 +246,94 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* MODE 1: LOGIN FORM */}
-          {authMode === 'login' ? (
-            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="text-neutral-300 font-medium block mb-1.5">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={roleTab === 'staff' ? 'leslie23tr@gmail.com o jorge.coach@kinetix.com' : 'tu-correo@ejemplo.com'}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-neutral-300 font-medium block mb-1.5">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Tu contraseña asignada o privada"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-10 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors font-mono"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="rounded bg-neutral-950 border-neutral-800 text-blue-600 focus:ring-0"
-                  />
-                  <span>Recordar sesión</span>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotEmail(email);
-                    setForgotError(null);
-                    setShowForgotModal(true);
-                  }}
-                  className="text-neutral-400 hover:text-blue-400 font-medium transition-colors underline"
-                >
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={`w-full py-3.5 rounded-xl text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50 ${
-                  roleTab === 'staff'
-                    ? 'bg-red-600 hover:bg-red-500 shadow-red-600/30'
-                    : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30'
-                }`}
-              >
-                <span>{isSubmitting ? 'Iniciando Sesión...' : 'Iniciar Sesión'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
-            /* MODE 2: REGISTER FORM */
-            <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-xs">
-              <div>
-                <label className="text-neutral-300 font-medium block mb-1">
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  placeholder="Ej. Rodrigo Silva"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-neutral-300 font-medium block mb-1">
-                  Correo Electrónico (Será tu usuario de acceso)
-                </label>
+          {/* LOGIN FORM */}
+          <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="text-neutral-300 font-medium block mb-1.5">
+                Correo Electrónico
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="tu-correo@ejemplo.com"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={roleTab === 'staff' ? 'leslie23tr@gmail.com o jorge.coach@kinetix.com' : 'tu-correo@ejemplo.com'}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
                   required
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="text-neutral-300 font-medium block mb-1">
-                  Crea tu Contraseña Personal
-                </label>
+            <div>
+              <label className="text-neutral-300 font-medium block mb-1.5">
+                Contraseña
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
-                  type="password"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Mínimo 4 caracteres (ej. kinetix2026)"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-emerald-500 font-mono"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tu contraseña asignada o privada"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-10 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors font-mono"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Género</label>
-                  <select
-                    value={regGender}
-                    onChange={(e) => setRegGender(e.target.value as 'male' | 'female')}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500"
-                  >
-                    <option value="male">Masculino</option>
-                    <option value="female">Femenino</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Estatura (cm)</label>
-                  <input
-                    type="number"
-                    value={regHeightCm}
-                    onChange={(e) => setRegHeightCm(parseInt(e.target.value) || 170)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500 font-mono"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-emerald-950/30 border border-emerald-800/40 text-[11px] text-emerald-200/90 space-y-1">
-                <div className="font-semibold text-emerald-300 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Aviso Previo de Consentimiento LFPDPPP</span>
-                </div>
-                <p className="leading-relaxed">
-                  Al completar el registro, verás obligatoriamente la pantalla de consentimiento del <strong>Aviso de Privacidad Integral</strong> para autorizar el tratamiento de tus datos sensibles antes de capturar tu composición corporal.
-                </p>
-              </div>
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-300 select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded bg-neutral-950 border-neutral-800 text-blue-600 focus:ring-0"
+                />
+                <span>Recordar sesión</span>
+              </label>
 
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95 disabled:opacity-50"
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotError(null);
+                  setShowForgotModal(true);
+                }}
+                className="text-neutral-400 hover:text-blue-400 font-medium transition-colors underline"
               >
-                <span>{isSubmitting ? 'Creando Perfil...' : 'Crear Perfil y Continuar'}</span>
-                <ArrowRight className="w-4 h-4" />
+                ¿Olvidaste tu contraseña?
               </button>
-            </form>
-          )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full py-3.5 rounded-xl text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50 ${
+                roleTab === 'staff'
+                  ? 'bg-red-600 hover:bg-red-500 shadow-red-600/30'
+                  : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30'
+              }`}
+            >
+              <span>{isSubmitting ? 'Iniciando Sesión...' : 'Iniciar Sesión'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+
+          {/* Coach & Owner exclusive registration notice */}
+          <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800/80 text-[11px] text-neutral-400 space-y-1">
+            <span className="text-white font-semibold block">¿Nuevo alumno en Kinetix?</span>
+            <p className="leading-relaxed">
+              Las cuentas y expedientes de atletas son creados exclusivamente por los Dueños y Coaches en recepción o desde su panel interno para garantizar la asignación correcta de plan y mediciones.
+            </p>
+          </div>
 
           {/* Privacy & Safe Notice */}
           <div className="pt-3 border-t border-neutral-800/80 flex items-center gap-2 text-[11px] text-neutral-400">

@@ -6,6 +6,7 @@ interface ProgressReportModalProps {
   athlete: UserProfile;
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
+  gymLogoUrl?: string | null;
   onClose: () => void;
 }
 
@@ -13,11 +14,18 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   athlete,
   latestBodyComp,
   latestEval,
+  gymLogoUrl,
   onClose,
 }) => {
   const handlePrint = () => {
     window.print();
   };
+
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  const currentYear = now.getFullYear();
+  const currentQuarter = `Trimestre Q${Math.floor(now.getMonth() / 3) + 1} ${currentYear}`;
+  const folioCode = `KZ-EVAL-${currentYear}-${(athlete.id || '001').replace('user-', '').slice(-4).toUpperCase()}`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-6 overflow-y-auto">
@@ -51,24 +59,32 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
         <div className="bg-neutral-950 p-6 sm:p-8 rounded-2xl border border-neutral-800 space-y-6 print:border-none print:p-0">
           {/* Header with Gym Identity */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-neutral-800 pb-5 gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-black font-extrabold text-xs">
+            <div className="flex items-center gap-3">
+              {gymLogoUrl ? (
+                <img
+                  src={gymLogoUrl}
+                  alt="Logo Kinetix"
+                  className="w-12 h-12 object-contain rounded-xl border border-neutral-800 bg-neutral-900 p-1"
+                />
+              ) : (
+                <span className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-black font-extrabold text-sm shadow-md">
                   KZ
                 </span>
+              )}
+              <div>
                 <span className="text-xl font-bold tracking-tight text-white font-brand">
                   KINETIX <span className="font-light text-neutral-400">Functional Zone</span>
                 </span>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  Departamento de Fisiología del Ejercicio & Evaluación Funcional
+                </p>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1">
-                Departamento de Fisiología del Ejercicio & Evaluación Funcional
-              </p>
             </div>
 
             <div className="text-right text-xs space-y-0.5">
-              <span className="font-mono text-emerald-400 font-semibold">Folio: KZ-EVAL-2024-039</span>
-              <div className="text-neutral-400 text-[11px]">Fecha de Emisión: 25 de Marzo, 2024</div>
-              <div className="text-neutral-500 text-[10px]">Validez: Trimestre Q1 2024</div>
+              <span className="font-mono text-emerald-400 font-semibold">Folio: {folioCode}</span>
+              <div className="text-neutral-400 text-[11px]">Fecha de Emisión: {formattedDate}</div>
+              <div className="text-neutral-500 text-[10px]">Validez: {currentQuarter}</div>
             </div>
           </div>
 
@@ -151,7 +167,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-white">Test de Cooper (12 Minutos)</span>
                     <span className="text-[#ff5500] font-bold bg-orange-950/80 border border-orange-800/60 px-2 py-0.5 rounded text-[10px]">
-                      NIVEL {latestEval.cooperTest.levelNumber}
+                      NIVEL {latestEval.cooperTest.levelNumber || 1} DE 20
                     </span>
                   </div>
                   <div className="text-sm font-mono text-neutral-300">

@@ -57,28 +57,31 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
             <span>Marcar todas como leídas</span>
           </button>
 
-          <button
-            onClick={onSimulateNewNotification}
-            className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold"
-          >
-            + Simular Aviso
-          </button>
+          {isStaff && (
+            <button
+              onClick={onSimulateNewNotification}
+              className="text-[11px] text-red-400 hover:text-red-300 font-semibold"
+              title="Herramienta de Staff para emitir aviso de prueba"
+            >
+              + Simular Aviso Staff
+            </button>
+          )}
         </div>
 
-        {/* Pinned Permanent Payment Due Date Notice (Solo para atletas; Staff/Coaches cuentan con Acceso Permanente sin cobros) */}
+        {/* Payment Due Date Notice (Solo para atletas) */}
         {!isStaff ? (
           <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-950/80 via-neutral-900 to-red-950/40 border border-blue-500/40 space-y-1.5 shrink-0 shadow-md">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-                <span>Aviso Permanente de Pago</span>
+                <span>Fecha de Corte Mensual</span>
               </span>
               <span className="text-[10px] text-blue-300 font-mono font-bold bg-blue-600/30 px-2 py-0.5 rounded-full border border-blue-500/40">
-                30 de Mayo, 2024
+                Al corriente
               </span>
             </div>
             <p className="text-[11px] text-neutral-300 leading-tight">
-              Tu membresía se renueva mensualmente. Cuentas con 5 días naturales de gracia tras el vencimiento.
+              Recuerda consultar tu fecha exacta de corte en la sección Membresía. Cuentas con 5 días naturales de gracia tras el vencimiento.
             </p>
           </div>
         ) : (

@@ -21,6 +21,7 @@ interface ShareableStoryModalProps {
   athlete: UserProfile;
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
+  gymLogoUrl?: string | null;
   onClose: () => void;
 }
 
@@ -28,6 +29,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   athlete,
   latestBodyComp,
   latestEval,
+  gymLogoUrl,
   onClose,
 }) => {
   const [storyType, setStoryType] = useState<'strength' | 'cooper' | 'body'>('strength');
@@ -439,9 +441,17 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
             {/* Top Brand Header */}
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-extrabold text-sm text-white shadow-md shadow-blue-500/40 shrink-0">
-                  KZ
-                </div>
+                {gymLogoUrl ? (
+                  <img
+                    src={gymLogoUrl}
+                    alt="Logo Kinetix"
+                    className="w-8 h-8 object-contain rounded-xl bg-neutral-900 border border-neutral-700 p-0.5 shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-extrabold text-sm text-white shadow-md shadow-blue-500/40 shrink-0">
+                    KZ
+                  </div>
+                )}
                 <div>
                   <div className="text-xs font-bold tracking-tight font-brand leading-none">
                     KINETIX <span className="text-red-500">FUNCTIONAL ZONE</span>

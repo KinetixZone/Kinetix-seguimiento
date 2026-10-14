@@ -34,7 +34,11 @@ import {
   Info,
   FileSpreadsheet,
   Bell,
-  RotateCcw
+  RotateCcw,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface StaffManagementViewProps {
@@ -98,7 +102,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   
   // Payment date and profile edit modal state
   const [selectedAthleteForPayment, setSelectedAthleteForPayment] = useState<UserProfile | null>(null);
-  const [modalTab, setModalTab] = useState<'membership' | 'profile'>('membership');
+  const [modalTab, setModalTab] = useState<'membership' | 'profile' | 'security'>('membership');
   const [editExpiryDate, setEditExpiryDate] = useState<string>('');
   const [editStatus, setEditStatus] = useState<MembershipStatus>('active');
   const [editPlan, setEditPlan] = useState<KinetixPlanName>('Kinetix');
@@ -110,6 +114,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [editEmergencyPhone, setEditEmergencyPhone] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [savePaymentSuccess, setSavePaymentSuccess] = useState<boolean>(false);
+
+  // Athlete password inspection & update state for Coaches/Owners
+  const [athletePassword, setAthletePassword] = useState<string>('');
+  const [showAthletePassword, setShowAthletePassword] = useState<boolean>(false);
+  const [newPasswordForAthlete, setNewPasswordForAthlete] = useState<string>('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState<boolean>(false);
   
   // New user form state
   const [name, setName] = useState('');
@@ -119,8 +129,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [planName, setPlanName] = useState<KinetixPlanName>('Kinetix');
   const [billingDay, setBillingDay] = useState<number>(15);
   const [initialPassword, setInitialPassword] = useState('kinetix123');
-  const [switchToAthlete, setSwitchToAthlete] = useState(true);
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Payment color filter state: 'all' | 5 | 15 | 20 | 30
   const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30>('all');
@@ -152,18 +162,54 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateError(null);
+
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanName) {
+      setCreateError('Por favor ingresa el nombre del atleta.');
+      return;
+    }
+
+    if (!cleanEmail) {
+      setCreateError('Por favor ingresa el correo electrónico del atleta.');
+      return;
+    }
+
+    // Check duplicate name
+    const nameExists = users.some(
+      u => u.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (nameExists) {
+      setCreateError(`Ya existe un atleta registrado con el nombre "${cleanName}". Por favor agrega un apellido o identificador para evitar perfiles duplicados.`);
+      return;
+    }
+
+    // Check duplicate email
+    const emailExists = users.some(
+      u => u.email.trim().toLowerCase() === cleanEmail
+    );
+    if (emailExists) {
+      setCreateError(`El correo "${cleanEmail}" ya está registrado en Kinetix. Cada alumno debe tener un correo único.`);
+      return;
+    }
+
     const expiry = calculateNextExpiryFromDay(billingDay);
+    const pass = initialPassword.trim() || 'kinetix123';
+
     onCreateUserByEmail({
-      name,
-      email,
+      name: cleanName,
+      email: cleanEmail,
       gender,
       heightCm,
       planName,
       billingDayOfMonth: billingDay,
       expiryDate: expiry,
-      password: initialPassword || 'kinetix123',
-      switchToCreatedUser: switchToAthlete,
+      password: pass,
+      switchToCreatedUser: false, // El dueño / coach se queda en su panel administrativo
     });
+
     setCreatedSuccessMsg(true);
     setTimeout(() => {
       setCreatedSuccessMsg(false);
@@ -172,7 +218,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setEmail('');
       setPlanName('Kinetix');
       setBillingDay(15);
+      setInitialPassword('kinetix123');
     }, 1800);
+  };
+
+  // Owner/Coach password updater for athlete
+  const handleOwnerUpdatePassword = (newPass: string) => {
+    if (!selectedAthleteForPayment || !newPass.trim()) return;
+    const clean = newPass.trim();
+    try {
+      localStorage.setItem(`kinetix_pwd_${selectedAthleteForPayment.id}`, clean);
+    } catch {}
+    setAthletePassword(clean);
+    setNewPasswordForAthlete('');
+    setPasswordChangeSuccess(true);
+    setTimeout(() => setPasswordChangeSuccess(false), 3000);
+  };
+
+  const handleGenerateRandomPassword = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const gen = `kz${randomNum}`;
+    handleOwnerUpdatePassword(gen);
   };
 
   // Toggle quick access directly from list
@@ -435,16 +501,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 }`}
                 title={c.desc}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <span>{c.emoji}</span>
-                  <span>{c.colorName} ({c.day})</span>
+                  <span className="font-semibold">{c.colorName} · Corte Día {c.day}</span>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 font-mono">
-                  {count}
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/50 font-mono font-bold">
+                  {count} {count === 1 ? 'atleta' : 'atletas'}
                 </span>
               </button>
             );
           })}
+        </div>
+        <div className="text-[10px] text-neutral-400 pt-1 flex items-center gap-1.5 border-t border-neutral-800/60">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+          <span>El número de cada código representa el <strong>día de corte mensual</strong> de pago (Día 5, 15, 20 o 30), mientras que la etiqueta gris indica cuántos alumnos están registrados con esa fecha.</span>
         </div>
       </div>
 
@@ -545,7 +615,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
                     <span>{pg.dotEmoji}</span>
-                    <span>{pg.colorName} ({athlete.membership.billingDayOfMonth || 15})</span>
+                    <span>{pg.colorName} · Corte Día {athlete.membership.billingDayOfMonth || 15}</span>
                   </span>
 
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
@@ -631,25 +701,24 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       setEditPhone(athlete.phone);
                       setEditEmergencyName(athlete.emergencyContact?.name || '');
                       setEditEmergencyPhone(athlete.emergencyContact?.phone || '');
+                      try {
+                        const saved = localStorage.getItem(`kinetix_pwd_${athlete.id}`) || 'kinetix123';
+                        setAthletePassword(saved);
+                      } catch {
+                        setAthletePassword('kinetix123');
+                      }
+                      setNewPasswordForAthlete('');
+                      setShowAthletePassword(false);
+                      setPasswordChangeSuccess(false);
                       setModalTab('membership');
                       setShowDeleteConfirm(false);
                     }}
                     className="px-2.5 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700/70 text-white text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                    title="Editar fecha de corte, color, plan o datos personales"
+                    title="Editar fecha de corte, color, contraseña o datos personales"
                   >
                     <SlidersHorizontal className="w-3 h-3 text-blue-400" />
-                    <span>Editar</span>
+                    <span>Editar & Clave</span>
                   </button>
-
-                  {onSwitchUser && (
-                    <button
-                      onClick={() => onSwitchUser(athlete)}
-                      className="px-2 py-1 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                      title="Probar pantalla y flujo de este alumno (Aparece consentimiento si es 1ª vez)"
-                    >
-                      <span>Probar Cuenta</span>
-                    </button>
-                  )}
 
                   <button
                     onClick={() => onSelectUserToInspect(athlete)}
@@ -700,6 +769,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
             ) : (
               <form onSubmit={handleCreateSubmit} className="space-y-3.5 text-xs">
+                {createError && (
+                  <div className="p-3 rounded-2xl bg-red-950/80 border border-red-800 text-xs text-red-200 flex items-start gap-2 animate-fade-in">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{createError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="text-neutral-300 font-medium block mb-1">Nombre Completo del Atleta</label>
                   <input
@@ -829,16 +904,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </p>
                 </div>
 
-                {/* Switch to athlete immediately toggle */}
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300 p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-neutral-700 select-none">
-                  <input
-                    type="checkbox"
-                    checked={switchToAthlete}
-                    onChange={(e) => setSwitchToAthlete(e.target.checked)}
-                    className="rounded bg-neutral-900 border-neutral-700 text-red-600 focus:ring-0"
-                  />
-                  <span className="text-[11px]">Iniciar sesión inmediatamente como este alumno para verificar la pantalla de consentimiento</span>
-                </label>
+                {/* Staff admin session preservation notice */}
+                <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[11px] text-neutral-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Al guardar, el atleta se añadirá a la lista oficial y permanecerás dentro de tu panel de Coach/Staff.</span>
+                </div>
 
                 <div className="pt-2 flex items-center gap-2">
                   <button
@@ -890,7 +960,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   modalTab === 'membership' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                Plan, Corte & Acceso
+                Plan & Acceso
               </button>
               <button
                 type="button"
@@ -899,7 +969,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   modalTab === 'profile' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                Editar Datos Personales
+                Datos Personales
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('security')}
+                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${
+                  modalTab === 'security' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                🔐 Contraseña
               </button>
             </div>
 
@@ -913,61 +992,82 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               <div className="space-y-4 text-xs">
                 {modalTab === 'membership' && (
                   <>
-                    {/* CONTROL MANUAL DE ACCESO (PAUSAR / REACTIVAR) */}
+                    {/* CONTROL MANUAL DE ACCESO (PAUSAR TEMPORAL / CANCELAR / REACTIVAR) */}
                     <div className={`p-4 rounded-2xl border space-y-2.5 transition-all ${
                       editStatus === 'suspended'
-                        ? 'bg-red-950/40 border-red-800'
+                        ? 'bg-amber-950/40 border-amber-800'
+                        : editStatus === 'canceled'
+                        ? 'bg-neutral-900 border-neutral-700'
                         : 'bg-neutral-950 border-neutral-800'
                     }`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {editStatus === 'suspended' ? (
-                            <ShieldAlert className="w-4 h-4 text-red-400" />
+                            <Pause className="w-4 h-4 text-amber-400" />
+                          ) : editStatus === 'canceled' ? (
+                            <X className="w-4 h-4 text-neutral-400" />
                           ) : (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                           )}
-                          <span className="font-bold text-white text-xs">Estado de Acceso a la Plataforma:</span>
+                          <span className="font-bold text-white text-xs">Estado de Cuenta & Acceso:</span>
                         </div>
                         <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
                           editStatus === 'suspended'
-                            ? 'bg-red-950 text-red-400 border border-red-800'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                            : editStatus === 'canceled'
+                            ? 'bg-neutral-800 text-neutral-400 border border-neutral-700'
                             : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                         }`}>
-                          {editStatus === 'suspended' ? 'ACCESO PAUSADO' : 'ACCESO ACTIVO'}
+                          {editStatus === 'suspended' ? 'PAUSADO (1 MES / RETOMA)' : editStatus === 'canceled' ? 'CANCELADO' : 'ACCESO ACTIVO'}
                         </span>
                       </div>
 
-                      {/* Direct Manual Switch Buttons */}
-                      <div className="grid grid-cols-2 gap-2 pt-1">
+                      {/* 3 Clear Status Buttons */}
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
                         <button
                           type="button"
                           onClick={() => setEditStatus('active')}
-                          className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all ${
-                            editStatus !== 'suspended'
-                              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500/50'
+                          className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 text-[11px] transition-all ${
+                            editStatus === 'active'
+                              ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/50'
                               : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
                           }`}
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Acceso Activo</span>
+                          <span>Activo</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setEditStatus('suspended')}
-                          className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 text-[11px] transition-all ${
                             editStatus === 'suspended'
-                              ? 'bg-red-600 text-white shadow-md shadow-red-600/30 ring-2 ring-red-500/50'
+                              ? 'bg-amber-600 text-white shadow-md ring-2 ring-amber-500/50'
                               : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
                           }`}
+                          title="Para alumnos que pausan por viaje o 1 mes y volverán (conserva todos sus datos)"
                         >
                           <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span>Pausar Acceso</span>
+                          <span>Pausar (1 mes)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditStatus('canceled')}
+                          className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center justify-center gap-1 text-[11px] transition-all ${
+                            editStatus === 'canceled'
+                              ? 'bg-neutral-700 text-white shadow-md ring-2 ring-neutral-500/50'
+                              : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
+                          }`}
+                          title="Baja administrativa de membresía"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Cancelar</span>
                         </button>
                       </div>
 
-                      <p className="text-[10px] text-neutral-400 leading-relaxed pt-1">
-                        Si pausas el acceso, el atleta verá en su celular una pantalla clara de <em>"Acceso pausado por el staff"</em> invitándole a ponerse al día con su mensualidad.
+                      <p className="text-[10px] text-neutral-400 leading-relaxed pt-0.5">
+                        💡 <strong>Pausar</strong> preserva todo el historial de pesajes, Cooper y fotos del alumno intactos para cuando regrese. <strong>Eliminar definitivamente</strong> (abajo) solo se usa para borrar la cuenta de raíz.
                       </p>
                     </div>
 
@@ -1110,6 +1210,84 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                         />
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {modalTab === 'security' && (
+                  <div className="space-y-4">
+                    {/* Current Password Reveal Card */}
+                    <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                          <Lock className="w-4 h-4 text-blue-400" />
+                          <span>Contraseña Actual del Alumno:</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/80 border border-emerald-800/80 px-2 py-0.5 rounded-full">
+                          Acceso Dueños
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                        <span className="font-mono text-sm tracking-wider text-white font-bold">
+                          {showAthletePassword ? athletePassword : '••••••••••••'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAthletePassword(!showAthletePassword)}
+                          className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                        >
+                          {showAthletePassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <span>{showAthletePassword ? 'Ocultar' : 'Revelar Clave'}</span>
+                        </button>
+                      </div>
+
+                      <p className="text-[10px] text-neutral-400 leading-tight">
+                        Si el alumno olvidó su contraseña o no puede ingresar, puedes leérsela directamente o asignarle una nueva a continuación.
+                      </p>
+                    </div>
+
+                    {/* Change or Reset Password Card */}
+                    <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2.5">
+                      <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                        <KeyRound className="w-4 h-4 text-red-400" />
+                        <span>Asignar Nueva Contraseña al Alumno:</span>
+                      </span>
+
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newPasswordForAthlete}
+                          onChange={(e) => setNewPasswordForAthlete(e.target.value)}
+                          placeholder="Escribe nueva clave (ej. kz2026)"
+                          className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleOwnerUpdatePassword(newPasswordForAthlete)}
+                          disabled={!newPasswordForAthlete.trim()}
+                          className="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-bold text-xs transition-all shadow-md active:scale-95 shrink-0"
+                        >
+                          Guardar Clave
+                        </button>
+                      </div>
+
+                      <div className="pt-1 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={handleGenerateRandomPassword}
+                          className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                        >
+                          <span>🎲 Generar contraseña aleatoria (ej. kz4812)</span>
+                        </button>
+                      </div>
+
+                      {passwordChangeSuccess && (
+                        <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-800 text-emerald-200 text-xs flex items-center gap-2 animate-fade-in font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>¡Contraseña actualizada con éxito! La nueva clave es: <strong className="text-white font-mono">{athletePassword}</strong></span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
