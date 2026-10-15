@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BodyCompositionRecord, UserProfile } from '../../types';
 import { 
   calculateBMI, 
@@ -33,6 +33,9 @@ interface BodyCompositionViewProps {
   onDeleteRecord?: (recordId: string) => void;
   onUpdateRecord?: (recordId: string, updates: Partial<BodyCompositionRecord>) => void;
   onBackToDashboard?: () => void;
+  loggedStaffUser?: UserProfile | null;
+  isStaffUser?: boolean;
+  initialOpenAddModal?: boolean;
 }
 
 export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
@@ -42,11 +45,20 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   onDeleteRecord,
   onUpdateRecord,
   onBackToDashboard,
+  loggedStaffUser,
+  isStaffUser,
+  initialOpenAddModal,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenphoGuide, setShowRenphoGuide] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<BodyCompositionRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
+
+  useEffect(() => {
+    if (initialOpenAddModal) {
+      setShowAddModal(true);
+    }
+  }, [initialOpenAddModal]);
 
   // New Record Form State
   const [weight, setWeight] = useState<number | ''>(() => {
@@ -90,7 +102,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       bmi: liveBmi,
       bmiCategory: liveBmiCategory,
       notes: notes,
-      recordedByRole: currentUser.role === 'staff' ? 'staff' : 'athlete',
+      recordedByRole: (currentUser.role === 'staff' || isStaffUser || loggedStaffUser?.role === 'staff') ? 'staff' : 'athlete',
     });
     setShowAddModal(false);
   };

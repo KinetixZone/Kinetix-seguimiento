@@ -96,8 +96,8 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   const isStaff = currentUser.role === 'staff';
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
   const userEvals = evaluations.filter(e => e.userId === currentUser.id);
-  const latestBodyComp = userBodyComps[userBodyComps.length - 1] || bodyCompRecords[0];
-  const latestEval = userEvals[userEvals.length - 1] || evaluations[0];
+  const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
+  const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -345,6 +345,8 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               onDeleteRecord={onDeleteBodyCompRecord}
               onUpdateRecord={onUpdateBodyCompRecord}
               onBackToDashboard={() => setCurrentSection('dashboard')}
+              loggedStaffUser={users.find(u => u.role === 'staff') || null}
+              isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
             />
           )}
 
@@ -356,6 +358,8 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               onDeleteEvaluation={onDeleteEvaluation}
               onUpdateEvaluation={onUpdateEvaluation}
               onBackToDashboard={() => setCurrentSection('dashboard')}
+              loggedStaffUser={users.find(u => u.role === 'staff') || null}
+              isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
             />
           )}
 
@@ -371,6 +375,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           {currentSection === 'staff' && (
             <StaffManagementView
               users={users}
+              currentUser={users.find(u => u.role === 'staff') || currentUser}
               onSelectUserToInspect={(u) => {
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
@@ -386,6 +391,10 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
                 setCurrentSection('body');
+              }}
+              onOpenReportForUser={(u) => {
+                setSelectedUserId(u.id);
+                setShowReportModal(true);
               }}
               onUpdateUserMembership={onUpdateUserMembership}
               onDeleteAthlete={onDeleteAthlete}

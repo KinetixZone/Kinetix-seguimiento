@@ -104,8 +104,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
   const userEvals = evaluations.filter(e => e.userId === currentUser.id);
-  const latestBodyComp = userBodyComps[userBodyComps.length - 1] || bodyCompRecords[0];
-  const latestEval = userEvals[userEvals.length - 1] || evaluations[0];
+  const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
+  const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
 
   const handleTriggerPushBanner = (title: string, body: string) => {
     setActiveBannerNotification({ title, body });
@@ -362,6 +362,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onDeleteRecord={onDeleteBodyCompRecord}
               onUpdateRecord={onUpdateBodyCompRecord}
               onBackToDashboard={() => setCurrentTab('dashboard')}
+              loggedStaffUser={users.find(u => u.role === 'staff') || null}
+              isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
             />
           )}
 
@@ -373,6 +375,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onDeleteEvaluation={onDeleteEvaluation}
               onUpdateEvaluation={onUpdateEvaluation}
               onBackToDashboard={() => setCurrentTab('dashboard')}
+              loggedStaffUser={users.find(u => u.role === 'staff') || null}
+              isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
             />
           )}
 
@@ -388,6 +392,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           {currentTab === 'staff' && (
             <StaffManagementView
               users={users}
+              currentUser={users.find(u => u.role === 'staff') || currentUser}
               onSelectUserToInspect={(u) => {
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
@@ -399,6 +404,10 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
                 setCurrentTab('body');
+              }}
+              onOpenReportForUser={(u) => {
+                setSelectedUserId(u.id);
+                setShowReportModal(true);
               }}
               onUpdateUserMembership={onUpdateUserMembership}
               onDeleteAthlete={onDeleteAthlete}

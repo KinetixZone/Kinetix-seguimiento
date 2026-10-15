@@ -46,33 +46,33 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   const generateShareText = () => {
     if (storyType === 'strength') {
       if (!strengthRecord) {
-        return `🔥 ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional #Fuerza`;
+        return `🔥 ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional #Fuerza`;
       }
       return `🔥 ¡Nuevo Récord Personal (PR) en Kinetix Functional Zone!
 🏋️ Ejercicio: ${strengthRecord.exerciseName}
 💪 Carga Levantada: ${strengthRecord.weightKg} ${strengthRecord.weightUnit} (${strengthRecord.reps} ${strengthRecord.reps === 1 ? 'rep' : 'reps'})
 ⚡ 1RM Estimado Oficial: ${strengthRecord.estimated1RMKg} kg
 👤 Atleta: ${athlete.name}
-📍 @kinetixzone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
+📍 @kinetix.zone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
     } else if (storyType === 'cooper') {
       if (!latestEval?.cooperTest) {
-        return `🏃‍♂️ ¡Entrenando en Kinetix Functional Zone! 👤 Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional`;
+        return `🏃‍♂️ ¡Entrenando en Kinetix Functional Zone! 👤 Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional`;
       }
       return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix Functional Zone!
 ⚡ Nivel Alcanzado: Nivel ${latestEval.cooperTest.levelNumber} (${latestEval.cooperTest.level})
 🎯 Distancia Recorrida: ${latestEval.cooperTest.distanceMeters} metros
 👤 Atleta: ${athlete.name}
-📍 @kinetixzone #CooperTest #KinetixFunctional #Resistencia`;
+📍 @kinetix.zone #CooperTest #KinetixFunctional #Resistencia`;
     } else {
       if (!latestBodyComp) {
-        return `✨ ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetixzone #KinetixFunctional`;
+        return `✨ ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional`;
       }
       return `✨ ¡Progreso y Recomposición Corporal en Kinetix!
 ⚖️ Peso Actual: ${latestBodyComp.weightKg} kg (IMC: ${latestBodyComp.bmi})
 💪 Masa Muscular: ${latestBodyComp.muscleMassPercent}%
 🔥 Grasa Corporal: ${latestBodyComp.bodyFatPercent}%
 👤 Atleta: ${athlete.name}
-📍 @kinetixzone #FitnessJourney #KinetixFunctional`;
+📍 @kinetix.zone #FitnessJourney #KinetixFunctional`;
     }
   };
 
@@ -264,7 +264,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 
     ctx.fillStyle = '#9ca3af';
     ctx.font = '36px monospace';
-    ctx.fillText(`${athlete.membership.planName} · @kinetixzone`, 100, 1785);
+    ctx.fillText(`${athlete.membership.planName} · @kinetix.zone`, 100, 1785);
 
     // Download file
     const dataUrl = canvas.toDataURL('image/png');
@@ -598,7 +598,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] font-bold text-red-500 font-brand block">@kinetixzone</span>
+                <span className="text-[10px] font-bold text-red-500 font-brand block">@kinetix.zone</span>
                 <span className="text-[8px] text-neutral-500 font-mono">#KinetixZone</span>
               </div>
             </div>

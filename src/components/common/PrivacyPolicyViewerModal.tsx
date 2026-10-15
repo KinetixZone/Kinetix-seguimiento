@@ -49,22 +49,15 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
             min-height: 100% !important;
             overflow: visible !important;
             background: #ffffff !important;
-            color: #000000 !important;
+            color: #111827 !important;
             margin: 0 !important;
             padding: 0 !important;
-          }
-          body * {
-            visibility: hidden !important;
-          }
-          #kinetix-printable-privacy,
-          #kinetix-printable-privacy * {
-            visibility: visible !important;
           }
           .privacy-policy-overlay {
             display: block !important;
             position: static !important;
             inset: auto !important;
-            background: #ffffff !important;
+            background: transparent !important;
             padding: 0 !important;
             margin: 0 !important;
             height: auto !important;
@@ -74,16 +67,14 @@ export const PrivacyPolicyViewerModal: React.FC<PrivacyPolicyViewerModalProps> =
           }
           #kinetix-printable-privacy {
             display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
             width: 100% !important;
             max-width: 100% !important;
             height: auto !important;
             max-height: none !important;
             overflow: visible !important;
             background: #ffffff !important;
-            color: #000000 !important;
+            color: #111827 !important;
             padding: 0 !important;
             margin: 0 !important;
             box-shadow: none !important;

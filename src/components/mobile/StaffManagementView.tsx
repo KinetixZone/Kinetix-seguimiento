@@ -59,6 +59,7 @@ interface StaffManagementViewProps {
   }) => void;
   onOpenTestEntryForUser: (user: UserProfile) => void;
   onOpenBodyCompForUser?: (user: UserProfile) => void;
+  onOpenReportForUser?: (user: UserProfile) => void;
   onUpdateUserMembership?: (
     userId: string, 
     status: MembershipStatus, 
@@ -85,6 +86,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onCreateUserByEmail,
   onOpenTestEntryForUser,
   onOpenBodyCompForUser,
+  onOpenReportForUser,
   onUpdateUserMembership,
   onDeleteAthlete,
   onUpdateAthleteProfile,
@@ -723,17 +725,41 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <button
                     onClick={() => onSelectUserToInspect(athlete)}
                     className="px-2 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-medium transition-colors"
+                    title="Ver inicio de atleta"
                   >
                     Perfil
                   </button>
 
+                  {onOpenBodyCompForUser && (
+                    <button
+                      onClick={() => onOpenBodyCompForUser(athlete)}
+                      className="px-2 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700/60 text-blue-300 text-[11px] font-medium transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+                      title="Registrar o consultar Bioimpedancia Renpho"
+                    >
+                      <Scale className="w-3 h-3 text-blue-400" />
+                      <span>Cuerpo</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => onOpenTestEntryForUser(athlete)}
                     className="px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+                    title="Registrar Test de Cooper (12 Min) y 1RM Máximos"
                   >
                     <Dumbbell className="w-3 h-3" />
                     <span>Evaluar</span>
                   </button>
+
+                  {onOpenReportForUser && (
+                    <button
+                      onClick={() => onOpenReportForUser(athlete)}
+                      className="px-2 py-1 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/70 text-emerald-300 text-[11px] font-medium transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+                      title="Generar e imprimir Informe Oficial"
+                    >
+                      <Award className="w-3 h-3 text-emerald-400" />
+                      <span>Reporte</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1152,6 +1178,66 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       <p className="text-[10px] text-neutral-500">
                         Esta fecha se muestra en el widget permanente de la app del atleta.
                       </p>
+                    </div>
+
+                    {/* Quick Access to Technical Tools for this athlete */}
+                    <div className="pt-2 border-t border-neutral-800 space-y-1.5">
+                      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider block">
+                        Herramientas Técnicas Directas:
+                      </span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedAthleteForPayment) {
+                              const athlete = selectedAthleteForPayment;
+                              setSelectedAthleteForPayment(null);
+                              onOpenTestEntryForUser(athlete);
+                            }
+                          }}
+                          className="p-2 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 font-semibold text-[11px] flex flex-col items-center justify-center gap-1 transition-all"
+                          title="Registrar Test de Cooper o Fuerza 1RM"
+                        >
+                          <Dumbbell className="w-3.5 h-3.5 text-red-400" />
+                          <span>Evaluar Tests</span>
+                        </button>
+
+                        {onOpenBodyCompForUser && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedAthleteForPayment) {
+                                const athlete = selectedAthleteForPayment;
+                                setSelectedAthleteForPayment(null);
+                                onOpenBodyCompForUser(athlete);
+                              }
+                            }}
+                            className="p-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-[11px] flex flex-col items-center justify-center gap-1 transition-all"
+                            title="Registrar o ver Bioimpedancia Renpho"
+                          >
+                            <Scale className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Bioimpedancia</span>
+                          </button>
+                        )}
+
+                        {onOpenReportForUser && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedAthleteForPayment) {
+                                const athlete = selectedAthleteForPayment;
+                                setSelectedAthleteForPayment(null);
+                                onOpenReportForUser(athlete);
+                              }
+                            }}
+                            className="p-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold text-[11px] flex flex-col items-center justify-center gap-1 transition-all"
+                            title="Generar e imprimir Informe Oficial"
+                          >
+                            <Award className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Ver Dictamen</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}

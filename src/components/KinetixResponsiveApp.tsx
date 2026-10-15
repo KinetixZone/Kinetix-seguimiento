@@ -112,6 +112,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
   const [showSendNotificationModal, setShowSendNotificationModal] = useState<boolean>(false);
   const [inspectedAthlete, setInspectedAthlete] = useState<UserProfile | null>(null);
+  const [autoOpenEvalModal, setAutoOpenEvalModal] = useState<boolean>(false);
+  const [autoOpenBodyModal, setAutoOpenBodyModal] = useState<boolean>(false);
 
   const isStaff = currentUser.role === 'staff';
   const effectiveUser = inspectedAthlete || currentUser;
@@ -124,11 +126,15 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   // Navigation handlers with History Stack
   const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
     if (tab === currentTab) return;
+    if (tab !== 'tests') setAutoOpenEvalModal(false);
+    if (tab !== 'body') setAutoOpenBodyModal(false);
     setTabHistory(prev => [...prev, tab]);
     setCurrentTab(tab);
   };
 
   const handleGoBack = () => {
+    setAutoOpenEvalModal(false);
+    setAutoOpenBodyModal(false);
     if (inspectedAthlete) {
       if (currentTab !== 'dashboard') {
         setCurrentTab('dashboard');
@@ -153,6 +159,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   };
 
   const handleGoHome = () => {
+    setAutoOpenEvalModal(false);
+    setAutoOpenBodyModal(false);
     if (inspectedAthlete) {
       setInspectedAthlete(null);
     }
@@ -162,20 +170,31 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
 
   const handleSelectUserToInspect = (user: UserProfile) => {
     setInspectedAthlete(user);
+    setAutoOpenEvalModal(false);
+    setAutoOpenBodyModal(false);
     setTabHistory(prev => [...prev, 'dashboard']);
     setCurrentTab('dashboard');
   };
 
   const handleOpenEvaluationForUser = (user: UserProfile) => {
     setInspectedAthlete(user);
+    setAutoOpenEvalModal(true);
+    setAutoOpenBodyModal(false);
     setTabHistory(prev => [...prev, 'tests']);
     setCurrentTab('tests');
   };
 
   const handleOpenBodyCompForUser = (user: UserProfile) => {
     setInspectedAthlete(user);
+    setAutoOpenBodyModal(true);
+    setAutoOpenEvalModal(false);
     setTabHistory(prev => [...prev, 'body']);
     setCurrentTab('body');
+  };
+
+  const handleOpenReportForUser = (user: UserProfile) => {
+    setInspectedAthlete(user);
+    setShowReportModal(true);
   };
 
   const getTabTitle = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
@@ -425,6 +444,9 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onDeleteRecord={onDeleteBodyCompRecord}
             onUpdateRecord={onUpdateBodyCompRecord}
             onBackToDashboard={handleGoHome}
+            loggedStaffUser={currentUser}
+            isStaffUser={isStaff}
+            initialOpenAddModal={autoOpenBodyModal}
           />
         )}
 
@@ -436,6 +458,9 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onDeleteEvaluation={onDeleteEvaluation}
             onUpdateEvaluation={onUpdateEvaluation}
             onBackToDashboard={handleGoHome}
+            loggedStaffUser={currentUser}
+            isStaffUser={isStaff}
+            initialOpenAddModal={autoOpenEvalModal}
           />
         )}
 
@@ -450,7 +475,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
 
         {currentTab === 'staff' && (
           <StaffManagementView
-            currentUser={effectiveUser}
+            currentUser={currentUser}
             users={users}
             bodyCompRecords={bodyCompRecords}
             evaluations={evaluations}
@@ -458,6 +483,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onCreateUserByEmail={onCreateUserByEmail}
             onOpenTestEntryForUser={handleOpenEvaluationForUser}
             onOpenBodyCompForUser={handleOpenBodyCompForUser}
+            onOpenReportForUser={handleOpenReportForUser}
             onOpenSendNotification={() => setShowSendNotificationModal(true)}
             onUpdateUserMembership={onUpdateUserMembership}
             onDeleteAthlete={onDeleteAthlete}

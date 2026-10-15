@@ -43,6 +43,9 @@ interface PhysicalTestsViewProps {
   onDeleteEvaluation?: (evalId: string) => void;
   onUpdateEvaluation?: (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => void;
   onBackToDashboard?: () => void;
+  loggedStaffUser?: UserProfile | null;
+  isStaffUser?: boolean;
+  initialOpenAddModal?: boolean;
 }
 
 export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
@@ -52,10 +55,21 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   onDeleteEvaluation,
   onUpdateEvaluation,
   onBackToDashboard,
+  loggedStaffUser,
+  isStaffUser,
+  initialOpenAddModal,
 }) => {
+  const canEvaluate = Boolean(currentUser.role === 'staff' || loggedStaffUser?.role === 'staff' || isStaffUser);
+
   // Sub-tabs: 'evolution' (Visión General), 'cooper', 'endurance' (Resistencia por tiempo), 'strength' (1RM), 'history' (Historial Staff)
   const [activeTab, setActiveTab] = useState<'evolution' | 'cooper' | 'endurance' | 'strength' | 'history'>('evolution');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+
+  const [evaluatingCoachName, setEvaluatingCoachName] = useState<string>(() => {
+    if (loggedStaffUser?.name) return loggedStaffUser.name;
+    if (currentUser.role === 'staff') return currentUser.name;
+    return 'Leslie (Dueña & Coach)';
+  });
 
   // Modals state
   const [showAddEvalModal, setShowAddEvalModal] = useState(false);
@@ -168,6 +182,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Reset Form for New Evaluation
   const handleOpenAddModal = () => {
+    if (loggedStaffUser?.name) {
+      setEvaluatingCoachName(loggedStaffUser.name);
+    } else if (currentUser.role === 'staff') {
+      setEvaluatingCoachName(currentUser.name);
+    }
     setEvalDate(new Date().toISOString().slice(0, 10));
     setSelectedCooperLevel(latestEval ? (latestEval.cooperTest.levelNumber || 3) : 3);
     setOptionalDistance(latestEval?.cooperTest.distanceMeters || 2200);
@@ -203,17 +222,29 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setShowAddEvalModal(true);
   };
 
+  useEffect(() => {
+    if (initialOpenAddModal) {
+      handleOpenAddModal();
+    }
+  }, [initialOpenAddModal]);
+
   const handleSubmitEvaluation = (e: React.FormEvent) => {
     e.preventDefault();
     const levelInfo = getCooperLevelInfo(selectedCooperLevel);
     const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
     const totalSec = enduranceMinutes * 60 + enduranceSeconds;
 
+    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
+      ? 'user-staff-leslie' 
+      : evaluatingCoachName.includes('Gus') 
+      ? 'user-staff-gus' 
+      : 'user-staff-01';
+
     onAddEvaluation({
       userId: currentUser.id,
       evaluationDate: evalDate,
-      coachId: currentUser.role === 'staff' ? currentUser.id : 'user-staff-01',
-      coachName: currentUser.role === 'staff' ? currentUser.name : 'Coach Jorge',
+      coachId: assignedCoachId,
+      coachName: evaluatingCoachName,
       cooperTest: {
         level: levelInfo.levelName,
         levelNumber: selectedCooperLevel,
@@ -328,7 +359,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           )}
 
           {/* Evaluation Action Button - Only Coach / Dueño */}
-          {currentUser.role === 'staff' ? (
+          {canEvaluate ? (
             <button
               onClick={handleOpenAddModal}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
@@ -339,7 +370,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-400">
               <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden sm:inline">Dictamen emitido por Coach Jorge</span>
+              <span className="hidden sm:inline">Dictamen emitido por Coach Kinetix</span>
               <span className="sm:hidden">Dictamen Coach</span>
             </div>
           )}
@@ -431,7 +462,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               Aún no cuentas con evaluaciones técnicas capturadas. Realiza con tu Coach el Test de Cooper (12 Min) y tus pruebas de fuerza máxima 1RM para activar tus niveles y comparativas de evolución.
             </p>
           </div>
-          {currentUser.role === 'staff' && (
+          {canEvaluate && (
             <button
               type="button"
               onClick={handleOpenAddModal}
@@ -1134,10 +1165,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div>
                 <span className="text-[10px] font-mono text-blue-400 uppercase font-bold">
-                  {currentUser.role === 'staff' ? 'Staff Kinetix · Registro Técnico' : 'Registro de Marca Personal · Kinetix'}
+                  {canEvaluate ? 'Staff Kinetix · Registro Oficial de Evaluación' : 'Registro de Marca Personal · Kinetix'}
                 </span>
                 <h3 className="text-base font-bold text-white font-brand">
-                  {currentUser.role === 'staff' ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
+                  {canEvaluate ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
                 </h3>
               </div>
               <button
@@ -1401,16 +1432,36 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </div>
               </div>
 
-              {/* Dictamen del Coach Jorge */}
+              {/* Selector de Coach Evaluador */}
+              <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-1.5">
+                <label className="text-neutral-300 font-medium block text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Coach Evaluador Oficial:</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Firma en Reporte</span>
+                </label>
+                <select
+                  value={evaluatingCoachName}
+                  onChange={(e) => setEvaluatingCoachName(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:border-blue-500 outline-none"
+                >
+                  <option value="Leslie (Dueña & Coach)">Leslie (Dueña & Coach Kinetix)</option>
+                  <option value="Coach Jorge">Coach Jorge (Head Coach)</option>
+                  <option value="Coach Gus">Coach Gus (Evaluador)</option>
+                </select>
+              </div>
+
+              {/* Dictamen del Coach */}
               <div>
                 <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
-                  <span>Dictamen Técnico y Recomendaciones ({currentUser.role === 'staff' ? currentUser.name : 'Coach Jorge'})</span>
-                  <span className="text-[10px] text-red-400 font-mono font-semibold">Exclusivo Staff / Coach</span>
+                  <span>Dictamen Técnico y Recomendaciones ({evaluatingCoachName})</span>
+                  <span className="text-[10px] text-emerald-400 font-mono font-semibold">Staff Autorizado</span>
                 </label>
                 <textarea
                   rows={2}
                   value={coachNotes}
-                  disabled={currentUser.role !== 'staff'}
+                  disabled={!canEvaluate}
                   onChange={(e) => setCoachNotes(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-blue-500 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                   placeholder="Feedback de ritmo, potencia y técnica..."
