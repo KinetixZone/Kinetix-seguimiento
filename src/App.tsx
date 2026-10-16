@@ -501,6 +501,77 @@ export default function App() {
     });
   };
 
+  const handleSendNotificationFromModal = (
+    title: string, 
+    body: string, 
+    targetUserId?: string, 
+    targetAudience?: 'all' | 'athletes' | 'staff' | 'color_5' | 'color_15' | 'color_20' | 'color_30'
+  ) => {
+    const newNotif: PushNotificationSimulation = {
+      id: `notif-${Date.now()}`,
+      title,
+      body,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'payment_reminder',
+      targetUserId,
+      targetAudience: targetAudience || (targetUserId ? undefined : 'athletes'),
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  const handleCreateStaffMember = (staffData: {
+    name: string;
+    email: string;
+    password: string;
+    staffRole: 'owner' | 'coach';
+  }) => {
+    const newStaff: UserProfile = {
+      id: `user-staff-${Date.now()}`,
+      name: staffData.name,
+      email: staffData.email.toLowerCase().trim(),
+      password: staffData.password,
+      role: 'staff',
+      staffRole: staffData.staffRole,
+      phone: '55 1234 5678',
+      birthDate: '1995-01-01',
+      gender: 'male',
+      heightCm: 175,
+      weightUnit: 'kg',
+      emergencyContact: {
+        name: 'Staff Kinetix',
+        phone: '55 1234 5678',
+        relationship: 'Equipo Kinetix'
+      },
+      avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+      membership: {
+        id: `mem-staff-${Date.now()}`,
+        planName: 'Kinetix',
+        status: 'active',
+        startDate: new Date().toISOString().slice(0, 10),
+        expiryDate: 'Permanente',
+        monthlyFee: 0,
+        currency: 'USD',
+        autoRenew: true,
+        gracePeriodDays: 999,
+        daysUntilExpiry: 99999,
+        lastPaymentDate: new Date().toISOString().slice(0, 10),
+        nextPaymentDate: '2099-01-01',
+        paymentReminderSent: false,
+      },
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+    setUsers(prev => [...prev, newStaff]);
+  };
+
+  const handleDeleteStaffMember = (staffId: string) => {
+    if (staffId === 'user-staff-leslie' || staffId === currentUser.id) {
+      alert('Por seguridad no puedes eliminar tu propia cuenta de dueña principal.');
+      return;
+    }
+    setUsers(prev => prev.filter(u => u.id !== staffId));
+  };
+
   const handleSimulateNotification = (title: string, body: string) => {
     const newNotif: PushNotificationSimulation = {
       id: `notif-${Date.now()}`,
@@ -509,6 +580,7 @@ export default function App() {
       timestamp: new Date().toISOString(),
       read: false,
       type: 'payment_reminder',
+      targetAudience: 'staff',
     };
     setNotifications(prev => [newNotif, ...prev]);
     setIsNotificationsOpen(true);
@@ -518,7 +590,23 @@ export default function App() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Only show notifications relevant to the logged-in user
+  const visibleNotifications = notifications.filter(notif => {
+    if (currentUser?.role === 'staff') {
+      return notif.targetAudience === 'staff' || notif.targetUserId === currentUser.id;
+    } else {
+      if (notif.targetUserId) return notif.targetUserId === currentUser.id;
+      if (notif.targetAudience === 'staff') return false;
+      if (notif.targetAudience === 'athletes' || notif.targetAudience === 'all') return true;
+      if (notif.targetAudience?.startsWith('color_')) {
+        const billingDay = currentUser.membership.billingDayOfMonth || 15;
+        return notif.targetAudience === `color_${billingDay}`;
+      }
+      return !notif.targetUserId && !notif.targetAudience;
+    }
+  });
+
+  const unreadCount = visibleNotifications.filter(n => !n.read).length;
 
   // IF NOT AUTHENTICATED: Show the Portal de Acceso (Login Page)
   if (!isAuthenticated) {
@@ -565,7 +653,7 @@ export default function App() {
           users={users}
           bodyCompRecords={bodyCompRecords}
           evaluations={evaluations}
-          notifications={notifications}
+          notifications={visibleNotifications}
           onAddBodyCompRecord={handleAddBodyCompRecord}
           onDeleteBodyCompRecord={handleDeleteBodyCompRecord}
           onUpdateBodyCompRecord={handleUpdateBodyCompRecord}
@@ -574,6 +662,8 @@ export default function App() {
           onUpdateEvaluation={handleUpdateEvaluation}
           onUpdateMembershipStatus={handleUpdateMembershipStatus}
           onCreateUserByEmail={handleCreateUserByEmail}
+          onCreateStaffMember={handleCreateStaffMember}
+          onDeleteStaffMember={handleDeleteStaffMember}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           onSimulatePushNotification={handleSimulateNotification}
           onUpdateUserMembership={handleUpdateUserMembership}
@@ -605,12 +695,12 @@ export default function App() {
       <InAppNotificationCenter
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
-        notifications={notifications}
+        notifications={visibleNotifications}
         isStaff={currentUser?.role === 'staff'}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
         onSimulateNewNotification={() => handleSimulateNotification(
-          'Recordatorio de Pago Kinetix',
-          'Hola, tu membresía vence pronto. Por favor contacta al gimnasio para renovar tu membresía.'
+          'Aviso Interno de Staff',
+          'Aviso de coordinación para el equipo de entrenadores Kinetix.'
         )}
       />
 
@@ -618,8 +708,8 @@ export default function App() {
       {isSendNotificationOpen && (
         <SendNotificationModal
           users={users}
-          onSendNotification={(title, body, targetUserId) => {
-            handleSimulateNotification(title, body);
+          onSendNotification={(title, body, targetUserId, targetAudience) => {
+            handleSendNotificationFromModal(title, body, targetUserId, targetAudience);
           }}
           onClose={() => setIsSendNotificationOpen(false)}
         />

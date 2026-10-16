@@ -71,12 +71,18 @@
     size: letter portrait;
   }
 
-  html, body {
+  html, body, #root, #root > div, main, .printable-modal-overlay, .privacy-policy-overlay {
     height: auto !important;
-    min-height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: visible !important;
     background: #ffffff !important;
     color: #111827 !important;
+    position: static !important;
+    display: block !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

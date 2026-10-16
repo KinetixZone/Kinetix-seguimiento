@@ -61,6 +61,13 @@ interface KinetixResponsiveAppProps {
     billingDayOfMonth?: number;
     expiryDate?: string;
   }) => void;
+  onCreateStaffMember?: (staffData: {
+    name: string;
+    email: string;
+    password: string;
+    staffRole: 'owner' | 'coach';
+  }) => void;
+  onDeleteStaffMember?: (staffId: string) => void;
   onOpenNotifications: () => void;
   onSimulatePushNotification: (title: string, body: string, targetUserId?: string) => void;
   onUpdateUserMembership?: (
@@ -94,6 +101,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onUpdateEvaluation,
   onUpdateMembershipStatus,
   onCreateUserByEmail,
+  onCreateStaffMember,
+  onDeleteStaffMember,
   onOpenNotifications,
   onSimulatePushNotification,
   onUpdateUserMembership,
@@ -481,6 +490,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             evaluations={evaluations}
             onSelectUserToInspect={handleSelectUserToInspect}
             onCreateUserByEmail={onCreateUserByEmail}
+            onCreateStaffMember={onCreateStaffMember}
+            onDeleteStaffMember={onDeleteStaffMember}
             onOpenTestEntryForUser={handleOpenEvaluationForUser}
             onOpenBodyCompForUser={handleOpenBodyCompForUser}
             onOpenReportForUser={handleOpenReportForUser}

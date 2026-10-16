@@ -195,7 +195,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setEnduranceSeconds(0);
     setEnduranceScoreLevel('Intermedio');
     
-    // Copy latest 1RMs as baseline
+    // Copy latest 1RMs as baseline or set clean starting weights
     if (latestEval?.strengthRecords) {
       const sq = latestEval.strengthRecords.find(s => s.exerciseId === 'squats');
       if (sq) { setSquatWeight(sq.weightKg); setSquatReps(sq.reps); }
@@ -217,8 +217,20 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           setRowExerciseType('remo');
         }
       }
+      setCoachNotes(latestEval.generalCoachNotes || '');
+    } else {
+      setSquatWeight(40);
+      setSquatReps(1);
+      setDeadliftWeight(50);
+      setDeadliftReps(1);
+      setHipThrustWeight(50);
+      setHipThrustReps(1);
+      setPressWeight(30);
+      setPressReps(1);
+      setRowWeight(30);
+      setRowReps(10);
+      setCoachNotes('');
     }
-    setCoachNotes('Excelente control motor y velocidad de ejecución en el reto.');
     setShowAddEvalModal(true);
   };
 
@@ -550,15 +562,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
                 <span>Nivel 1 (Base)</span>
                 <span className="text-emerald-400 font-bold">
-                  {prevEval?.cooperTest.levelNumber ? `Nivel ${prevEval.cooperTest.levelNumber}` : 'Nivel 4'} → Nivel {latestEval.cooperTest.levelNumber || 5}
+                  {prevEval?.cooperTest.levelNumber ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
                 </span>
-                <span className="text-blue-400 font-bold">Nivel 5 (Élite)</span>
+                <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
               </div>
               <div className="grid grid-cols-5 gap-1.5 h-2">
                 {[1, 2, 3, 4, 5].map((lvl) => {
-                  const currentLvl = latestEval.cooperTest.levelNumber || 5;
+                  const currentLvl = latestEval.cooperTest.levelNumber || 1;
                   const isReached = lvl <= currentLvl;
-                  const isNew = prevEval && lvl === currentLvl && currentLvl > (prevEval.cooperTest.levelNumber || 4);
+                  const isNew = prevEval && prevEval.cooperTest.levelNumber && lvl === currentLvl && currentLvl > prevEval.cooperTest.levelNumber;
                   return (
                     <div
                       key={lvl}
@@ -610,13 +622,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
                 <span className="text-[10px] text-neutral-400 block font-medium">
-                  En el anterior hiciste:
+                  {prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}
                 </span>
-                <div className="text-2xl font-extrabold text-neutral-300 font-mono">
-                  {prevEval ? prevEval.enduranceTest.result : '07:42 min'}
+                <div className="text-xl font-extrabold text-neutral-300 font-mono">
+                  {prevEval ? prevEval.enduranceTest.result : 'Primer Reto'}
                 </div>
                 <div className="text-[10px] text-neutral-500 font-mono">
-                  {prevEval ? prevEval.evaluationDate : 'Test previo'}
+                  {prevEval ? prevEval.evaluationDate : 'Línea base registrada'}
                 </div>
               </div>
 
@@ -624,7 +636,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <span className="text-[10px] text-emerald-400 block font-semibold">
                   Ahora hiciste:
                 </span>
-                <div className="text-2xl font-extrabold text-emerald-300 font-mono">
+                <div className="text-xl font-extrabold text-emerald-300 font-mono">
                   {latestEval.enduranceTest.result}
                 </div>
                 <div className="text-[10px] text-emerald-400 font-medium">
@@ -648,16 +660,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <Dumbbell className="w-4 h-4 text-[#ff5500]" />
                 <span>3. Fuerza Máxima 1RM (5 Ejercicios Pilares)</span>
               </span>
-              <span className="text-[11px] text-orange-400 font-bold bg-orange-500/15 px-2.5 py-0.5 rounded-full border border-orange-500/30">
-                +45 kg ganancia neta total
-              </span>
+              {(() => {
+                if (!prevEval || !prevEval.strengthRecords || prevEval.strengthRecords.length === 0) {
+                  return (
+                    <span className="text-[10px] text-blue-400 font-semibold bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                      Evaluación Base Oficial
+                    </span>
+                  );
+                }
+                const totalCurrent = latestEval.strengthRecords.reduce((acc, r) => acc + r.weightKg, 0);
+                const totalPrev = prevEval.strengthRecords.reduce((acc, r) => acc + r.weightKg, 0);
+                const diff = totalCurrent - totalPrev;
+                return (
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    diff >= 0 ? 'text-orange-400 bg-orange-500/15 border-orange-500/30' : 'text-neutral-400 bg-neutral-800 border-neutral-700'
+                  }`}>
+                    {diff >= 0 ? `+${diff} kg ganancia neta` : `${diff} kg variación`}
+                  </span>
+                );
+              })()}
             </div>
 
             <div className="space-y-2">
               {latestEval.strengthRecords.map((rec) => {
                 const prevRec = prevEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
-                const prevWeight = prevRec ? prevRec.weightKg : (rec.weightKg > 10 ? rec.weightKg - 10 : rec.weightKg);
-                const deltaKg = rec.weightKg - prevWeight;
+                const hasPrev = Boolean(prevRec);
+                const deltaKg = hasPrev && prevRec ? rec.weightKg - prevRec.weightKg : null;
 
                 return (
                   <div
@@ -669,14 +697,18 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <span className="text-neutral-400">{rec.exerciseName}</span>
                       </div>
                       <div className="text-[10px] text-neutral-400">
-                        Anterior: <strong className="text-neutral-300">{prevWeight} kg</strong> &rarr; Ahora:{' '}
+                        {hasPrev && prevRec ? (
+                          <>Anterior: <strong className="text-neutral-300">{prevRec.weightKg} kg</strong> &rarr; Ahora:{' '}</>
+                        ) : (
+                          <>Marca actual:{' '}</>
+                        )}
                         <strong className="text-white">{rec.weightKg} kg</strong> ({rec.reps} {rec.reps === 1 ? 'rep' : 'reps'})
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="text-[10px] text-emerald-400 font-mono font-bold">
-                        {deltaKg > 0 ? `+${deltaKg} kg` : `${deltaKg} kg`}
+                        {deltaKg !== null ? (deltaKg > 0 ? `+${deltaKg} kg` : `${deltaKg} kg`) : 'Base'}
                       </div>
                       <div className="text-xs font-extrabold text-neutral-200 font-mono">
                         1RM: {rec.estimated1RMKg} kg
@@ -696,10 +728,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           </div>
 
           {/* Dictamen del Coach */}
-          {latestEval.generalCoachNotes && (
+          {latestEval.generalCoachNotes && latestEval.generalCoachNotes.trim() && (
             <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 text-xs space-y-1">
               <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
-                Dictamen Técnico · Coach Jorge
+                Dictamen Técnico · {latestEval.coachName || 'Coach Kinetix'}
               </span>
               <p className="text-neutral-300 italic text-[11px] leading-relaxed">
                 "{latestEval.generalCoachNotes}"
@@ -872,11 +904,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800">
-                  <span className="text-[10px] text-neutral-400 block">En el anterior hiciste:</span>
+                  <span className="text-[10px] text-neutral-400 block">{prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}</span>
                   <div className="text-base font-bold text-neutral-300 font-mono mt-0.5">
-                    {prevEval ? prevEval.enduranceTest.result : '07:42 min'}
+                    {prevEval ? prevEval.enduranceTest.result : 'Primer Test'}
                   </div>
-                  <span className="text-[10px] text-neutral-500 font-mono">{prevEval ? prevEval.evaluationDate : 'Test inicial'}</span>
+                  <span className="text-[10px] text-neutral-500 font-mono">{prevEval ? prevEval.evaluationDate : 'Línea base registrada'}</span>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60">
@@ -1033,6 +1065,39 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       Fuerza Relativa: <strong className="text-white font-mono">{relativeRatio}x</strong> peso corporal
                     </span>
                     <span className="text-[#ff5500] font-semibold">{strengthTier.tier}</span>
+                  </div>
+
+                  {/* Calculadora de Porcentajes de Carga (% 1RM) */}
+                  <div className="pt-2 border-t border-neutral-800/60 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider font-semibold">
+                        Porcentajes de Entrenamiento (% de 1RM):
+                      </span>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        1RM: <strong className="text-white font-bold">{display1RM} {weightUnit}</strong>
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 text-center font-mono text-[11px]">
+                      {[
+                        { pct: 50, label: '50%', color: 'text-neutral-400' },
+                        { pct: 60, label: '60%', color: 'text-neutral-300' },
+                        { pct: 70, label: '70%', color: 'text-blue-400' },
+                        { pct: 75, label: '75%', color: 'text-cyan-400' },
+                        { pct: 80, label: '80%', color: 'text-emerald-400' },
+                        { pct: 85, label: '85%', color: 'text-amber-400' },
+                        { pct: 90, label: '90%', color: 'text-orange-400' },
+                        { pct: 95, label: '95%', color: 'text-red-400' },
+                      ].map(item => {
+                        const calculatedWeight = (display1RM * (item.pct / 100)).toFixed(1);
+                        return (
+                          <div key={item.pct} className="p-1.5 bg-neutral-950 rounded-xl border border-neutral-800/80">
+                            <span className={`text-[9px] block font-bold ${item.color}`}>Tu {item.label}</span>
+                            <strong className="text-white text-xs">{calculatedWeight}</strong>
+                            <span className="text-[8px] text-neutral-500 block">{weightUnit}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );

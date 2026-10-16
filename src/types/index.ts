@@ -25,6 +25,7 @@ export interface UserProfile {
   };
   membership: MembershipInfo;
   createdAt: string;
+  password?: string;
 }
 
 export type KinetixPlanName = 
@@ -126,6 +127,8 @@ export interface PushNotificationSimulation {
   timestamp: string;
   type: 'payment_reminder' | 'test_results' | 'membership_suspension' | 'milestone';
   read: boolean;
+  targetUserId?: string;
+  targetAudience?: 'all' | 'athletes' | 'staff' | 'color_5' | 'color_15' | 'color_20' | 'color_30';
 }
 
 export interface PrivacyConsentRecord {

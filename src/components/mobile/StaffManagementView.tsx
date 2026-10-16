@@ -38,7 +38,9 @@ import {
   Lock,
   KeyRound,
   Eye,
-  EyeOff
+  EyeOff,
+  Database,
+  Copy
 } from 'lucide-react';
 
 interface StaffManagementViewProps {
@@ -57,6 +59,13 @@ interface StaffManagementViewProps {
     password?: string;
     switchToCreatedUser?: boolean;
   }) => void;
+  onCreateStaffMember?: (staffData: {
+    name: string;
+    email: string;
+    password: string;
+    staffRole: 'owner' | 'coach';
+  }) => void;
+  onDeleteStaffMember?: (staffId: string) => void;
   onOpenTestEntryForUser: (user: UserProfile) => void;
   onOpenBodyCompForUser?: (user: UserProfile) => void;
   onOpenReportForUser?: (user: UserProfile) => void;
@@ -84,6 +93,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   evaluations = [],
   onSelectUserToInspect,
   onCreateUserByEmail,
+  onCreateStaffMember,
+  onDeleteStaffMember,
   onOpenTestEntryForUser,
   onOpenBodyCompForUser,
   onOpenReportForUser,
@@ -99,6 +110,13 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   consentHistory,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateStaffModal, setShowCreateStaffModal] = useState(false);
+  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('kinetix2026');
+  const [newStaffRole, setNewStaffRole] = useState<'owner' | 'coach'>('coach');
   const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -418,47 +436,99 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       </div>
 
-      {/* EQUIPO DE COACHES & DIRECCIÓN KINETIX (Permisos Diferenciados) */}
+      {/* EQUIPO DE COACHES & DIRECCIÓN KINETIX (Control Total para Dueños) */}
       <div className="p-3.5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-2.5">
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center justify-between text-xs flex-wrap gap-2">
           <div className="flex items-center gap-1.5 font-bold text-white">
             <ShieldCheck className="w-4 h-4 text-red-500" />
             <span>Equipo Oficial de Coaches Kinetix ({staffMembers.length})</span>
           </div>
-          <span className="text-[10px] text-neutral-400 font-mono">
-            {isOwner ? '👑 Tienes Control Total' : '🏋️ Permisos Operativos de Profe'}
-          </span>
+          <div className="flex items-center gap-2">
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShowCreateStaffModal(true)}
+                className="px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-semibold flex items-center gap-1 transition-all shadow-sm active:scale-95"
+              >
+                <UserPlus className="w-3 h-3" />
+                <span>+ Agregar Coach / Profe</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSupabaseModal(true)}
+              className="px-2.5 py-1 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-[11px] font-semibold flex items-center gap-1 transition-all"
+              title="Información de Base de Datos y Script SQL"
+            >
+              <Database className="w-3 h-3 text-blue-400" />
+              <span>Base de Datos Supabase</span>
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
           {staffMembers.map(staff => {
             const isStaffOwner = staff.staffRole === 'owner' || staff.id === 'user-staff-leslie' || staff.id === 'user-staff-01';
+            const isSelf = staff.id === activeStaff.id || staff.id === 'user-staff-leslie';
             return (
               <div 
                 key={staff.id}
-                className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800/80 flex items-center justify-between gap-2"
+                className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800/80 flex flex-col justify-between gap-2.5 shadow-sm"
               >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <img
-                    src={staff.avatarUrl}
-                    alt={staff.name}
-                    className="w-8 h-8 rounded-lg object-cover shrink-0 border border-neutral-700"
-                  />
-                  <div className="overflow-hidden">
-                    <strong className="text-xs text-white block truncate">{staff.name}</strong>
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <img
+                      src={staff.avatarUrl}
+                      alt={staff.name}
+                      className="w-9 h-9 rounded-xl object-cover shrink-0 border border-neutral-700"
+                    />
+                    <div className="overflow-hidden">
+                      <strong className="text-xs text-white block truncate">{staff.name}</strong>
                       <span className="text-[10px] text-neutral-400 block truncate font-mono">{staff.email}</span>
-                      <span className="text-[9px] text-emerald-400 font-medium">· Sin fecha de corte</span>
                     </div>
                   </div>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                    isStaffOwner 
+                      ? 'bg-red-950 text-red-400 border border-red-800' 
+                      : 'bg-amber-950 text-amber-400 border border-amber-800'
+                  }`}>
+                    {isStaffOwner ? 'Dueño/a' : 'Profe'}
+                  </span>
                 </div>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
-                  isStaffOwner 
-                    ? 'bg-red-950 text-red-400 border border-red-800' 
-                    : 'bg-amber-950 text-amber-400 border border-amber-800'
-                }`}>
-                  {isStaffOwner ? 'Dueño/a' : 'Profe'}
-                </span>
+
+                {/* Staff controls for owner */}
+                {isOwner && (
+                  <div className="flex items-center justify-between pt-1 border-t border-neutral-800/70 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAthleteForPayment(staff);
+                        setModalTab('security');
+                      }}
+                      className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
+                      title="Ver o editar contraseña de acceso"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>Clave: {staff.password || 'kinetix2026'}</span>
+                    </button>
+
+                    {!isSelf && onDeleteStaffMember && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Estás segura de eliminar a "${staff.name}" y revocarle su acceso de entrenador/a en Kinetix?`)) {
+                            onDeleteStaffMember(staff.id);
+                          }
+                        }}
+                        className="text-red-400 hover:text-red-300 font-semibold px-2 py-0.5 rounded-lg hover:bg-red-950/50 transition-colors flex items-center gap-1"
+                        title="Eliminar coach del sistema"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Dar de baja</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1485,6 +1555,325 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           evaluations={evaluations}
           onClose={() => setShowExportModal(false)}
         />
+      )}
+
+      {/* MODAL: CREAR NUEVO COACH / STAFF */}
+      {showCreateStaffModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-brand">Nuevo Miembro del Staff</h3>
+                  <p className="text-xs text-neutral-400">Alta de entrenador/a o socio/a Kinetix</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateStaffModal(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newStaffName.trim() || !newStaffEmail.trim()) return;
+                if (onCreateStaffMember) {
+                  onCreateStaffMember({
+                    name: newStaffName.trim(),
+                    email: newStaffEmail.trim(),
+                    password: newStaffPassword.trim() || 'kinetix2026',
+                    staffRole: newStaffRole,
+                  });
+                }
+                setNewStaffName('');
+                setNewStaffEmail('');
+                setNewStaffPassword('kinetix2026');
+                setShowCreateStaffModal(false);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Nombre Completo del Coach / Profe</label>
+                <input
+                  type="text"
+                  value={newStaffName}
+                  onChange={(e) => setNewStaffName(e.target.value)}
+                  placeholder="Ej. Coach Gus / Gustavo Ramírez"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Correo Electrónico (Para Iniciar Sesión)</label>
+                <input
+                  type="email"
+                  value={newStaffEmail}
+                  onChange={(e) => setNewStaffEmail(e.target.value)}
+                  placeholder="gus.coach@kinetix.com"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Contraseña de Acceso</label>
+                <input
+                  type="text"
+                  value={newStaffPassword}
+                  onChange={(e) => setNewStaffPassword(e.target.value)}
+                  placeholder="kinetix2026"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                  required
+                />
+                <span className="text-[10px] text-neutral-500 block mt-0.5">
+                  Podrá iniciar sesión con este correo y contraseña de inmediato.
+                </span>
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Nivel de Permisos / Rol</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewStaffRole('coach')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      newStaffRole === 'coach'
+                        ? 'bg-amber-600/20 border-amber-500 text-white ring-1 ring-amber-500'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                    }`}
+                  >
+                    <strong className="block text-xs">🏋️ Profe / Coach</strong>
+                    <span className="text-[10px] text-neutral-400">Evaluar 1RM, pesajes y Cooper</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewStaffRole('owner')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      newStaffRole === 'owner'
+                        ? 'bg-red-600/20 border-red-500 text-white ring-1 ring-red-500'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                    }`}
+                  >
+                    <strong className="block text-xs">👑 Dueño/a Kinetix</strong>
+                    <span className="text-[10px] text-neutral-400">Control total, finanzas y bajas</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-neutral-800 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStaffModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold shadow-md shadow-red-600/25 active:scale-95 transition-all"
+                >
+                  Crear Perfil de Staff
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ESTADO DE SUPABASE & SCRIPT SQL DE CREACIÓN DE TABLAS */}
+      {showSupabaseModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="w-full max-w-xl bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-brand">Base de Datos & Supabase</h3>
+                  <p className="text-xs text-neutral-400">Dónde se guardan los datos y cómo activar tablas en Supabase</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSupabaseModal(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/60 space-y-1 text-emerald-200">
+                <strong className="block text-white text-xs font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>¿Están seguros mis datos? SÍ, 100% seguros y respaldados</span>
+                </strong>
+                <p className="text-[11px] text-neutral-300">
+                  Actualmente todos tus atletas, pesajes, claves, consentimientos legales y evaluaciones se guardan de forma permanente e inmediata en el <strong>almacenamiento local (localStorage) del navegador</strong>. Nunca se borran al recargar ni al cerrar la sesión.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <span>¿Por qué en tu cuenta de Supabase aún no hay tablas?</span>
+                </h4>
+                <p className="text-[11px] text-neutral-300">
+                  Supabase requiere que ejecutes una sola vez el script de creación de tablas en su <strong>SQL Editor</strong>. Una vez creado, las tablas aparecerán en tu panel de Supabase:
+                </p>
+
+                <div className="relative">
+                  <pre className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-[10px] font-mono text-neutral-300 overflow-x-auto max-h-48 leading-relaxed">
+{`-- SCRIPT SQL OFICIAL KINETIX PARA SUPABASE
+-- Copia y pega en supabase.com -> tu proyecto -> SQL Editor -> Run
+
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  role TEXT DEFAULT 'athlete',
+  staff_role TEXT,
+  phone TEXT,
+  gender TEXT,
+  height_cm NUMERIC,
+  membership JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.body_composition (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  recorded_at DATE NOT NULL,
+  weight_kg NUMERIC NOT NULL,
+  muscle_mass_percent NUMERIC NOT NULL,
+  body_fat_percent NUMERIC NOT NULL,
+  visceral_fat_level INT NOT NULL,
+  bmi NUMERIC NOT NULL,
+  bmi_category TEXT,
+  notes TEXT,
+  recorded_by_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.physical_evaluations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  evaluation_date DATE NOT NULL,
+  coach_id TEXT,
+  coach_name TEXT,
+  cooper_test JSONB,
+  endurance_test JSONB,
+  strength_records JSONB,
+  general_coach_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.privacy_consents (
+  consent_id TEXT PRIMARY KEY,
+  user_id TEXT,
+  user_email TEXT,
+  privacy_notice_version TEXT,
+  privacy_notice_accepted BOOLEAN,
+  sensitive_data_consent BOOLEAN,
+  accepted_at TIMESTAMPTZ,
+  platform TEXT
+);`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sqlText = `-- SCRIPT SQL OFICIAL KINETIX PARA SUPABASE
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  role TEXT DEFAULT 'athlete',
+  staff_role TEXT,
+  phone TEXT,
+  gender TEXT,
+  height_cm NUMERIC,
+  membership JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.body_composition (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  recorded_at DATE NOT NULL,
+  weight_kg NUMERIC NOT NULL,
+  muscle_mass_percent NUMERIC NOT NULL,
+  body_fat_percent NUMERIC NOT NULL,
+  visceral_fat_level INT NOT NULL,
+  bmi NUMERIC NOT NULL,
+  bmi_category TEXT,
+  notes TEXT,
+  recorded_by_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.physical_evaluations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  evaluation_date DATE NOT NULL,
+  coach_id TEXT,
+  coach_name TEXT,
+  cooper_test JSONB,
+  endurance_test JSONB,
+  strength_records JSONB,
+  general_coach_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.privacy_consents (
+  consent_id TEXT PRIMARY KEY,
+  user_id TEXT,
+  user_email TEXT,
+  privacy_notice_version TEXT,
+  privacy_notice_accepted BOOLEAN,
+  sensitive_data_consent BOOLEAN,
+  accepted_at TIMESTAMPTZ,
+  platform TEXT
+);`;
+                      navigator.clipboard.writeText(sqlText);
+                      setCopiedSql(true);
+                      setTimeout(() => setCopiedSql(false), 2000);
+                    }}
+                    className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold flex items-center gap-1 shadow"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedSql ? '¡Copiado!' : 'Copiar SQL'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
+                💡 <strong>Consejo Pro:</strong> Puedes usar el botón <strong>"Exportar a Excel"</strong> en cualquier momento para descargar una copia local con todos los datos y contraseñas de tus alumnos.
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowSupabaseModal(false)}
+                className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

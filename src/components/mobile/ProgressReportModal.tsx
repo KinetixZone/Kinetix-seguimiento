@@ -270,17 +270,25 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
           </div>
 
           {/* Coach Conclusion */}
-          <div className="print-card pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
-            <div>
-              <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
-              <p className="text-neutral-300 text-xs italic mt-0.5 leading-relaxed bg-neutral-950 p-3 rounded-2xl border border-neutral-800">
-                {validEval?.generalCoachNotes || (validBodyComp ? 
-                  `Seguimiento activo en Kinetix Functional Zone. Continúa con el plan de entrenamiento asignado para el ciclo actual.` : 
-                  `Perfil dado de alta en Kinetix Progress. Pendiente de registro de primera valoración antropométrica y test físico.`
-                )}
-              </p>
+          {validEval?.generalCoachNotes && validEval.generalCoachNotes.trim() ? (
+            <div className="print-card pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
+              <div>
+                <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
+                <p className="text-neutral-300 text-xs italic mt-0.5 leading-relaxed bg-neutral-950 p-3 rounded-2xl border border-neutral-800">
+                  {validEval.generalCoachNotes}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="print-card pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
+              <div>
+                <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
+                <div className="min-h-[36px] bg-neutral-950 p-3 rounded-2xl border border-neutral-800/60 text-neutral-600 text-xs italic">
+                  {/* Espacio reservado para dictamen oficial o firma en físico */}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Institutional Signature & Stamp (Printable) */}
           <div className="print-card pt-4 border-t border-neutral-800/80 grid grid-cols-2 gap-6 text-[11px] text-neutral-400 font-mono">
