@@ -135,6 +135,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   // Navigation handlers with History Stack
   const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
     if (tab === currentTab) return;
+    if (tab === 'staff' && !isStaff) return; // Strict role-based guard
     if (tab !== 'tests') setAutoOpenEvalModal(false);
     if (tab !== 'body') setAutoOpenBodyModal(false);
     setTabHistory(prev => [...prev, tab]);
@@ -482,7 +483,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           />
         )}
 
-        {currentTab === 'staff' && (
+        {currentTab === 'staff' && isStaff && (
           <StaffManagementView
             currentUser={currentUser}
             users={users}
