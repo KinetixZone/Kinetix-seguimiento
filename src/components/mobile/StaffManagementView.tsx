@@ -44,7 +44,8 @@ import {
   Cloud,
   Check,
   RefreshCw,
-  Download
+  Download,
+  Pencil
 } from 'lucide-react';
 import { 
   KINETIX_OFFICIAL_SUPABASE_SQL, 
@@ -166,6 +167,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [editPlan, setEditPlan] = useState<KinetixPlanName>('Kinetix');
   const [editBillingDay, setEditBillingDay] = useState<number>(15);
   const [editName, setEditName] = useState<string>('');
+  const [editUsername, setEditUsername] = useState<string>('');
+  const [editStaffRole, setEditStaffRole] = useState<'owner' | 'coach'>('coach');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
   const [editEmergencyName, setEditEmergencyName] = useState<string>('');
@@ -182,6 +186,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   // New user form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [customUsername, setCustomUsername] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [heightCm, setHeightCm] = useState<number>(175);
   const [planName, setPlanName] = useState<KinetixPlanName>('Kinetix');
@@ -253,6 +258,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       return;
     }
 
+    // Check duplicate username if provided
+    const cleanUser = customUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (cleanUser) {
+      const userExists = users.some(u => u.username?.toLowerCase() === cleanUser);
+      if (userExists) {
+        setCreateError(`El nombre de usuario "@${cleanUser}" ya está en uso. Por favor elige otro.`);
+        return;
+      }
+    }
+
     const expiry = calculateNextExpiryFromDay(billingDay);
     const pass = initialPassword.trim() || 'kinetix123';
 
@@ -274,6 +289,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setShowCreateModal(false);
       setName('');
       setEmail('');
+      setCustomUsername('');
       setPlanName('Kinetix');
       setBillingDay(15);
       setInitialPassword('kinetix123');
@@ -536,18 +552,50 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                 {/* Staff controls for owner */}
                 {isOwner && (
-                  <div className="flex items-center justify-between pt-1 border-t border-neutral-800/70 text-[11px]">
+                  <div className="flex items-center justify-between pt-1 border-t border-neutral-800/70 text-[11px] gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAthleteForPayment(staff);
+                        setEditName(staff.name);
+                        setEditUsername(staff.username || staff.name.toLowerCase().split(' ')[0].replace(/[^a-z0-9_]/g, ''));
+                        setEditEmail(staff.email);
+                        setEditPhone(staff.phone || '');
+                        setEditStaffRole(staff.staffRole || 'coach');
+                        try {
+                          const saved = localStorage.getItem(`kinetix_pwd_${staff.id}`) || staff.password || 'kinetix2026';
+                          setAthletePassword(saved);
+                        } catch {
+                          setAthletePassword(staff.password || 'kinetix2026');
+                        }
+                        setUsernameError(null);
+                        setModalTab('profile');
+                        setShowDeleteConfirm(false);
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-neutral-900 transition-colors"
+                      title="Editar nombre, usuario, correo y permisos de este coach o dueño"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Editar Perfil & Rol</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedAthleteForPayment(staff);
                         setModalTab('security');
+                        try {
+                          const saved = localStorage.getItem(`kinetix_pwd_${staff.id}`) || staff.password || 'kinetix2026';
+                          setAthletePassword(saved);
+                        } catch {
+                          setAthletePassword(staff.password || 'kinetix2026');
+                        }
                       }}
                       className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
                       title="Ver o editar contraseña de acceso"
                     >
                       <KeyRound className="w-3 h-3" />
-                      <span>Clave: {staff.password || 'kinetix2026'}</span>
+                      <span>Clave</span>
                     </button>
 
                     {!isSelf && onDeleteStaffMember && (
@@ -558,11 +606,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                             onDeleteStaffMember(staff.id);
                           }
                         }}
-                        className="text-red-400 hover:text-red-300 font-semibold px-2 py-0.5 rounded-lg hover:bg-red-950/50 transition-colors flex items-center gap-1"
+                        className="text-red-400 hover:text-red-300 font-semibold px-1.5 py-0.5 rounded-lg hover:bg-red-950/50 transition-colors flex items-center gap-1 ml-auto"
                         title="Eliminar coach del sistema"
                       >
                         <Trash2 className="w-3 h-3" />
-                        <span>Dar de baja</span>
+                        <span>Baja</span>
                       </button>
                     )}
                   </div>
@@ -807,6 +855,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       setEditPlan(athlete.membership.planName);
                       setEditBillingDay(athlete.membership.billingDayOfMonth || 15);
                       setEditName(athlete.name);
+                      setEditUsername(athlete.username || athlete.name.toLowerCase().split(' ')[0].replace(/[^a-z0-9_]/g, ''));
+                      setEditStaffRole('coach');
+                      setUsernameError(null);
                       setEditEmail(athlete.email);
                       setEditPhone(athlete.phone);
                       setEditEmergencyName(athlete.emergencyContact?.name || '');
@@ -919,6 +970,23 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                     required
                   />
+                </div>
+
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                    <span>Nombre de Usuario (Opcional)</span>
+                    <span className="text-[10px] text-neutral-500 font-mono">Autogenerado si está vacío</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">@</span>
+                    <input
+                      type="text"
+                      value={customUsername}
+                      onChange={(e) => setCustomUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="rodrigo"
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-7 pr-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1072,10 +1140,25 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div>
                 <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-red-500" />
-                  <span>Control Total del Atleta</span>
+                  {selectedAthleteForPayment.role === 'staff' ? (
+                    <>
+                      <UserCog className="w-4 h-4 text-amber-500" />
+                      <span>Editar Perfil de Coach / Dueño</span>
+                    </>
+                  ) : (
+                    <>
+                      <SlidersHorizontal className="w-4 h-4 text-red-500" />
+                      <span>Control Total del Atleta</span>
+                    </>
+                  )}
                 </h3>
-                <p className="text-xs text-neutral-400">Atleta: <strong className="text-white">{selectedAthleteForPayment.name}</strong></p>
+                <p className="text-xs text-neutral-400">
+                  {selectedAthleteForPayment.role === 'staff' ? 'Staff: ' : 'Atleta: '}
+                  <strong className="text-white">{selectedAthleteForPayment.name}</strong>
+                  {selectedAthleteForPayment.username && (
+                    <span className="text-neutral-500 ml-1 font-mono">(@{selectedAthleteForPayment.username})</span>
+                  )}
+                </p>
               </div>
               <button
                 onClick={() => setSelectedAthleteForPayment(null)}
@@ -1087,15 +1170,17 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
             {/* Modal Navigation Tabs */}
             <div className="flex rounded-xl bg-neutral-950 p-1 border border-neutral-800 text-xs">
-              <button
-                type="button"
-                onClick={() => setModalTab('membership')}
-                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${
-                  modalTab === 'membership' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                Plan & Acceso
-              </button>
+              {selectedAthleteForPayment.role === 'athlete' && (
+                <button
+                  type="button"
+                  onClick={() => setModalTab('membership')}
+                  className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${
+                    modalTab === 'membership' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Plan & Acceso
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setModalTab('profile')}
@@ -1103,7 +1188,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   modalTab === 'profile' ? 'bg-neutral-800 text-white shadow-sm font-bold' : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                Datos Personales
+                {selectedAthleteForPayment.role === 'staff' ? 'Datos & Rol' : 'Datos Personales'}
               </button>
               <button
                 type="button"
@@ -1353,7 +1438,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 {modalTab === 'profile' && (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-neutral-300 font-medium block mb-1">Nombre Completo del Atleta</label>
+                      <label className="text-neutral-300 font-medium block mb-1">
+                        {selectedAthleteForPayment.role === 'staff' ? 'Nombre Completo del Coach / Dueño' : 'Nombre Completo del Atleta'}
+                      </label>
                       <input
                         type="text"
                         value={editName}
@@ -1361,6 +1448,49 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                       />
                     </div>
+
+                    <div>
+                      <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                        <span>Nombre de Usuario (Para Iniciar Sesión)</span>
+                        <span className="text-[10px] text-neutral-500 font-mono">Único · Sin espacios</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">@</span>
+                        <input
+                          type="text"
+                          value={editUsername}
+                          onChange={(e) => {
+                            setUsernameError(null);
+                            setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                          }}
+                          placeholder="ej. juan / leslie"
+                          className={`w-full bg-neutral-950 border rounded-xl pl-7 pr-3 py-2 text-white text-xs font-mono outline-none ${
+                            usernameError ? 'border-red-500' : 'border-neutral-800 focus:border-blue-500'
+                          }`}
+                        />
+                      </div>
+                      {usernameError ? (
+                        <p className="text-[11px] text-red-400 mt-1 font-semibold">{usernameError}</p>
+                      ) : (
+                        <p className="text-[10px] text-neutral-500 mt-1">
+                          El usuario podrá ingresar con este alias o con su correo en el portal.
+                        </p>
+                      )}
+                    </div>
+
+                    {selectedAthleteForPayment.role === 'staff' && (
+                      <div>
+                        <label className="text-neutral-300 font-medium block mb-1">Rol de Permisos en Kinetix</label>
+                        <select
+                          value={editStaffRole}
+                          onChange={(e) => setEditStaffRole(e.target.value as 'owner' | 'coach')}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
+                        >
+                          <option value="owner">Dueño/a (Control Total: Finanzas, Base de Datos, Atletas y Coaches)</option>
+                          <option value="coach">Entrenador/a (Gestión de Tests Físicos, 1RM y Pesajes)</option>
+                        </select>
+                      </div>
+                    )}
 
                     <div>
                       <label className="text-neutral-300 font-medium block mb-1">Correo Electrónico (Login)</label>
@@ -1383,28 +1513,30 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-neutral-300 font-medium block mb-1">Contacto Emergencia</label>
-                        <input
-                          type="text"
-                          value={editEmergencyName}
-                          onChange={(e) => setEditEmergencyName(e.target.value)}
-                          placeholder="Nombre familiar"
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
-                        />
+                    {selectedAthleteForPayment.role === 'athlete' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-neutral-300 font-medium block mb-1">Contacto Emergencia</label>
+                          <input
+                            type="text"
+                            value={editEmergencyName}
+                            onChange={(e) => setEditEmergencyName(e.target.value)}
+                            placeholder="Nombre familiar"
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-neutral-300 font-medium block mb-1">Teléfono Emergencia</label>
+                          <input
+                            type="tel"
+                            value={editEmergencyPhone}
+                            onChange={(e) => setEditEmergencyPhone(e.target.value)}
+                            placeholder="Teléfono"
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-neutral-300 font-medium block mb-1">Teléfono Emergencia</label>
-                        <input
-                          type="tel"
-                          value={editEmergencyPhone}
-                          onChange={(e) => setEditEmergencyPhone(e.target.value)}
-                          placeholder="Teléfono"
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
@@ -1490,7 +1622,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <div className="flex gap-2 pt-2 border-t border-neutral-800">
                   <button
                     type="button"
-                    onClick={() => setSelectedAthleteForPayment(null)}
+                    onClick={() => {
+                      setUsernameError(null);
+                      setSelectedAthleteForPayment(null);
+                    }}
                     className="flex-1 py-2.5 rounded-xl bg-neutral-800 text-neutral-300 font-medium hover:bg-neutral-700 transition-colors"
                   >
                     Cancelar
@@ -1498,7 +1633,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (onUpdateUserMembership) {
+                      const cleanUsername = editUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+                      if (cleanUsername) {
+                        const isTaken = users.some(
+                          u => u.id !== selectedAthleteForPayment.id && u.username?.toLowerCase() === cleanUsername
+                        );
+                        if (isTaken) {
+                          setUsernameError(`El nombre de usuario "@${cleanUsername}" ya pertenece a otro miembro. Debe ser único.`);
+                          setModalTab('profile');
+                          return;
+                        }
+                      }
+
+                      if (selectedAthleteForPayment.role === 'athlete' && onUpdateUserMembership) {
                         onUpdateUserMembership(
                           selectedAthleteForPayment.id, 
                           editStatus, 
@@ -1507,18 +1654,22 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           editBillingDay
                         );
                       }
+
                       if (onUpdateAthleteProfile) {
                         onUpdateAthleteProfile(selectedAthleteForPayment.id, {
-                          name: editName,
-                          email: editEmail,
-                          phone: editPhone,
-                          emergencyContact: {
+                          name: editName.trim(),
+                          email: editEmail.trim().toLowerCase(),
+                          phone: editPhone.trim(),
+                          username: cleanUsername || undefined,
+                          staffRole: selectedAthleteForPayment.role === 'staff' ? editStaffRole : undefined,
+                          emergencyContact: selectedAthleteForPayment.role === 'athlete' ? {
                             ...selectedAthleteForPayment.emergencyContact,
                             name: editEmergencyName,
                             phone: editEmergencyPhone,
-                          }
+                          } : undefined
                         });
                       }
+
                       setSavePaymentSuccess(true);
                       setTimeout(() => {
                         setSavePaymentSuccess(false);

@@ -427,9 +427,37 @@ export default function App() {
     }
   };
 
-  // Update Athlete Profile
+  // Helper to ensure guaranteed unique usernames across athletes and staff
+  const generateUniqueUsername = (
+    desired: string,
+    usersList: UserProfile[],
+    excludeUserId?: string
+  ): string => {
+    const base = desired
+      .toLowerCase()
+      .trim()
+      .split(' ')[0]
+      .replace(/[^a-z0-9_]/g, '') || 'usuario';
+
+    let candidate = base;
+    let suffix = 2;
+    while (usersList.some(u => u.id !== excludeUserId && u.username?.toLowerCase() === candidate.toLowerCase())) {
+      candidate = `${base}${suffix}`;
+      suffix++;
+    }
+    return candidate;
+  };
+
+  // Update Athlete or Staff Profile and sync to Supabase
   const handleUpdateAthleteProfile = (userId: string, updates: Partial<UserProfile>) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, ...updates } : u);
+      const userObj = updated.find(u => u.id === userId);
+      if (userObj) {
+        syncUserToSupabase(userObj);
+      }
+      return updated;
+    });
   };
 
   // Create User by Email (Staff feature)
@@ -487,7 +515,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().split('T')[0],
-      username: newUser.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `atleta${Date.now().toString().slice(-4)}`,
+      username: generateUniqueUsername(newUser.name, users),
     };
 
     // Save initial password in localStorage
@@ -552,7 +580,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().split('T')[0],
-      username: newUser.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `atleta${Date.now().toString().slice(-4)}`,
+      username: generateUniqueUsername(newUser.name, users),
     };
 
     // Save personal password in localStorage
@@ -640,7 +668,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().slice(0, 10),
-      username: staffData.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `staff${Date.now().toString().slice(-4)}`,
+      username: generateUniqueUsername(staffData.name, users),
     };
     setUsers(prev => [...prev, newStaff]);
     syncUserToSupabase(newStaff);
@@ -654,7 +682,13 @@ export default function App() {
     setUsers(prev => prev.filter(u => u.id !== staffId));
   };
 
-  const handleSimulateNotification = (title: string, body: string) => {
+  const handleSimulateNotification = (
+    title: string, 
+    body: string, 
+    targetUserId?: string, 
+    targetAudience?: 'all' | 'athletes' | 'staff' | 'color_5' | 'color_15' | 'color_20' | 'color_30'
+  ) => {
+    const isAthlete = currentUser?.role === 'athlete';
     const newNotif: PushNotificationSimulation = {
       id: `notif-${Date.now()}`,
       title,
@@ -662,7 +696,8 @@ export default function App() {
       timestamp: new Date().toISOString(),
       read: false,
       type: 'payment_reminder',
-      targetAudience: 'staff',
+      targetUserId: targetUserId || (isAthlete ? currentUser?.id : undefined),
+      targetAudience: targetAudience || (isAthlete ? 'athletes' : 'staff'),
     };
     setNotifications(prev => [newNotif, ...prev]);
     setIsNotificationsOpen(true);
@@ -778,6 +813,7 @@ export default function App() {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         notifications={visibleNotifications}
+        allNotifications={notifications}
         isStaff={currentUser?.role === 'staff'}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
         onOpenSendNotification={() => setIsSendNotificationOpen(true)}

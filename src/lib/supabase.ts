@@ -108,9 +108,12 @@ export async function testSupabaseConnection(): Promise<{ ok: boolean; message: 
  * COMPLETE SQL SCRIPT for copy-pasting into Supabase SQL Editor
  */
 export const KINETIX_OFFICIAL_SUPABASE_SQL = `-- ==============================================================================
--- SCRIPT SQL OFICIAL KINETIX FUNCTIONAL ZONE PARA SUPABASE
--- Copia este texto completo y pégalo en:
--- supabase.com -> Tu Proyecto -> SQL Editor -> New Query -> Run
+-- SCRIPT SQL OFICIAL KINETIX FUNCTIONAL ZONE (COMPATIBLE CON SUPABASE CLOUD)
+-- Copia este texto y pégalo en: supabase.com -> Tu Proyecto -> SQL Editor -> Run
+-- 
+-- 100% IDEMPOTENTE: No genera error 42P07 ni errores de políticas si ya existen.
+-- Si deseas reiniciar todo desde cero, descomenta la siguiente línea de DROP:
+-- DROP TABLE IF EXISTS public.privacy_consents, public.notifications, public.physical_evaluations, public.body_composition, public.users CASCADE;
 -- ==============================================================================
 
 -- 1. TABLA DE USUARIOS (ATLETAS, DUEÑOS Y COACHES)
@@ -133,6 +136,14 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Asegurar columnas si la tabla ya existía
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS staff_role TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Índice único para que los nombres de usuario NUNCA se repitan (insensible a mayúsculas)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON public.users (LOWER(username)) WHERE username IS NOT NULL;
 
 -- 2. TABLA DE COMPOSICIÓN CORPORAL Y PESAJE (ANTROPOMETRÍA RENPHO / INBODY)
 CREATE TABLE IF NOT EXISTS public.body_composition (
@@ -181,6 +192,12 @@ CREATE TABLE IF NOT EXISTS public.physical_evaluations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Asegurar columnas JSONB por si la tabla ya existía
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS cooper_test JSONB;
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS endurance_test JSONB;
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS strength_records JSONB;
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS general_coach_notes TEXT;
+
 -- 4. TABLA DE NOTIFICACIONES Y AVISOS
 CREATE TABLE IF NOT EXISTS public.notifications (
   id TEXT PRIMARY KEY,
@@ -193,6 +210,9 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   target_audience TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS target_user_id TEXT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS target_audience TEXT;
 
 -- 5. TABLA DE CONSENTIMIENTOS DE PRIVACIDAD (LFPDPPP)
 CREATE TABLE IF NOT EXISTS public.privacy_consents (
@@ -212,7 +232,7 @@ CREATE TABLE IF NOT EXISTS public.privacy_consents (
 );
 
 -- ==============================================================================
--- POLÍTICAS DE ACCESO SEGURO (ROW LEVEL SECURITY - RLS)
+-- POLÍTICAS DE ACCESO SEGURO (ROW LEVEL SECURITY - RLS) 100% RE-EJECUTABLES
 -- ==============================================================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.body_composition ENABLE ROW LEVEL SECURITY;
@@ -220,24 +240,20 @@ ALTER TABLE public.physical_evaluations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.privacy_consents ENABLE ROW LEVEL SECURITY;
 
--- Políticas universales para la aplicación cliente Kinetix
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Kinetix Users All') THEN
-    CREATE POLICY "Kinetix Users All" ON public.users FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Kinetix Body Comp All') THEN
-    CREATE POLICY "Kinetix Body Comp All" ON public.body_composition FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Kinetix Evaluations All') THEN
-    CREATE POLICY "Kinetix Evaluations All" ON public.physical_evaluations FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Kinetix Notifications All') THEN
-    CREATE POLICY "Kinetix Notifications All" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Kinetix Privacy Consents All') THEN
-    CREATE POLICY "Kinetix Privacy Consents All" ON public.privacy_consents FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Kinetix Users All" ON public.users;
+CREATE POLICY "Kinetix Users All" ON public.users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Kinetix Body Comp All" ON public.body_composition;
+CREATE POLICY "Kinetix Body Comp All" ON public.body_composition FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Kinetix Evaluations All" ON public.physical_evaluations;
+CREATE POLICY "Kinetix Evaluations All" ON public.physical_evaluations FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Kinetix Notifications All" ON public.notifications;
+CREATE POLICY "Kinetix Notifications All" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Kinetix Privacy Consents All" ON public.privacy_consents;
+CREATE POLICY "Kinetix Privacy Consents All" ON public.privacy_consents FOR ALL USING (true) WITH CHECK (true);
 `;
 
 /**
