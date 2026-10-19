@@ -40,8 +40,20 @@ import {
   Eye,
   EyeOff,
   Database,
-  Copy
+  Copy,
+  Cloud,
+  Check,
+  RefreshCw,
+  Download
 } from 'lucide-react';
+import { 
+  KINETIX_OFFICIAL_SUPABASE_SQL, 
+  getSupabaseCredentials, 
+  saveSupabaseCredentials, 
+  testSupabaseConnection, 
+  syncAllToSupabase,
+  isSupabaseConfigured 
+} from '../../lib/supabase';
 
 interface StaffManagementViewProps {
   users: UserProfile[];
@@ -119,6 +131,32 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [newStaffRole, setNewStaffRole] = useState<'owner' | 'coach'>('coach');
   const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Supabase Cloud Configuration States
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState<string>(() => getSupabaseCredentials().url);
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState<string>(() => getSupabaseCredentials().key);
+  const [supabaseTestStatus, setSupabaseTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const handleDownloadBackup = () => {
+    const backupData = {
+      plataforma: 'Kinetix Functional Zone',
+      fechaExportacion: new Date().toISOString(),
+      usuariosTotales: users.length,
+      usuarios: users,
+      registrosComposicionCorporal: bodyCompRecords,
+      evaluacionesFisicas: evaluations,
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kinetix_respaldo_oficial_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   
   // Payment date and profile edit modal state
   const [selectedAthleteForPayment, setSelectedAthleteForPayment] = useState<UserProfile | null>(null);
@@ -1692,15 +1730,25 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       {/* MODAL: ESTADO DE SUPABASE & SCRIPT SQL DE CREACIÓN DE TABLAS */}
       {showSupabaseModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-          <div className="w-full max-w-xl bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+          <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-                  <Database className="w-4 h-4" />
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                  <Database className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white font-brand">Base de Datos & Supabase</h3>
-                  <p className="text-xs text-neutral-400">Dónde se guardan los datos y cómo activar tablas en Supabase</p>
+                  <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
+                    <span>Base de Datos en la Nube (Supabase Cloud)</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                      isSupabaseConfigured()
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        : 'bg-amber-950 text-amber-300 border border-amber-800'
+                    }`}>
+                      {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400">Respaldo permanente, sincronización en tiempo real y script SQL oficial</p>
                 </div>
               </div>
               <button
@@ -1712,164 +1760,193 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </button>
             </div>
 
-            <div className="space-y-3 text-xs leading-relaxed">
-              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/60 space-y-1 text-emerald-200">
+            <div className="space-y-4 text-xs leading-relaxed">
+              {/* Card 1: Seguridad y Almacenamiento Actual */}
+              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/60 space-y-1.5 text-emerald-200">
                 <strong className="block text-white text-xs font-bold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>¿Están seguros mis datos? SÍ, 100% seguros y respaldados</span>
+                  <span>Tus datos NO se pierden: Doble Capa de Seguridad Kinetix</span>
                 </strong>
-                <p className="text-[11px] text-neutral-300">
-                  Actualmente todos tus atletas, pesajes, claves, consentimientos legales y evaluaciones se guardan de forma permanente e inmediata en el <strong>almacenamiento local (localStorage) del navegador</strong>. Nunca se borran al recargar ni al cerrar la sesión.
+                <p className="text-[11px] text-neutral-300 leading-relaxed">
+                  Actualmente todos los atletas ({users.length}), pesajes ({bodyCompRecords.length}) y evaluaciones ({evaluations.length}) están guardados de forma permanente en el almacenamiento local del dispositivo. Cuando configures tu proyecto en Supabase, los datos se sincronizarán también en la nube de PostgreSQL automáticamente.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+              {/* Card 2: Capacidad para 30 alumnos o más */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-1.5">
                 <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>¿Por qué en tu cuenta de Supabase aún no hay tablas?</span>
+                  <span>¿Aguantará 30 alumnos en Supabase? (Análisis de Capacidad)</span>
                 </h4>
-                <p className="text-[11px] text-neutral-300">
-                  Supabase requiere que ejecutes una sola vez el script de creación de tablas en su <strong>SQL Editor</strong>. Una vez creado, las tablas aparecerán en tu panel de Supabase:
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                  <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-400 block font-mono">Almacenamiento BD</span>
+                    <strong className="text-white text-xs">500 MB Gratis</strong>
+                    <p className="text-[10px] text-emerald-400 mt-0.5">30 alumnos usan menos de 6 MB (&lt;1.2%)</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-400 block font-mono">Usuarios Activos</span>
+                    <strong className="text-white text-xs">50,000 / mes</strong>
+                    <p className="text-[10px] text-emerald-400 mt-0.5">30 alumnos = 0.06% del límite</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-400 block font-mono">Velocidad</span>
+                    <strong className="text-white text-xs">PostgreSQL 15</strong>
+                    <p className="text-[10px] text-emerald-400 mt-0.5">Respuestas en menos de 40ms</p>
+                  </div>
+                </div>
+              </div>
 
-                <div className="relative">
-                  <pre className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-[10px] font-mono text-neutral-300 overflow-x-auto max-h-48 leading-relaxed">
-{`-- SCRIPT SQL OFICIAL KINETIX PARA SUPABASE
--- Copia y pega en supabase.com -> tu proyecto -> SQL Editor -> Run
+              {/* Card 3: Credenciales de Supabase en Vivo */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Conectar con tu Proyecto Supabase</span>
+                  </h4>
+                  <span className="text-[10px] text-neutral-500">Configuración directa desde el panel</span>
+                </div>
 
-CREATE TABLE IF NOT EXISTS public.users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  role TEXT DEFAULT 'athlete',
-  staff_role TEXT,
-  phone TEXT,
-  gender TEXT,
-  height_cm NUMERIC,
-  membership JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[10px] font-mono text-neutral-400 block mb-1">
+                      URL del Proyecto Supabase (Project URL)
+                    </label>
+                    <input
+                      type="text"
+                      value={supabaseUrlInput}
+                      onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                      placeholder="https://xyzabcdefghijklmnop.supabase.co"
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white placeholder-neutral-600 outline-none focus:border-emerald-500 font-mono text-xs"
+                    />
+                  </div>
 
-CREATE TABLE IF NOT EXISTS public.body_composition (
-  id TEXT PRIMARY KEY,
-  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
-  recorded_at DATE NOT NULL,
-  weight_kg NUMERIC NOT NULL,
-  muscle_mass_percent NUMERIC NOT NULL,
-  body_fat_percent NUMERIC NOT NULL,
-  visceral_fat_level INT NOT NULL,
-  bmi NUMERIC NOT NULL,
-  bmi_category TEXT,
-  notes TEXT,
-  recorded_by_role TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+                  <div>
+                    <label className="text-[10px] font-mono text-neutral-400 block mb-1">
+                      Clave Anónima Pública (Anon Key)
+                    </label>
+                    <input
+                      type="password"
+                      value={supabaseKeyInput}
+                      onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white placeholder-neutral-600 outline-none focus:border-emerald-500 font-mono text-xs"
+                    />
+                  </div>
+                </div>
 
-CREATE TABLE IF NOT EXISTS public.physical_evaluations (
-  id TEXT PRIMARY KEY,
-  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
-  evaluation_date DATE NOT NULL,
-  coach_id TEXT,
-  coach_name TEXT,
-  cooper_test JSONB,
-  endurance_test JSONB,
-  strength_records JSONB,
-  general_coach_notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+                {/* Status message */}
+                {supabaseTestStatus && (
+                  <div className={`p-2.5 rounded-xl border text-[11px] flex items-center gap-2 ${
+                    supabaseTestStatus.ok
+                      ? 'bg-emerald-950/50 border-emerald-800/80 text-emerald-200'
+                      : 'bg-red-950/50 border-red-800/80 text-red-200'
+                  }`}>
+                    {supabaseTestStatus.ok ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
+                    <span>{supabaseTestStatus.message}</span>
+                  </div>
+                )}
 
-CREATE TABLE IF NOT EXISTS public.privacy_consents (
-  consent_id TEXT PRIMARY KEY,
-  user_id TEXT,
-  user_email TEXT,
-  privacy_notice_version TEXT,
-  privacy_notice_accepted BOOLEAN,
-  sensitive_data_consent BOOLEAN,
-  accepted_at TIMESTAMPTZ,
-  platform TEXT
-);`}
-                  </pre>
+                {syncResult && (
+                  <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/80 text-blue-200 text-[11px] flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>{syncResult}</span>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      const sqlText = `-- SCRIPT SQL OFICIAL KINETIX PARA SUPABASE
-CREATE TABLE IF NOT EXISTS public.users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  role TEXT DEFAULT 'athlete',
-  staff_role TEXT,
-  phone TEXT,
-  gender TEXT,
-  height_cm NUMERIC,
-  membership JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.body_composition (
-  id TEXT PRIMARY KEY,
-  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
-  recorded_at DATE NOT NULL,
-  weight_kg NUMERIC NOT NULL,
-  muscle_mass_percent NUMERIC NOT NULL,
-  body_fat_percent NUMERIC NOT NULL,
-  visceral_fat_level INT NOT NULL,
-  bmi NUMERIC NOT NULL,
-  bmi_category TEXT,
-  notes TEXT,
-  recorded_by_role TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.physical_evaluations (
-  id TEXT PRIMARY KEY,
-  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
-  evaluation_date DATE NOT NULL,
-  coach_id TEXT,
-  coach_name TEXT,
-  cooper_test JSONB,
-  endurance_test JSONB,
-  strength_records JSONB,
-  general_coach_notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.privacy_consents (
-  consent_id TEXT PRIMARY KEY,
-  user_id TEXT,
-  user_email TEXT,
-  privacy_notice_version TEXT,
-  privacy_notice_accepted BOOLEAN,
-  sensitive_data_consent BOOLEAN,
-  accepted_at TIMESTAMPTZ,
-  platform TEXT
-);`;
-                      navigator.clipboard.writeText(sqlText);
-                      setCopiedSql(true);
-                      setTimeout(() => setCopiedSql(false), 2000);
+                    disabled={isTestingSupabase}
+                    onClick={async () => {
+                      setIsTestingSupabase(true);
+                      setSupabaseTestStatus(null);
+                      saveSupabaseCredentials(supabaseUrlInput, supabaseKeyInput);
+                      const res = await testSupabaseConnection();
+                      setSupabaseTestStatus(res);
+                      setIsTestingSupabase(false);
                     }}
-                    className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold flex items-center gap-1 shadow"
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
                   >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedSql ? '¡Copiado!' : 'Copiar SQL'}</span>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isTestingSupabase ? 'Verificando...' : 'Guardar y Probar Conexión'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSyncingAll}
+                    onClick={async () => {
+                      setIsSyncingAll(true);
+                      setSyncResult(null);
+                      saveSupabaseCredentials(supabaseUrlInput, supabaseKeyInput);
+                      const res = await syncAllToSupabase(users, bodyCompRecords, evaluations, []);
+                      if (res.success) {
+                        setSyncResult(`¡Sincronización completada! Subidos: ${res.syncedCount.users} atletas, ${res.syncedCount.bodyComp} pesajes, ${res.syncedCount.evals} tests.`);
+                      } else {
+                        setSyncResult(`No se pudo sincronizar: ${res.error}. Recuerda ejecutar el script SQL oficial abajo en Supabase.`);
+                      }
+                      setIsSyncingAll(false);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingAll ? 'Sincronizando...' : 'Subir Todos los Datos a Supabase'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95"
+                    title="Guarda una copia de seguridad local en archivo .json"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Descargar Respaldo JSON</span>
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
-                💡 <strong>Consejo Pro:</strong> Puedes usar el botón <strong>"Exportar a Excel"</strong> en cualquier momento para descargar una copia local con todos los datos y contraseñas de tus alumnos.
+              {/* Card 4: Script SQL Oficial Kinetix */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Script SQL Oficial Kinetix (Para ejecutar en Supabase)</span>
+                  </h4>
+                  <span className="text-[10px] text-neutral-500">Ejecutar 1 sola vez en SQL Editor</span>
+                </div>
+                <p className="text-[11px] text-neutral-300">
+                  Copia este código y pégalo en tu panel de Supabase (<strong>supabase.com &rarr; tu proyecto &rarr; SQL Editor &rarr; New Query &rarr; Run</strong>). Creará todas las tablas con sus tipos, llaves foráneas y permisos seguros:
+                </p>
+
+                <div className="relative">
+                  <pre className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-[10px] font-mono text-neutral-300 overflow-x-auto max-h-56 leading-relaxed select-all">
+{KINETIX_OFFICIAL_SUPABASE_SQL}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(KINETIX_OFFICIAL_SUPABASE_SQL);
+                      setCopiedSql(true);
+                      setTimeout(() => setCopiedSql(false), 2000);
+                    }}
+                    className="absolute top-2 right-2 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-md active:scale-95 transition-all"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedSql ? '¡Copiado al Portapapeles!' : 'Copiar SQL Completo'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-neutral-800">
+            <div className="pt-3 border-t border-neutral-800 flex items-center justify-between">
+              <span className="text-[11px] text-neutral-500">Kinetix Functional Zone · Base de datos en la nube</span>
               <button
                 type="button"
                 onClick={() => setShowSupabaseModal(false)}
-                className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold"
+                className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs transition-colors"
               >
-                Entendido
+                Cerrar
               </button>
             </div>
           </div>

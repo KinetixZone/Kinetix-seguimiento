@@ -121,7 +121,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
   const [rowWeight, setRowWeight] = useState<number>(75);
   const [rowReps, setRowReps] = useState<number>(12);
-  const [coachNotes, setCoachNotes] = useState<string>('Progreso sostenido en cadencia de resistencia muscular y ganancias de fuerza máxima.');
+  const [coachNotes, setCoachNotes] = useState<string>('');
 
   // Evaluaciones del atleta actual ordenadas cronológicamente
   const userEvals = evaluations.filter(e => e.userId === currentUser.id);

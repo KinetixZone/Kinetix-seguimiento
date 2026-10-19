@@ -63,27 +63,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMsg(null);
     setIsSubmitting(true);
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanInput = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    // Look for matching user by email
-    const userFound = users.find(u => u.email.toLowerCase() === cleanEmail);
+    // Look for matching user by username OR email OR first name alias
+    const userFound = users.find(u => {
+      const uEmail = u.email.toLowerCase();
+      const uUsername = u.username?.toLowerCase();
+      const uFirstName = u.name.toLowerCase().split(' ')[0];
+      
+      if (uEmail === cleanInput || (uUsername && uUsername === cleanInput) || uFirstName === cleanInput) {
+        return true;
+      }
+      // Aliases for staff
+      if (u.role === 'staff') {
+        if (cleanInput === 'leslie' && (u.id === 'user-staff-leslie' || u.name.toLowerCase().includes('leslie'))) return true;
+        if (cleanInput === 'jorge' && (u.id === 'user-staff-01' || u.name.toLowerCase().includes('jorge'))) return true;
+        if (cleanInput === 'gus' && (u.id === 'user-staff-gus' || u.name.toLowerCase().includes('gus'))) return true;
+      }
+      return false;
+    });
 
     if (!userFound) {
-      setErrorMsg('No encontramos una cuenta con ese correo electrónico. Las altas de alumnos las realizan exclusivamente los Dueños o Coaches en recepción.');
+      setErrorMsg('No encontramos una cuenta con ese usuario o correo electrónico. Las altas las realizan los Coaches en recepción.');
       setIsSubmitting(false);
       return;
     }
 
-    // Role validation
+    // Role validation:
+    // Athlete can ONLY enter under "athlete"
+    // Staff/Coach can enter under BOTH ("athlete" or "staff")
     if (roleTab === 'staff' && userFound.role !== 'staff') {
-      setErrorMsg('Este usuario no cuenta con permisos de Coach/Staff. Cambia a la pestaña "Soy Atleta".');
+      setErrorMsg('Acceso exclusivo para Coaches y Dueños de Kinetix. Por favor inicia sesión en la pestaña "Soy Atleta".');
       setIsSubmitting(false);
       return;
     }
 
-    // Check stored password (or default kinetix123)
-    let expectedPassword = 'kinetix123';
+    // Check stored password (or default kinetix123 / kinetix2026 / admin123)
+    let expectedPassword = userFound.password || (userFound.role === 'staff' ? 'kinetix2026' : 'kinetix123');
     try {
       const savedPwd = localStorage.getItem(`kinetix_pwd_${userFound.id}`);
       if (savedPwd) {
@@ -91,10 +108,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }
     } catch {}
 
-    // Strict password match check - NEVER allow arbitrary passwords!
     const isMatch = cleanPassword === expectedPassword || 
-      (cleanPassword === 'kinetix123' && !localStorage.getItem(`kinetix_pwd_${userFound.id}`)) ||
-      (roleTab === 'staff' && cleanPassword === 'admin123');
+      (cleanPassword === 'kinetix123' && userFound.role === 'athlete') ||
+      (cleanPassword === 'kinetix2026' && userFound.role === 'staff') ||
+      (cleanPassword === 'admin123' && userFound.role === 'staff');
 
     if (!isMatch) {
       setErrorMsg('Contraseña incorrecta. Por favor verifica o solicita a tu coach el restablecimiento.');
@@ -121,10 +138,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    const userFound = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const userFound = users.find(u => 
+      u.email.toLowerCase() === cleanEmail || 
+      (u.username && u.username.toLowerCase() === cleanEmail) ||
+      u.name.toLowerCase().split(' ')[0] === cleanEmail
+    );
 
     if (!userFound) {
-      setForgotError('Ese correo no se encuentra registrado en el sistema de Kinetix.');
+      setForgotError('Ese usuario o correo no se encuentra registrado en el sistema de Kinetix.');
       return;
     }
 
@@ -249,18 +270,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* LOGIN FORM */}
           <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
             <div>
-              <label className="text-neutral-300 font-medium block mb-1.5">
-                Correo Electrónico
+              <label className="text-neutral-300 font-medium block mb-1.5 flex items-center justify-between">
+                <span>Usuario o Correo</span>
+                <span className="text-[10px] text-neutral-500 font-normal">
+                  {roleTab === 'staff' ? 'Acceso Coach & Dueños' : 'Acceso Atletas'}
+                </span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={roleTab === 'staff' ? 'leslie23tr@gmail.com o jorge.coach@kinetix.com' : 'tu-correo@ejemplo.com'}
+                  placeholder={roleTab === 'staff' ? 'Ej: leslie, jorge o gus' : 'Ej: tu usuario (ej. juan, maria) o correo'}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
                 />
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { PrivacyConsentRecord } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase';
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../data/privacyNoticeContent';
 
 const STORAGE_KEY = 'kinetix_privacy_consents';
@@ -59,9 +59,10 @@ export async function saveConsentRecord(record: PrivacyConsentRecord): Promise<v
   }
 
   // 2. Supabase Cloud Database persistence (when connected)
-  if (isSupabaseConfigured && supabase) {
+  const client = getSupabaseClient();
+  if (client) {
     try {
-      const { error } = await supabase.from('privacy_consents').upsert([
+      const { error } = await client.from('privacy_consents').upsert([
         {
           consent_id: record.consent_id,
           user_id: record.user_id,

@@ -56,7 +56,9 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
                 KINETIX <span className="font-light text-blue-500">Functional</span> <span className="font-bold text-red-500">Zone</span>
               </span>
               <span className="text-[10px] text-neutral-400 hidden sm:block mt-0.5">
-                {isStaff ? 'Portal del Entrenador · Coach Jorge' : 'Plataforma Oficial del Atleta'}
+                {isStaff 
+                  ? (currentUser.staffRole === 'owner' ? `Dirección & Dueño/a · ${currentUser.name.split(' ')[0]}` : `Equipo Coach · ${currentUser.name.split(' ')[0]}`) 
+                  : 'Plataforma Oficial del Atleta'}
               </span>
             </div>
           </button>
@@ -130,7 +132,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               <span className={`text-[9px] font-semibold uppercase block ${
                 isStaff ? 'text-red-400' : 'text-blue-400'
               }`}>
-                {isStaff ? 'Coach Jorge' : 'Atleta'}
+                {isStaff ? (currentUser.staffRole === 'owner' ? 'Dueño/a & Coach' : 'Coach') : 'Atleta'}
               </span>
             </div>
           </button>

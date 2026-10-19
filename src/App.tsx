@@ -26,6 +26,13 @@ import {
   BrandTheme,
   PrivacyConsentRecord
 } from './types';
+import { 
+  syncUserToSupabase, 
+  syncBodyCompToSupabase, 
+  syncEvaluationToSupabase, 
+  syncNotificationToSupabase, 
+  loadAllFromSupabase 
+} from './lib/supabase';
 
 export default function App() {
   const [brandTheme] = useState<BrandTheme>('blue');
@@ -125,7 +132,13 @@ export default function App() {
     return ALL_INITIAL_PHYSICAL_EVALS;
   });
 
-  const [notifications, setNotifications] = useState<PushNotificationSimulation[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<PushNotificationSimulation[]>(() => {
+    try {
+      const saved = localStorage.getItem('kinetix_notifications_data');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_NOTIFICATIONS;
+  });
 
   // Sync state changes to localStorage
   useEffect(() => {
@@ -145,6 +158,30 @@ export default function App() {
       localStorage.setItem('kinetix_evaluations_data', JSON.stringify(evaluations));
     } catch {}
   }, [evaluations]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kinetix_notifications_data', JSON.stringify(notifications));
+    } catch {}
+  }, [notifications]);
+
+  // Hydrate from Supabase on mount if configured and tables exist
+  useEffect(() => {
+    async function hydrate() {
+      try {
+        const cloud = await loadAllFromSupabase();
+        if (cloud) {
+          if (cloud.users && cloud.users.length > 0) setUsers(cloud.users);
+          if (cloud.bodyComp && cloud.bodyComp.length > 0) setBodyCompRecords(cloud.bodyComp);
+          if (cloud.evaluations && cloud.evaluations.length > 0) setEvaluations(cloud.evaluations);
+          if (cloud.notifications && cloud.notifications.length > 0) setNotifications(cloud.notifications);
+        }
+      } catch (err) {
+        console.warn('Hydration from Supabase skipped:', err);
+      }
+    }
+    hydrate();
+  }, []);
 
   const currentUser = users.find(u => u.id === currentUserId) || users[0];
 
@@ -255,6 +292,22 @@ export default function App() {
       id: `bc-${Date.now()}`,
     };
     setBodyCompRecords(prev => [...prev, newRecord]);
+
+    // Automatic push notification to the athlete
+    const newNotif: PushNotificationSimulation = {
+      id: `notif-bc-${Date.now()}`,
+      title: '⚖️ Nueva Evaluación de Composición Corporal',
+      body: `Se ha registrado tu pesaje oficial (${newRecord.weightKg} kg, ${newRecord.bodyFatPercent}% grasa). Consulta tus avances en la pestaña Antropometría.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'test_results',
+      targetUserId: record.userId,
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+
+    // Sync to Supabase in the background
+    syncBodyCompToSupabase(newRecord);
+    syncNotificationToSupabase(newNotif);
   };
 
   // Delete Body Comp Record
@@ -274,6 +327,28 @@ export default function App() {
       id: `eval-${Date.now()}`,
     };
     setEvaluations(prev => [...prev, newEval]);
+
+    // Send automatic notification to the athlete with their 1RM milestone
+    const topRM = evalRec.strengthRecords?.reduce(
+      (prev, curr) => (curr.estimated1RMKg > (prev?.estimated1RMKg || 0) ? curr : prev), 
+      evalRec.strengthRecords[0]
+    );
+    const rmMention = topRM ? ` Récord 1RM estimado: ${topRM.exerciseName} ${topRM.estimated1RMKg} kg.` : '';
+
+    const newNotif: PushNotificationSimulation = {
+      id: `notif-rm-${Date.now()}`,
+      title: '🏋️ Nueva Valoración Técnica y 1RM Registrada',
+      body: `Tu coach ha actualizado tu expediente físico oficial.${rmMention} Revisa tu pestaña Tests para ver tus marcas y porcentajes de entrenamiento.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'test_results',
+      targetUserId: evalRec.userId,
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+
+    // Sync to Supabase in the background
+    syncEvaluationToSupabase(newEval);
+    syncNotificationToSupabase(newNotif);
   };
 
   // Delete Physical Evaluation
@@ -412,6 +487,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().split('T')[0],
+      username: newUser.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `atleta${Date.now().toString().slice(-4)}`,
     };
 
     // Save initial password in localStorage
@@ -421,6 +497,7 @@ export default function App() {
     } catch {}
 
     setUsers(prev => [createdUser, ...prev]);
+    syncUserToSupabase(createdUser);
 
     if (newUser.switchToCreatedUser) {
       setCurrentUserId(createdUser.id);
@@ -475,6 +552,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().split('T')[0],
+      username: newUser.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `atleta${Date.now().toString().slice(-4)}`,
     };
 
     // Save personal password in localStorage
@@ -484,6 +562,7 @@ export default function App() {
 
     // Register user in the database/state. The athlete will now log in with their password
     setUsers(prev => [createdUser, ...prev]);
+    syncUserToSupabase(createdUser);
   };
 
   const handleClearDemoAthletes = () => {
@@ -518,6 +597,7 @@ export default function App() {
       targetAudience: targetAudience || (targetUserId ? undefined : 'athletes'),
     };
     setNotifications(prev => [newNotif, ...prev]);
+    syncNotificationToSupabase(newNotif);
   };
 
   const handleCreateStaffMember = (staffData: {
@@ -560,8 +640,10 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().slice(0, 10),
+      username: staffData.name.toLowerCase().trim().split(' ')[0].replace(/[^a-z0-9]/g, '') || `staff${Date.now().toString().slice(-4)}`,
     };
     setUsers(prev => [...prev, newStaff]);
+    syncUserToSupabase(newStaff);
   };
 
   const handleDeleteStaffMember = (staffId: string) => {
@@ -698,10 +780,7 @@ export default function App() {
         notifications={visibleNotifications}
         isStaff={currentUser?.role === 'staff'}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
-        onSimulateNewNotification={() => handleSimulateNotification(
-          'Aviso Interno de Staff',
-          'Aviso de coordinación para el equipo de entrenadores Kinetix.'
-        )}
+        onOpenSendNotification={() => setIsSendNotificationOpen(true)}
       />
 
       {/* Send Notification Modal (For Coach/Staff) */}

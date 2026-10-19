@@ -7,7 +7,8 @@ interface InAppNotificationCenterProps {
   onClose: () => void;
   notifications: PushNotificationSimulation[];
   onMarkAllAsRead: () => void;
-  onSimulateNewNotification: () => void;
+  onSimulateNewNotification?: () => void;
+  onOpenSendNotification?: () => void;
   isStaff?: boolean;
 }
 
@@ -17,6 +18,7 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
   notifications,
   onMarkAllAsRead,
   onSimulateNewNotification,
+  onOpenSendNotification,
   isStaff,
 }) => {
   if (!isOpen) return null;
@@ -57,13 +59,16 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
             <span>Marcar todas como leídas</span>
           </button>
 
-          {isStaff && (
+          {isStaff && onOpenSendNotification && (
             <button
-              onClick={onSimulateNewNotification}
-              className="text-[11px] text-red-400 hover:text-red-300 font-semibold"
-              title="Herramienta de Staff para emitir aviso de prueba"
+              onClick={() => {
+                onClose();
+                onOpenSendNotification();
+              }}
+              className="text-[11px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1"
+              title="Emitir un nuevo aviso a atletas o staff"
             >
-              + Simular Aviso Staff
+              <span>+ Nuevo Aviso</span>
             </button>
           )}
         </div>

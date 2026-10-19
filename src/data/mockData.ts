@@ -39,6 +39,8 @@ export const DEMO_ATHLETES: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2023-11-10',
+    username: 'juan',
+    password: 'kinetix123',
   },
   {
     id: 'user-002',
@@ -75,6 +77,8 @@ export const DEMO_ATHLETES: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2024-01-20',
+    username: 'maria',
+    password: 'kinetix123',
   },
   {
     id: 'user-003',
@@ -110,6 +114,8 @@ export const DEMO_ATHLETES: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2023-09-15',
+    username: 'sarah',
+    password: 'kinetix123',
   },
   {
     id: 'user-004',
@@ -145,6 +151,8 @@ export const DEMO_ATHLETES: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2024-01-30',
+    username: 'david',
+    password: 'kinetix123',
   },
 ];
 
@@ -152,7 +160,7 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
   {
     id: 'user-staff-leslie',
     name: 'Leslie (Dueña & Coach)',
-    email: 'leslie23tr@gmail.com',
+    email: 'leslie.coach@kinetix.com',
     role: 'staff',
     staffRole: 'owner', // Control Total: Finanzas, Membresías, Logo, Atletas y Coaches
     phone: '+52 56 2730 3189',
@@ -182,6 +190,8 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2022-01-01',
+    username: 'leslie',
+    password: 'kinetix2026',
   },
   {
     id: 'user-staff-01',
@@ -216,6 +226,8 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2022-01-01',
+    username: 'jorge',
+    password: 'admin123',
   },
   {
     id: 'user-staff-gus',
@@ -250,6 +262,8 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
       paymentReminderSent: false,
     },
     createdAt: '2023-06-01',
+    username: 'gus',
+    password: 'kinetix2026',
   },
 ];
 
@@ -374,7 +388,7 @@ export const INITIAL_PHYSICAL_EVAL_JUAN: PhysicalEvaluationRecord[] = [
       { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 90, reps: 1, estimated1RMKg: 90, weightUnit: 'kg' },
       { exerciseId: 'pullups_or_rows', exerciseName: 'Dominadas / Remo', weightKg: 85, reps: 14, estimated1RMKg: 110, weightUnit: 'kg' },
     ],
-    generalCoachNotes: '+5kg de ganancia neta en peso muerto y sentadilla. Transición excelente a nivel avanzado.',
+    generalCoachNotes: '',
   },
 ];
 
@@ -430,5 +444,6 @@ export const INITIAL_NOTIFICATIONS: PushNotificationSimulation[] = [
     timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16),
     type: 'milestone',
     read: false,
+    targetAudience: 'athletes',
   },
 ];

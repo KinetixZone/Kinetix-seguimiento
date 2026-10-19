@@ -26,6 +26,7 @@ export interface UserProfile {
   membership: MembershipInfo;
   createdAt: string;
   password?: string;
+  username?: string;
 }
 
 export type KinetixPlanName = 
