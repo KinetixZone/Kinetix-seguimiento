@@ -3,6 +3,7 @@ import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord, Membershi
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
+import { UserAvatar } from '../common/UserAvatar';
 import { 
   Users, 
   UserPlus, 
@@ -466,11 +467,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       <div className="p-4 rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-900/90 to-red-950/30 border border-red-900/40 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img
-              src={activeStaff.avatarUrl}
-              alt={activeStaff.name}
-              className="w-10 h-10 rounded-2xl object-cover border-2 border-red-500/50 shadow-md"
-              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+            <UserAvatar
+              name={activeStaff.name}
+              avatarUrl={activeStaff.avatarUrl}
+              role={activeStaff.role}
+              staffRole={activeStaff.staffRole}
+              sizeClassName="w-10 h-10"
+              textClassName="text-sm"
+              className="rounded-2xl border-2 border-red-500/50 shadow-md"
             />
             <div>
               <div className="flex items-center gap-2">
@@ -586,10 +590,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <img
-                      src={staff.avatarUrl}
-                      alt={staff.name}
-                      className="w-9 h-9 rounded-xl object-cover shrink-0 border border-neutral-700"
+                    <UserAvatar
+                      name={staff.name}
+                      avatarUrl={staff.avatarUrl}
+                      role={staff.role}
+                      staffRole={staff.staffRole}
+                      sizeClassName="w-9 h-9"
                     />
                     <div className="overflow-hidden">
                       <strong className="text-xs text-white block truncate">{staff.name}</strong>
@@ -929,11 +935,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={athlete.avatarUrl}
-                    alt={athlete.name}
-                    className="w-9 h-9 rounded-xl object-cover border border-neutral-800"
-                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                  <UserAvatar
+                    name={athlete.name}
+                    avatarUrl={athlete.avatarUrl}
+                    role={athlete.role}
+                    sizeClassName="w-9 h-9"
                   />
                   <div>
                     <h4 className="text-xs font-bold text-white flex items-center gap-1.5">

@@ -1,8 +1,8 @@
 import { BodyCompositionRecord, PhysicalEvaluationRecord, PushNotificationSimulation, UserProfile } from '../types';
 
 export const HERO_IMAGE = '/src/assets/images/kinetix_hero_gym_1790797558081.jpg';
-export const ATHLETE_AVATAR = '/src/assets/images/kinetix_avatar_athlete_1790797568543.jpg';
-export const COACH_AVATAR = '/src/assets/images/kinetix_avatar_coach_1790797579030.jpg';
+export const ATHLETE_AVATAR = '';
+export const COACH_AVATAR = '';
 
 export const DEMO_ATHLETES: UserProfile[] = [
   {
@@ -11,7 +11,7 @@ export const DEMO_ATHLETES: UserProfile[] = [
     email: 'juan.perez@kinetix.com',
     role: 'athlete',
     phone: '+52 (55) 4123-8890',
-    avatarUrl: ATHLETE_AVATAR,
+    avatarUrl: '',
     birthDate: '1996-05-14',
     gender: 'male',
     heightCm: 184,
@@ -48,7 +48,7 @@ export const DEMO_ATHLETES: UserProfile[] = [
     email: 'maria.garcia@kinetix.com',
     role: 'athlete',
     phone: '+52 (55) 6789-1122',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+    avatarUrl: '',
     birthDate: '1998-09-22',
     gender: 'female',
     heightCm: 168,
@@ -86,7 +86,7 @@ export const DEMO_ATHLETES: UserProfile[] = [
     email: 'sarah.connor@kinetix.com',
     role: 'athlete',
     phone: '+52 (55) 8877-2233',
-    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+    avatarUrl: '',
     birthDate: '1993-11-04',
     gender: 'female',
     heightCm: 172,
@@ -123,7 +123,7 @@ export const DEMO_ATHLETES: UserProfile[] = [
     email: 'david.gomez@kinetix.com',
     role: 'athlete',
     phone: '+52 (55) 6677-8899',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+    avatarUrl: '',
     birthDate: '1995-07-18',
     gender: 'male',
     heightCm: 178,
@@ -164,7 +164,7 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
     role: 'staff',
     staffRole: 'owner', // Control Total: Finanzas, Membresías, Logo, Atletas y Coaches
     phone: '+52 56 2730 3189',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
+    avatarUrl: '',
     birthDate: '1992-06-15',
     gender: 'female',
     heightCm: 167,
@@ -200,7 +200,7 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
     role: 'staff',
     staffRole: 'owner', // Control Total: Finanzas, Membresías, Logo, Atletas y Coaches
     phone: '+52 56 2730 3189',
-    avatarUrl: COACH_AVATAR,
+    avatarUrl: '',
     birthDate: '1988-03-12',
     gender: 'male',
     heightCm: 182,
@@ -236,7 +236,7 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
     role: 'staff',
     staffRole: 'coach', // Permisos de Coach: Evaluar 1RM/Cooper, Pesajes, sin acceso a borrar alumnos ni finanzas
     phone: '+52 (55) 3322-1100',
-    avatarUrl: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80',
+    avatarUrl: '',
     birthDate: '1995-11-20',
     gender: 'male',
     heightCm: 179,

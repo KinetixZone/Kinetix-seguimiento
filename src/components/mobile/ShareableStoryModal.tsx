@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
 import { 
   X, 
   Share2, 
@@ -585,11 +586,12 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
             {/* Bottom Athlete Signature Footer */}
             <div className="relative z-10 pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2.5">
-                <img
-                  src={athlete.avatarUrl}
-                  alt={athlete.name}
-                  className="w-8 h-8 rounded-xl object-cover border border-blue-500/50"
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                <UserAvatar
+                  name={athlete.name}
+                  avatarUrl={athlete.avatarUrl}
+                  role={athlete.role}
+                  sizeClassName="w-8 h-8"
+                  className="border border-blue-500/50"
                 />
                 <div className="text-left">
                   <div className="text-xs font-bold text-white truncate max-w-[140px]">{athlete.name}</div>

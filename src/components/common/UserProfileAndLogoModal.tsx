@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { UserProfile } from '../../types';
+import { UserAvatar } from './UserAvatar';
 import { 
   X, 
   Upload, 
@@ -145,10 +146,14 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
 
           <div className="flex items-center gap-3.5">
             <div className="relative group">
-              <img
-                src={currentUser.avatarUrl}
-                alt={currentUser.name}
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-blue-500 shadow-md"
+              <UserAvatar
+                name={currentUser.name}
+                avatarUrl={currentUser.avatarUrl}
+                role={currentUser.role}
+                staffRole={currentUser.staffRole}
+                sizeClassName="w-16 h-16"
+                textClassName="text-xl"
+                className="rounded-2xl border-2 border-blue-500 shadow-md"
               />
               <button
                 onClick={() => avatarInputRef.current?.click()}
@@ -162,15 +167,24 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
             <div className="flex-1 space-y-1">
               <h4 className="text-sm font-bold text-white leading-tight">{currentUser.name}</h4>
               <p className="text-xs text-neutral-400 font-mono">{currentUser.email}</p>
-              <div className="pt-1">
+              <div className="pt-1 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all"
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  <span>Subir Mi Foto</span>
+                  <span>Subir Foto</span>
                 </button>
+                {currentUser.avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateAvatar(currentUser.id, '')}
+                    className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 transition-all"
+                  >
+                    Quitar Foto (Usar Iniciales)
+                  </button>
+                )}
               </div>
             </div>
 

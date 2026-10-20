@@ -89,14 +89,26 @@ export default function App() {
         const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
         const cleanUsers = parsed.filter(u => !demoIds.includes(u.id));
         
-        // Ensure official staff members always have latest profile data
-        const officialStaff = INITIAL_USERS.filter(s => s.role === 'staff');
+        const isStockPhoto = (url?: string) => {
+          if (!url) return true;
+          return url.includes('images.unsplash.com') || 
+                 url.includes('kinetix_avatar') || 
+                 url.includes('placeholder');
+        };
+
+        // Ensure official staff members always have latest profile data without stock photos
+        const officialStaff = INITIAL_USERS
+          .filter(s => s.role === 'staff')
+          .map(s => ({ ...s, avatarUrl: isStockPhoto(s.avatarUrl) ? '' : s.avatarUrl }));
         const existingAthletes = cleanUsers.filter(u => u.role !== 'staff');
 
-        // Merge official Kinetix athletes so all 45 members are loaded
+        // Merge official Kinetix athletes and clean any stock placeholder photos
         const athleteMap = new Map<string, UserProfile>();
-        OFFICIAL_KINETIX_ATHLETES.forEach(a => athleteMap.set(a.id, a));
-        existingAthletes.forEach(a => athleteMap.set(a.id, a));
+        OFFICIAL_KINETIX_ATHLETES.forEach(a => athleteMap.set(a.id, { ...a, avatarUrl: '' }));
+        existingAthletes.forEach(a => {
+          const cleanedAvatar = isStockPhoto(a.avatarUrl) ? '' : a.avatarUrl;
+          athleteMap.set(a.id, { ...a, avatarUrl: cleanedAvatar });
+        });
 
         const finalUsers = [
           ...officialStaff,
@@ -107,7 +119,10 @@ export default function App() {
         return finalUsers;
       }
     } catch {}
-    return INITIAL_USERS;
+    return INITIAL_USERS.map(u => ({
+      ...u,
+      avatarUrl: (!u.avatarUrl || u.avatarUrl.includes('images.unsplash.com') || u.avatarUrl.includes('kinetix_avatar')) ? '' : u.avatarUrl
+    }));
   });
 
   const [bodyCompRecords, setBodyCompRecords] = useState<BodyCompositionRecord[]>(() => {
@@ -494,7 +509,7 @@ export default function App() {
       email: newUser.email,
       role: 'athlete',
       phone: '+52 (55) 0000-0000',
-      avatarUrl: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 999999)}?auto=format&fit=crop&w=400&q=80`,
+      avatarUrl: '',
       birthDate: '1998-01-01',
       gender: newUser.gender,
       heightCm: newUser.heightCm,
@@ -560,7 +575,7 @@ export default function App() {
       email: newUser.email,
       role: 'athlete',
       phone: '+52 (55) 0000-0000',
-      avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80`,
+      avatarUrl: '',
       birthDate: '1998-01-01',
       gender: newUser.gender,
       heightCm: newUser.heightCm,
@@ -674,7 +689,7 @@ export default function App() {
         phone: '55 1234 5678',
         relationship: 'Equipo Kinetix'
       },
-      avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+      avatarUrl: '',
       membership: {
         id: `mem-staff-${Date.now()}`,
         planName: 'Kinetix',

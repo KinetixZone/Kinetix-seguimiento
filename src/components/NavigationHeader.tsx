@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bell, LogOut, ShieldCheck, User, Camera, Upload } from 'lucide-react';
 import { UserProfile } from '../types';
+import { UserAvatar } from './common/UserAvatar';
 
 interface NavigationHeaderProps {
   currentUser: UserProfile;
@@ -112,11 +113,13 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
             title="Ver perfil, subir foto o personalizar logo"
           >
             <div className="relative">
-              <img
-                src={currentUser.avatarUrl}
-                alt={currentUser.name}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border border-neutral-700"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              <UserAvatar
+                name={currentUser.name}
+                avatarUrl={currentUser.avatarUrl}
+                role={currentUser.role}
+                staffRole={currentUser.staffRole}
+                sizeClassName="w-7 h-7 sm:w-8 sm:h-8"
+                textClassName="text-[10px] sm:text-xs"
               />
               {isStaff && (
                 <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-red-600 rounded-full border border-neutral-900 flex items-center justify-center text-[8px] text-white font-bold">

@@ -14,6 +14,7 @@ import { MembershipView } from './MembershipView';
 import { StaffManagementView } from './StaffManagementView';
 import { ProgressReportModal } from './ProgressReportModal';
 import { ShareableStoryModal } from './ShareableStoryModal';
+import { UserAvatar } from '../common/UserAvatar';
 import { 
   Home, 
   Activity, 
@@ -292,11 +293,13 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               <Bell className="w-3.5 h-3.5" />
             </button>
             <div className="flex items-center gap-1.5 bg-neutral-900 px-2 py-1 rounded-xl border border-neutral-800">
-              <img
-                src={currentUser.avatarUrl}
-                alt={currentUser.name}
-                className="w-4 h-4 rounded-full object-cover"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              <UserAvatar
+                name={currentUser.name}
+                avatarUrl={currentUser.avatarUrl}
+                role={currentUser.role}
+                staffRole={currentUser.staffRole}
+                sizeClassName="w-5 h-5"
+                textClassName="text-[9px]"
               />
               <span className="text-[11px] font-medium text-neutral-200 truncate max-w-[80px]">
                 {currentUser.name.split(' ')[0]}

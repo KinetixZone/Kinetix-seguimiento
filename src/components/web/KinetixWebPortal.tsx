@@ -14,6 +14,7 @@ import { MembershipView } from '../mobile/MembershipView';
 import { StaffManagementView } from '../mobile/StaffManagementView';
 import { ProgressReportModal } from '../mobile/ProgressReportModal';
 import { ShareableStoryModal } from '../mobile/ShareableStoryModal';
+import { UserAvatar } from '../common/UserAvatar';
 import { 
   Home, 
   Activity, 
@@ -165,11 +166,14 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
-              <img
-                src={currentUser.avatarUrl}
-                alt={currentUser.name}
-                className="w-11 h-11 rounded-xl object-cover border-2 border-blue-500/40"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              <UserAvatar
+                name={currentUser.name}
+                avatarUrl={currentUser.avatarUrl}
+                role={currentUser.role}
+                staffRole={currentUser.staffRole}
+                sizeClassName="w-11 h-11"
+                textClassName="text-sm"
+                className="border-2 border-blue-500/40"
               />
               <div className="overflow-hidden">
                 <h4 className="text-sm font-bold text-white truncate">{currentUser.name}</h4>
