@@ -11,6 +11,7 @@ import { CURRENT_PRIVACY_NOTICE_VERSION } from './data/privacyNoticeContent';
 import { saveConsentRecord } from './services/privacyConsentService';
 import { 
   INITIAL_USERS, 
+  OFFICIAL_KINETIX_ATHLETES,
   DEMO_ATHLETES,
   ALL_INITIAL_BODY_COMP,
   ALL_INITIAL_PHYSICAL_EVALS,
@@ -79,7 +80,7 @@ export default function App() {
     }
   });
   
-  // Data State with full local persistence (Sanitizes legacy demo profiles automatically)
+  // Data State with full local persistence (Loads official 45 Kinetix athletes & staff)
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('kinetix_users_data');
@@ -90,9 +91,16 @@ export default function App() {
         
         // Ensure official staff members always have latest profile data
         const officialStaff = INITIAL_USERS.filter(s => s.role === 'staff');
+        const existingAthletes = cleanUsers.filter(u => u.role !== 'staff');
+
+        // Merge official Kinetix athletes so all 45 members are loaded
+        const athleteMap = new Map<string, UserProfile>();
+        OFFICIAL_KINETIX_ATHLETES.forEach(a => athleteMap.set(a.id, a));
+        existingAthletes.forEach(a => athleteMap.set(a.id, a));
+
         const finalUsers = [
           ...officialStaff,
-          ...cleanUsers.filter(u => u.role !== 'staff')
+          ...Array.from(athleteMap.values())
         ];
         
         localStorage.setItem('kinetix_users_data', JSON.stringify(finalUsers));

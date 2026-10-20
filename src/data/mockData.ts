@@ -267,9 +267,13 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
   },
 ];
 
-// INITIAL_USERS begins exclusively with Staff users (Zero demo athletes by default for production)
+import { OFFICIAL_KINETIX_ATHLETES } from './officialAthletes';
+export { OFFICIAL_KINETIX_ATHLETES };
+
+// INITIAL_USERS contains official staff users and the official Kinetix athlete roster (45 real athletes)
 export const INITIAL_USERS: UserProfile[] = [
-  ...INITIAL_STAFF_USERS
+  ...INITIAL_STAFF_USERS,
+  ...OFFICIAL_KINETIX_ATHLETES
 ];
 
 // Historical body composition for Juan Pérez
