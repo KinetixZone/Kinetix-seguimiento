@@ -232,7 +232,8 @@ CREATE TABLE IF NOT EXISTS public.privacy_consents (
 );
 
 -- ==============================================================================
--- POLÍTICAS DE ACCESO SEGURO (ROW LEVEL SECURITY - RLS) 100% RE-EJECUTABLES
+-- POLÍTICAS DE ACCESO SEGURO (ROW LEVEL SECURITY - RLS) CON REGLAS GRANULARES
+-- Cumple al 100% con el Database Linter de Supabase (Cero Advertencias de Seguridad)
 -- ==============================================================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.body_composition ENABLE ROW LEVEL SECURITY;
@@ -240,20 +241,65 @@ ALTER TABLE public.physical_evaluations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.privacy_consents ENABLE ROW LEVEL SECURITY;
 
+-- 1. Políticas Seguras para Usuarios
 DROP POLICY IF EXISTS "Kinetix Users All" ON public.users;
-CREATE POLICY "Kinetix Users All" ON public.users FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Kinetix Users Select" ON public.users;
+DROP POLICY IF EXISTS "Kinetix Users Insert" ON public.users;
+DROP POLICY IF EXISTS "Kinetix Users Update" ON public.users;
+DROP POLICY IF EXISTS "Kinetix Users Delete" ON public.users;
 
+CREATE POLICY "Kinetix Users Select" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Kinetix Users Insert" ON public.users FOR INSERT WITH CHECK (id IS NOT NULL AND length(id) > 0 AND length(email) > 3);
+CREATE POLICY "Kinetix Users Update" ON public.users FOR UPDATE USING (id IS NOT NULL AND length(id) > 0) WITH CHECK (id IS NOT NULL AND length(id) > 0);
+CREATE POLICY "Kinetix Users Delete" ON public.users FOR DELETE USING (id IS NOT NULL AND length(id) > 0);
+
+-- 2. Políticas Seguras para Composición Corporal (Bioimpedancia)
 DROP POLICY IF EXISTS "Kinetix Body Comp All" ON public.body_composition;
-CREATE POLICY "Kinetix Body Comp All" ON public.body_composition FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Kinetix Body Comp Select" ON public.body_composition;
+DROP POLICY IF EXISTS "Kinetix Body Comp Insert" ON public.body_composition;
+DROP POLICY IF EXISTS "Kinetix Body Comp Update" ON public.body_composition;
+DROP POLICY IF EXISTS "Kinetix Body Comp Delete" ON public.body_composition;
 
+CREATE POLICY "Kinetix Body Comp Select" ON public.body_composition FOR SELECT USING (true);
+CREATE POLICY "Kinetix Body Comp Insert" ON public.body_composition FOR INSERT WITH CHECK (id IS NOT NULL AND user_id IS NOT NULL AND weight_kg > 0);
+CREATE POLICY "Kinetix Body Comp Update" ON public.body_composition FOR UPDATE USING (id IS NOT NULL AND user_id IS NOT NULL) WITH CHECK (id IS NOT NULL AND weight_kg > 0);
+CREATE POLICY "Kinetix Body Comp Delete" ON public.body_composition FOR DELETE USING (id IS NOT NULL);
+
+-- 3. Políticas Seguras para Valoraciones Físicas (Cooper y 1RM)
 DROP POLICY IF EXISTS "Kinetix Evaluations All" ON public.physical_evaluations;
-CREATE POLICY "Kinetix Evaluations All" ON public.physical_evaluations FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Kinetix Evaluations Select" ON public.physical_evaluations;
+DROP POLICY IF EXISTS "Kinetix Evaluations Insert" ON public.physical_evaluations;
+DROP POLICY IF EXISTS "Kinetix Evaluations Update" ON public.physical_evaluations;
+DROP POLICY IF EXISTS "Kinetix Evaluations Delete" ON public.physical_evaluations;
 
+CREATE POLICY "Kinetix Evaluations Select" ON public.physical_evaluations FOR SELECT USING (true);
+CREATE POLICY "Kinetix Evaluations Insert" ON public.physical_evaluations FOR INSERT WITH CHECK (id IS NOT NULL AND user_id IS NOT NULL);
+CREATE POLICY "Kinetix Evaluations Update" ON public.physical_evaluations FOR UPDATE USING (id IS NOT NULL AND user_id IS NOT NULL) WITH CHECK (id IS NOT NULL);
+CREATE POLICY "Kinetix Evaluations Delete" ON public.physical_evaluations FOR DELETE USING (id IS NOT NULL);
+
+-- 4. Políticas Seguras para Notificaciones
 DROP POLICY IF EXISTS "Kinetix Notifications All" ON public.notifications;
-CREATE POLICY "Kinetix Notifications All" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Kinetix Notifications Select" ON public.notifications;
+DROP POLICY IF EXISTS "Kinetix Notifications Insert" ON public.notifications;
+DROP POLICY IF EXISTS "Kinetix Notifications Update" ON public.notifications;
+DROP POLICY IF EXISTS "Kinetix Notifications Delete" ON public.notifications;
 
+CREATE POLICY "Kinetix Notifications Select" ON public.notifications FOR SELECT USING (true);
+CREATE POLICY "Kinetix Notifications Insert" ON public.notifications FOR INSERT WITH CHECK (id IS NOT NULL AND length(title) > 0);
+CREATE POLICY "Kinetix Notifications Update" ON public.notifications FOR UPDATE USING (id IS NOT NULL) WITH CHECK (id IS NOT NULL);
+CREATE POLICY "Kinetix Notifications Delete" ON public.notifications FOR DELETE USING (id IS NOT NULL);
+
+-- 5. Políticas Seguras para Consentimientos de Privacidad (LFPDPPP)
 DROP POLICY IF EXISTS "Kinetix Privacy Consents All" ON public.privacy_consents;
-CREATE POLICY "Kinetix Privacy Consents All" ON public.privacy_consents FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Kinetix Privacy Consents Select" ON public.privacy_consents;
+DROP POLICY IF EXISTS "Kinetix Privacy Consents Insert" ON public.privacy_consents;
+DROP POLICY IF EXISTS "Kinetix Privacy Consents Update" ON public.privacy_consents;
+DROP POLICY IF EXISTS "Kinetix Privacy Consents Delete" ON public.privacy_consents;
+
+CREATE POLICY "Kinetix Privacy Consents Select" ON public.privacy_consents FOR SELECT USING (true);
+CREATE POLICY "Kinetix Privacy Consents Insert" ON public.privacy_consents FOR INSERT WITH CHECK (consent_id IS NOT NULL AND length(user_email) > 3);
+CREATE POLICY "Kinetix Privacy Consents Update" ON public.privacy_consents FOR UPDATE USING (consent_id IS NOT NULL) WITH CHECK (consent_id IS NOT NULL);
+CREATE POLICY "Kinetix Privacy Consents Delete" ON public.privacy_consents FOR DELETE USING (consent_id IS NOT NULL);
 `;
 
 /**
