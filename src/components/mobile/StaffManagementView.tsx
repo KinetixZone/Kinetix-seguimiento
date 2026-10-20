@@ -95,6 +95,7 @@ interface StaffManagementViewProps {
   onRestoreDemoAthletes?: () => void;
   onBackToDashboard?: () => void;
   onOpenSendNotification?: () => void;
+  onSendBatchNotification?: (title: string, body: string, targetUserIds: string[]) => void;
   currentUser?: UserProfile;
   onSwitchUser?: (user: UserProfile) => void;
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
@@ -118,6 +119,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onRestoreDemoAthletes,
   onBackToDashboard,
   onOpenSendNotification,
+  onSendBatchNotification,
   currentUser,
   onSwitchUser,
   consentHistory,
@@ -195,8 +197,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Payment color filter state: 'all' | 5 | 15 | 20 | 30
-  const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30>('all');
+  // Payment color filter state: 'all' | 5 | 15 | 20 | 30 | 'due_soon'
+  const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30 | 'due_soon'>('all');
+  const [batchSentSuccess, setBatchSentSuccess] = useState<boolean>(false);
+  const [isBatchSending, setIsBatchSending] = useState<boolean>(false);
 
   const activeStaff = currentUser && currentUser.role === 'staff' 
     ? currentUser 
@@ -206,13 +210,64 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const isCoachGus = activeStaff.staffRole === 'coach' || activeStaff.id === 'user-staff-gus';
   const staffMembers = users.filter(u => u.role === 'staff');
 
+  // Helper to determine if an athlete's membership expires in the next 3 days or is overdue
+  const isExpiringInNext3Days = (athlete: UserProfile): boolean => {
+    if (athlete.role !== 'athlete') return false;
+
+    // Check if membership is expired or marked expiring soon
+    if (athlete.membership?.status === 'expired' || athlete.membership?.status === 'expiring_soon') {
+      return true;
+    }
+
+    const today = new Date();
+    const currentDay = today.getDate();
+    const billingDay = athlete.membership?.billingDayOfMonth || 15;
+    
+    // Check explicit daysUntilExpiry if set
+    if (typeof athlete.membership?.daysUntilExpiry === 'number') {
+      if (athlete.membership.daysUntilExpiry <= 3) return true;
+    }
+    
+    // Difference between billingDay and currentDay (accounting for month rollover)
+    let diff = billingDay - currentDay;
+    if (diff < 0) {
+      const daysInCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      diff = (daysInCurrentMonth - currentDay) + billingDay;
+    }
+    
+    return diff >= 0 && diff <= 3;
+  };
+
+  const dueSoonAthletes = users.filter(u => u.role === 'athlete' && isExpiringInNext3Days(u));
+
   const filteredAthletes = users.filter(u => {
     if (u.role !== 'athlete') return false;
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
+    if (colorFilter === 'due_soon') return isExpiringInNext3Days(u);
     if (colorFilter === 'all') return true;
     return (u.membership?.billingDayOfMonth || 15) === colorFilter;
   });
+
+  const handleSendBatchReminderToDueSoon = () => {
+    if (dueSoonAthletes.length === 0) return;
+    setIsBatchSending(true);
+    
+    if (onSendBatchNotification) {
+      dueSoonAthletes.forEach(athlete => {
+        const billingDay = athlete.membership?.billingDayOfMonth || 15;
+        const title = 'Recordatorio de Renovación Kinetix';
+        const body = `Hola ${athlete.name.split(' ')[0]}, tu fecha de corte mensual (Día ${billingDay}) vence en los próximos días. Acércate a recepción o contacta a tu coach para renovar tu membresía y continuar sin interrupciones.`;
+        onSendBatchNotification(title, body, [athlete.id]);
+      });
+    }
+
+    setIsBatchSending(false);
+    setBatchSentSuccess(true);
+    setTimeout(() => setBatchSentSuccess(false), 4000);
+  };
 
   // Calculate next date helper based on day of month
   const calculateNextExpiryFromDay = (day: number): string => {
@@ -621,6 +676,72 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       </div>
 
+      {/* BOTÓN RÁPIDO Y PANEL DE CONTROL: VENCEN EN LOS PRÓXIMOS 3 DÍAS */}
+      <div className={`p-4 rounded-3xl border transition-all ${
+        colorFilter === 'due_soon'
+          ? 'bg-gradient-to-r from-amber-950 via-neutral-900 to-amber-950 border-amber-500 shadow-xl shadow-amber-500/20 ring-1 ring-amber-500/30'
+          : 'bg-gradient-to-r from-amber-950/40 via-neutral-900 to-neutral-900 border-amber-800/50 hover:border-amber-600/70'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 ${
+              colorFilter === 'due_soon' 
+                ? 'bg-amber-500 text-black shadow-md shadow-amber-500/40' 
+                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+            }`}>
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-sm font-brand">
+                  Vencimientos Próximos (Próximos 3 Días)
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-500 text-black shadow-sm">
+                  {dueSoonAthletes.length} {dueSoonAthletes.length === 1 ? 'atleta' : 'atletas'}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400">
+                Alumnos con fecha de corte entre hoy y el fin de semana. Filtra y notifícalos en lote sin revisar uno por uno.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setColorFilter(colorFilter === 'due_soon' ? 'all' : 'due_soon')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 ${
+                colorFilter === 'due_soon'
+                  ? 'bg-neutral-800 text-white border border-neutral-700 hover:bg-neutral-700'
+                  : 'bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/25'
+              }`}
+            >
+              <span>{colorFilter === 'due_soon' ? '✕ Ver Todos los Alumnos' : '⚡ Filtrar Vencimientos (3 Días)'}</span>
+            </button>
+
+            {dueSoonAthletes.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSendBatchReminderToDueSoon}
+                disabled={isBatchSending}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+                title="Emitir recordatorio de corte a las bandejas de entrada de todos los atletas que vencen pronto"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>{isBatchSending ? 'Enviando avisos...' : batchSentSuccess ? '¡Avisos Enviados!' : `📢 Avisar en Lote (${dueSoonAthletes.length})`}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {batchSentSuccess && (
+          <div className="mt-3 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-md">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>¡Notificación masiva enviada con éxito a las bandejas de entrada de los atletas!</span>
+          </div>
+        )}
+      </div>
+
       {/* SYSTEM DE CÓDIGOS DE COLOR DE PAGO (Información & Filtro Rápido) */}
       <div className="p-3.5 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-2.5">
         <div className="flex items-center justify-between text-xs">
@@ -632,7 +753,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
 
         {/* Color buttons filter */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
           <button
             onClick={() => setColorFilter('all')}
             className={`py-2 px-2.5 rounded-xl text-center border font-semibold transition-all flex items-center justify-center gap-1.5 ${
@@ -644,6 +765,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             <span>Todos</span>
             <span className="text-[10px] bg-neutral-900 px-1.5 py-0.2 rounded-full border border-neutral-700">
               {users.filter(u => u.role === 'athlete').length}
+            </span>
+          </button>
+
+          {/* Botón Rápido: Vencen en 3 Días */}
+          <button
+            onClick={() => setColorFilter(colorFilter === 'due_soon' ? 'all' : 'due_soon')}
+            className={`py-2 px-2 rounded-xl text-center border font-bold transition-all flex items-center justify-between gap-1 text-[11px] ${
+              colorFilter === 'due_soon'
+                ? 'bg-amber-500 text-black border-amber-400 shadow-md shadow-amber-500/30'
+                : 'bg-amber-950/30 text-amber-300 border-amber-900/60 hover:bg-amber-950/60'
+            }`}
+            title="Filtrar alumnos cuyo corte vence en los próximos 3 días"
+          >
+            <div className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>⚡ En 3 Días</span>
+            </div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+              colorFilter === 'due_soon' ? 'bg-black text-amber-300' : 'bg-amber-900/80 text-amber-200'
+            }`}>
+              {dueSoonAthletes.length}
             </span>
           </button>
 
@@ -661,10 +803,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               >
                 <div className="flex items-center gap-1.5">
                   <span>{c.emoji}</span>
-                  <span className="font-semibold">{c.colorName} · Corte Día {c.day}</span>
+                  <span className="font-semibold">{c.colorName} · Día {c.day}</span>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/50 font-mono font-bold">
-                  {count} {count === 1 ? 'atleta' : 'atletas'}
+                  {count}
                 </span>
               </button>
             );
@@ -672,7 +814,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
         <div className="text-[10px] text-neutral-400 pt-1 flex items-center gap-1.5 border-t border-neutral-800/60">
           <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-          <span>El número de cada código representa el <strong>día de corte mensual</strong> de pago (Día 5, 15, 20 o 30), mientras que la etiqueta gris indica cuántos alumnos están registrados con esa fecha.</span>
+          <span>El número de cada código representa el <strong>día de corte mensual</strong> de pago (Día 5, 15, 20 o 30). Usa el botón amarillo ⚡ para ver quién vence esta semana.</span>
         </div>
       </div>
 
@@ -687,6 +829,43 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition-colors"
         />
       </div>
+
+      {/* BANNER DE ACCIÓN MASIVA: VENCEN EN 3 DÍAS */}
+      {colorFilter === 'due_soon' && (
+        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/80 via-neutral-900 to-red-950/50 border border-amber-500/50 space-y-2.5 shadow-lg animate-fade-in">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <strong className="text-white text-xs block">
+                  {filteredAthletes.length} {filteredAthletes.length === 1 ? 'Atleta con corte' : 'Atletas con corte'} en los próximos 3 días
+                </strong>
+                <p className="text-[11px] text-amber-300/80">
+                  Emitir recordatorio masivo de renovación a sus bandejas de entrada
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSendBatchReminderToDueSoon}
+              disabled={filteredAthletes.length === 0 || isBatchSending}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>{isBatchSending ? 'Enviando...' : batchSentSuccess ? '¡Avisos Enviados!' : '📢 Enviar Aviso en Lote a Todos'}</span>
+            </button>
+          </div>
+          {batchSentSuccess && (
+            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[11px] flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Se envió la notificación de renovación oficial a los atletas filtrados.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Staff Management Notice: Control Manual vs Automático */}
       <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/80 text-[11px] text-neutral-400 flex items-start gap-2.5">
@@ -809,6 +988,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <strong className="text-white font-mono">{athlete.membership.expiryDate}</strong>
                     <span>·</span>
                     <span className={`${pg.badgeText} font-semibold`}>Corte Día {athlete.membership.billingDayOfMonth || 15} de cada mes</span>
+                    {isExpiringInNext3Days(athlete) && (
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 animate-pulse">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Vence en ≤ 3 días</span>
+                      </span>
+                    )}
                   </div>
                   {/* LFPDPPP Consent Status Indicator */}
                   <div className="text-[10px] flex items-center gap-1.5 pt-0.5">
@@ -846,6 +1031,26 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       </>
                     )}
                   </button>
+
+                  {isExpiringInNext3Days(athlete) && onSendBatchNotification && (
+                    <button
+                      onClick={() => {
+                        const billingDay = athlete.membership?.billingDayOfMonth || 15;
+                        onSendBatchNotification(
+                          'Recordatorio de Renovación Kinetix',
+                          `Hola ${athlete.name.split(' ')[0]}, tu fecha de corte mensual (Día ${billingDay}) vence en los próximos días. Acércate a recepción o contacta a tu coach para renovar tu membresía.`,
+                          [athlete.id]
+                        );
+                        setBatchSentSuccess(true);
+                        setTimeout(() => setBatchSentSuccess(false), 3500);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                      title="Enviar aviso de corte directo a la bandeja de este alumno"
+                    >
+                      <Bell className="w-3 h-3 text-amber-400" />
+                      <span>Avisar Corte</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {

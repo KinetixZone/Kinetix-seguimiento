@@ -628,6 +628,21 @@ export default function App() {
     syncNotificationToSupabase(newNotif);
   };
 
+  const handleSendBatchNotification = (title: string, body: string, targetUserIds: string[]) => {
+    const newNotifs: PushNotificationSimulation[] = targetUserIds.map((uid, index) => ({
+      id: `notif-batch-${Date.now()}-${index}`,
+      title,
+      body,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'payment_reminder',
+      targetUserId: uid,
+      targetAudience: 'athletes',
+    }));
+    setNotifications(prev => [...newNotifs, ...prev]);
+    newNotifs.forEach(n => syncNotificationToSupabase(n));
+  };
+
   const handleCreateStaffMember = (staffData: {
     name: string;
     email: string;
@@ -792,6 +807,7 @@ export default function App() {
           onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
           consentHistory={consentHistory}
           gymLogoUrl={gymLogoUrl}
+          onSendBatchNotification={handleSendBatchNotification}
         />
       </main>
 

@@ -364,6 +364,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onBackToDashboard={() => setCurrentTab('dashboard')}
               loggedStaffUser={users.find(u => u.role === 'staff') || null}
               isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
+              allAthletes={users.filter(u => u.role === 'athlete')}
+              onSelectNextAthlete={(next) => setSelectedUserId(next.id)}
             />
           )}
 
@@ -377,6 +379,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onBackToDashboard={() => setCurrentTab('dashboard')}
               loggedStaffUser={users.find(u => u.role === 'staff') || null}
               isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
+              allAthletes={users.filter(u => u.role === 'athlete')}
+              onSelectNextAthlete={(next) => setSelectedUserId(next.id)}
             />
           )}
 

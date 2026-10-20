@@ -85,6 +85,7 @@ interface KinetixResponsiveAppProps {
   onOpenPrivacyPolicy?: () => void;
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
   gymLogoUrl?: string | null;
+  onSendBatchNotification?: (title: string, body: string, targetUserIds: string[]) => void;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -114,6 +115,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   onOpenPrivacyPolicy,
   consentHistory,
   gymLogoUrl,
+  onSendBatchNotification,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
@@ -457,6 +459,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             loggedStaffUser={currentUser}
             isStaffUser={isStaff}
             initialOpenAddModal={autoOpenBodyModal}
+            allAthletes={users.filter(u => u.role === 'athlete')}
+            onSelectNextAthlete={(next) => setInspectedAthlete(next)}
           />
         )}
 
@@ -471,6 +475,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             loggedStaffUser={currentUser}
             isStaffUser={isStaff}
             initialOpenAddModal={autoOpenEvalModal}
+            allAthletes={users.filter(u => u.role === 'athlete')}
+            onSelectNextAthlete={(next) => setInspectedAthlete(next)}
           />
         )}
 
@@ -497,6 +503,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onOpenBodyCompForUser={handleOpenBodyCompForUser}
             onOpenReportForUser={handleOpenReportForUser}
             onOpenSendNotification={() => setShowSendNotificationModal(true)}
+            onSendBatchNotification={onSendBatchNotification}
             onUpdateUserMembership={onUpdateUserMembership}
             onDeleteAthlete={onDeleteAthlete}
             onUpdateAthleteProfile={onUpdateAthleteProfile}

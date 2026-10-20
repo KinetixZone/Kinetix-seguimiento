@@ -36,6 +36,8 @@ interface BodyCompositionViewProps {
   loggedStaffUser?: UserProfile | null;
   isStaffUser?: boolean;
   initialOpenAddModal?: boolean;
+  allAthletes?: UserProfile[];
+  onSelectNextAthlete?: (next: UserProfile) => void;
 }
 
 export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
@@ -48,10 +50,13 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   loggedStaffUser,
   isStaffUser,
   initialOpenAddModal,
+  allAthletes,
+  onSelectNextAthlete,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenphoGuide, setShowRenphoGuide] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<BodyCompositionRecord | null>(null);
+  const [nextAthleteToast, setNextAthleteToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
 
   useEffect(() => {
@@ -75,6 +80,33 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   });
   const [recordedDate, setRecordedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState<string>('');
+
+  // Calculate athletes in rotation for sequential weigh-in
+  const athleteList = allAthletes && allAthletes.length > 0 
+    ? allAthletes.filter(a => a.role === 'athlete') 
+    : [];
+  const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
+  const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
+    ? athleteList[(currentAthleteIndex + 1) % athleteList.length]
+    : (athleteList[0] || null);
+
+  // When currentUser changes (e.g. coach advances to next athlete)
+  useEffect(() => {
+    const userRecords = records.filter(r => r.userId === currentUser.id);
+    if (userRecords.length > 0) {
+      const last = userRecords[userRecords.length - 1];
+      setWeight(last.weightKg);
+      setMuscle(last.muscleMassPercent);
+      setBodyFat(last.bodyFatPercent);
+      setVisceralFat(last.visceralFatLevel || 1);
+    } else {
+      setWeight('');
+      setMuscle('');
+      setBodyFat('');
+      setVisceralFat(3);
+    }
+    setNotes('');
+  }, [currentUser.id]);
 
   // Live calculated BMI
   const liveBmi = weight ? calculateBMI(Number(weight), currentUser.heightCm) : 0;
@@ -105,6 +137,44 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       recordedByRole: (currentUser.role === 'staff' || isStaffUser || loggedStaffUser?.role === 'staff') ? 'staff' : 'athlete',
     });
     setShowAddModal(false);
+  };
+
+  const handleSaveAndNext = () => {
+    if (!weight) {
+      alert('Por favor ingresa el peso corporal antes de continuar con el siguiente alumno.');
+      return;
+    }
+
+    onAddRecord({
+      userId: currentUser.id,
+      recordedAt: recordedDate,
+      weightKg: Number(weight),
+      muscleMassPercent: Number(muscle) || 0,
+      bodyFatPercent: Number(bodyFat) || 0,
+      visceralFatLevel: Number(visceralFat) || 1,
+      bmi: liveBmi,
+      bmiCategory: liveBmiCategory,
+      notes: notes,
+      recordedByRole: 'staff',
+    });
+
+    if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
+      const savedName = currentUser.name;
+      const targetNext = nextAthlete;
+
+      // Reset fields for the next athlete
+      setWeight('');
+      setMuscle('');
+      setBodyFat('');
+      setVisceralFat(3);
+      setNotes('');
+
+      onSelectNextAthlete(targetNext);
+      setNextAthleteToast(`¡Guardado para ${savedName.split(' ')[0]}! Ahora pesando a: ${targetNext.name}`);
+      setTimeout(() => setNextAthleteToast(null), 4500);
+    } else {
+      setShowAddModal(false);
+    }
   };
 
   // Deltas between initial and latest
@@ -640,8 +710,8 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
           <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div>
-                <h3 className="text-base font-bold text-white font-brand">Nueva Medición Antropométrica</h3>
-                <p className="text-xs text-neutral-400">Ingreso mensual de composición corporal</p>
+                <h3 className="text-base font-bold text-white font-brand">Registro de Antropometría & Bioimpedancia</h3>
+                <p className="text-xs text-neutral-400">Captura de peso y métricas de báscula Renpho</p>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
@@ -650,6 +720,39 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Active Athlete Banner & Progress in Rotation */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-blue-600/30 text-blue-400 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                  {currentUser.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
+                    Pesando a Alumno {athleteList.length > 0 && `(${currentAthleteIndex + 1} de ${athleteList.length})`}
+                  </span>
+                  <strong className="text-white text-sm block truncate">
+                    {currentUser.name}
+                  </strong>
+                </div>
+              </div>
+              {nextAthlete && athleteList.length > 1 && (
+                <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
+                  <span className="text-[9px] text-neutral-400 block font-mono">Siguiente Alumno:</span>
+                  <span className="text-xs font-bold text-blue-400 block">
+                    {nextAthlete.name.split(' ')[0]} ⏭️
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* In-Modal Feedback Toast when Advancing to Next Student */}
+            {nextAthleteToast && (
+              <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-lg">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold">{nextAthleteToast}</span>
+              </div>
+            )}
 
             {/* Helper Card for RENPHO Scale Workflow */}
             <div className="p-3 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-start gap-2.5 text-xs text-blue-200">
@@ -757,20 +860,38 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 />
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-semibold transition-colors shadow-md shadow-emerald-500/20"
-                >
-                  Guardar Medición
-                </button>
+              <div className="pt-3 space-y-2">
+                {/* Botón Principal Solicitado: Guardar y Siguiente Alumno */}
+                {athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAndNext}
+                    className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
+                  >
+                    <span>Guardar y Siguiente Alumno</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                    <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full font-medium text-blue-100">
+                      👉 Pesar a: {nextAthlete.name.split(' ')[0]}
+                    </span>
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors text-xs"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-semibold transition-colors shadow-md shadow-emerald-500/20 text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Guardar Solo Este</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
