@@ -435,8 +435,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
         </div>
       </div>
 
-      {/* MAIN VIEW CONTENT CONTAINER */}
-      <main className="flex-1 max-w-6xl w-full mx-auto pb-20 md:pb-8 pt-2">
+      {/* MAIN VIEW CONTENT CONTAINER (Con espacio inferior amplio para la barra móvil y safe-area) */}
+      <main className="flex-1 max-w-6xl w-full mx-auto pb-28 sm:pb-24 md:pb-8 pt-2">
         {currentTab === 'dashboard' && (
           <AthleteDashboard
             currentUser={effectiveUser}
@@ -666,75 +666,101 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
         </div>
       </footer>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR (Visible on mobile screens < md) */}
+      {/* MOBILE BOTTOM NAVIGATION BAR (Optimizada ergonómica: 5 pestañas para Staff, 4 para Atletas con Safe-Area) */}
       <div 
-        className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-neutral-950/95 backdrop-blur-lg border-t border-neutral-800/80 grid items-center px-1 z-40 transition-all"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-xl border-t border-neutral-800/90 shadow-[0_-4px_24px_rgba(0,0,0,0.6)] transition-all"
         style={{
-          gridTemplateColumns: isStaff ? 'repeat(6, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))'
+          paddingBottom: 'max(0.6rem, env(safe-area-inset-bottom))',
+          paddingTop: '0.4rem',
         }}
       >
-        <button
-          onClick={() => handleNavigateTab('dashboard')}
-          className={`flex flex-col items-center justify-center h-full transition-colors ${
-            currentTab === 'dashboard' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
+        <div 
+          className="grid items-center px-1.5"
+          style={{
+            gridTemplateColumns: isStaff ? 'repeat(5, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))'
+          }}
         >
-          <Home className="w-4 h-4" />
-          <span className="text-[9px] font-medium tracking-tight mt-1">Inicio</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigateTab('body')}
-          className={`flex flex-col items-center justify-center h-full transition-colors ${
-            currentTab === 'body' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-        >
-          <Scale className="w-4 h-4" />
-          <span className="text-[9px] font-medium tracking-tight mt-1">Cuerpo</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigateTab('tests')}
-          className={`flex flex-col items-center justify-center h-full transition-colors ${
-            currentTab === 'tests' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-        >
-          <Dumbbell className="w-4 h-4" />
-          <span className="text-[9px] font-medium tracking-tight mt-1">Pruebas</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigateTab('membership')}
-          className={`flex flex-col items-center justify-center h-full transition-colors ${
-            currentTab === 'membership' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-        >
-          <CreditCard className="w-4 h-4" />
-          <span className="text-[9px] font-medium tracking-tight mt-1">{isStaff ? 'Cuenta' : 'Pagos'}</span>
-        </button>
-
-        {/* Mobile Bottom Privacy Tab */}
-        <button
-          onClick={() => handleNavigateTab('privacy')}
-          className={`flex flex-col items-center justify-center h-full transition-colors ${
-            currentTab === 'privacy' ? 'text-blue-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span className="text-[9px] font-medium tracking-tight mt-1">Privacidad</span>
-        </button>
-
-        {isStaff && (
+          {/* Tab 1: Inicio / Resumen */}
           <button
-            onClick={() => handleNavigateTab('staff')}
-            className={`flex flex-col items-center justify-center h-full transition-colors ${
-              currentTab === 'staff' ? 'text-red-500 font-bold' : 'text-neutral-500 hover:text-neutral-300'
+            type="button"
+            onClick={() => handleNavigateTab('dashboard')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all active:scale-90 ${
+              currentTab === 'dashboard' 
+                ? 'text-blue-400 font-bold bg-blue-950/40 shadow-inner' 
+                : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <ShieldCheck className="w-4 h-4 text-red-500" />
-            <span className="text-[9px] font-bold tracking-tight mt-1 text-red-400">Staff</span>
+            <Home className="w-5 h-5 stroke-[2.2]" />
+            <span className="text-[10px] font-semibold tracking-tight mt-0.5">Inicio</span>
           </button>
-        )}
+
+          {/* Tab 2 (Staff): Panel de Dueños & Coaches con badge de vencimientos */}
+          {isStaff && (
+            <button
+              type="button"
+              onClick={() => handleNavigateTab('staff')}
+              className={`relative flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all active:scale-90 ${
+                currentTab === 'staff' 
+                  ? 'text-red-400 font-bold bg-red-950/50 shadow-inner border border-red-900/40' 
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <div className="relative">
+                <ShieldCheck className="w-5 h-5 stroke-[2.2] text-red-500" />
+                {users.some(u => u.role === 'athlete' && (u.membership.status === 'expired' || u.membership.daysUntilExpiry <= 3)) && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse border border-neutral-950" />
+                )}
+              </div>
+              <span className="text-[10px] font-bold tracking-tight mt-0.5 text-red-300">Staff</span>
+            </button>
+          )}
+
+          {/* Tab 3: Antropometría / Pesajes */}
+          <button
+            type="button"
+            onClick={() => handleNavigateTab('body')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all active:scale-90 ${
+              currentTab === 'body' 
+                ? 'text-blue-400 font-bold bg-blue-950/40 shadow-inner' 
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Scale className="w-5 h-5 stroke-[2.2]" />
+            <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+              {isStaff ? 'Pesaje' : 'Cuerpo'}
+            </span>
+          </button>
+
+          {/* Tab 4: Pruebas Físicas / Tests 1RM & Cooper */}
+          <button
+            type="button"
+            onClick={() => handleNavigateTab('tests')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all active:scale-90 ${
+              currentTab === 'tests' 
+                ? 'text-blue-400 font-bold bg-blue-950/40 shadow-inner' 
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Dumbbell className="w-5 h-5 stroke-[2.2]" />
+            <span className="text-[10px] font-semibold tracking-tight mt-0.5">Pruebas</span>
+          </button>
+
+          {/* Tab 5: Membresía / Pagos */}
+          <button
+            type="button"
+            onClick={() => handleNavigateTab('membership')}
+            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all active:scale-90 ${
+              currentTab === 'membership' 
+                ? 'text-blue-400 font-bold bg-blue-950/40 shadow-inner' 
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <CreditCard className="w-5 h-5 stroke-[2.2]" />
+            <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+              {isStaff ? 'Cuenta' : 'Plan'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* MODALS */}

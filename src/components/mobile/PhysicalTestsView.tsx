@@ -1320,65 +1320,68 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL: REGISTRAR NUEVA EVALUACIÓN (STAFF) */}
-      {/* ========================================================================= */}
+      {/* MODAL: REGISTRAR NUEVA EVALUACIÓN (STAFF - Mobile Bottom-Sheet) */}
       {showAddEvalModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <div>
-                <span className="text-[10px] font-mono text-blue-400 uppercase font-bold">
-                  {canEvaluate ? 'Staff Kinetix · Registro Oficial de Evaluación' : 'Registro de Marca Personal · Kinetix'}
-                </span>
-                <h3 className="text-base font-bold text-white font-brand">
-                  {canEvaluate ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
-                </h3>
+          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden shadow-2xl">
+            {/* Pinned Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-neutral-800 shrink-0 space-y-2.5 bg-neutral-900/95">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-mono text-blue-400 uppercase font-bold">
+                    {canEvaluate ? 'Staff Kinetix · Registro Oficial de Evaluación' : 'Registro de Marca Personal · Kinetix'}
+                  </span>
+                  <h3 className="text-base font-bold text-white font-brand">
+                    {canEvaluate ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowAddEvalModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowAddEvalModal(false)}
-                className="text-neutral-400 hover:text-white p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Active Athlete Banner & Progress in Rotation */}
+              {canEvaluate && (
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                      {currentUser.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
+                        Evaluando a Alumno {athleteList.length > 0 && `(${currentAthleteIndex + 1} de ${athleteList.length})`}
+                      </span>
+                      <strong className="text-white text-sm block truncate">
+                        {currentUser.name}
+                      </strong>
+                    </div>
+                  </div>
+                  {nextAthlete && athleteList.length > 1 && (
+                    <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
+                      <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
+                      <span className="text-xs font-bold text-red-400 block">
+                        {nextAthlete.name.split(' ')[0]} ⏭️
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* In-Modal Feedback Toast when Advancing to Next Student */}
+              {nextAthleteToast && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-lg">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-semibold">{nextAthleteToast}</span>
+                </div>
+              )}
             </div>
 
-            {/* Active Athlete Banner & Progress in Rotation */}
-            {canEvaluate && (
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
-                    {currentUser.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
-                      Evaluando a Alumno {athleteList.length > 0 && `(${currentAthleteIndex + 1} de ${athleteList.length})`}
-                    </span>
-                    <strong className="text-white text-sm block truncate">
-                      {currentUser.name}
-                    </strong>
-                  </div>
-                </div>
-                {nextAthlete && athleteList.length > 1 && (
-                  <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
-                    <span className="text-[9px] text-neutral-400 block font-mono">Siguiente Alumno:</span>
-                    <span className="text-xs font-bold text-red-400 block">
-                      {nextAthlete.name.split(' ')[0]} ⏭️
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* In-Modal Feedback Toast when Advancing to Next Student */}
-            {nextAthleteToast && (
-              <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-lg">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-semibold">{nextAthleteToast}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmitEvaluation} className="space-y-4 text-xs">
+            {/* Scrollable Form Content */}
+            <form onSubmit={handleSubmitEvaluation} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               {/* Fecha */}
               <div>
                 <label className="text-neutral-300 font-medium block mb-1">Fecha de la Prueba</label>
@@ -1666,44 +1669,48 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   placeholder="Feedback de ritmo, potencia y técnica..."
                 />
               </div>
+            </div>
 
-              {/* Action Buttons */}
-              <div className="pt-3 space-y-2">
-                {/* Botón Principal Solicitado: Guardar y Siguiente Alumno */}
-                {canEvaluate && athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
-                  <button
-                    type="button"
-                    onClick={handleSaveAndNextEvaluation}
-                    className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-95 transition-all"
-                  >
-                    <span>Guardar y Evaluar Siguiente Alumno</span>
-                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-                    <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full font-medium text-red-100">
-                      👉 Evaluar a: {nextAthlete.name.split(' ')[0]}
-                    </span>
-                  </button>
-                )}
+            {/* Pinned Modal Action Footer (Accesible en todo momento con el pulgar) */}
+            <div 
+              className="p-3 sm:p-4 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-800 shrink-0 space-y-2"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
+              {/* Botón Principal: Guardar y Evaluar Siguiente Alumno */}
+              {canEvaluate && athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
+                <button
+                  type="button"
+                  onClick={handleSaveAndNextEvaluation}
+                  className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-95 transition-all"
+                >
+                  <span>Guardar y Evaluar Siguiente Alumno</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full font-medium text-red-100">
+                    👉 Evaluar a: {nextAthlete.name.split(' ')[0]}
+                  </span>
+                </button>
+              )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddEvalModal(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors text-xs"
-                  >
-                    Cancelar / Volver
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors shadow-md shadow-blue-500/20 text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Guardar Este Solo</span>
-                  </button>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEvalModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors text-xs"
+                >
+                  Cancelar / Volver
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors shadow-md shadow-blue-500/20 text-xs flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Guardar Este Solo</span>
+                </button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
+      </div>
       )}
 
       {/* ========================================================================= */}
