@@ -53,28 +53,23 @@ export const PrivateProgressPhotosView: React.FC<PrivateProgressPhotosViewProps>
   const [uploadedImageData, setUploadedImageData] = useState<string>('');
 
   // Storage key specific to this athlete: eliminates any test photos by default
-  const storageKey = `kinetix_private_photos_${athlete.id}`;
+  const [photosData, setPhotosData] = useState<ProgressPhotoItem[]>([]);
 
-  const [photosData, setPhotosData] = useState<ProgressPhotoItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {
-      // ignore
-    }
-    return []; // Clean empty state without private test photos
-  });
-
-  // Keep localStorage updated
+  // Strictly sync photos when athlete ID changes
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(photosData));
+      const saved = localStorage.getItem(`kinetix_private_photos_${athlete.id}`);
+      if (saved) {
+        setPhotosData(JSON.parse(saved));
+      } else {
+        setPhotosData([]);
+      }
     } catch {
-      // ignore
+      setPhotosData([]);
     }
-  }, [photosData, storageKey]);
+    setUploadedImageData('');
+    setShowUploadModal(false);
+  }, [athlete.id]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -123,6 +118,9 @@ export const PrivateProgressPhotosView: React.FC<PrivateProgressPhotosViewProps>
     }
 
     setPhotosData(updatedList);
+    try {
+      localStorage.setItem(`kinetix_private_photos_${athlete.id}`, JSON.stringify(updatedList));
+    } catch {}
     setUploadSuccess(true);
     setTimeout(() => {
       setUploadSuccess(false);
@@ -133,7 +131,11 @@ export const PrivateProgressPhotosView: React.FC<PrivateProgressPhotosViewProps>
 
   const handleDeleteEntry = (id: string) => {
     if (window.confirm('¿Deseas eliminar este registro de foto de tu álbum privado?')) {
-      setPhotosData(photosData.filter((p) => p.id !== id));
+      const updatedList = photosData.filter((p) => p.id !== id);
+      setPhotosData(updatedList);
+      try {
+        localStorage.setItem(`kinetix_private_photos_${athlete.id}`, JSON.stringify(updatedList));
+      } catch {}
     }
   };
 

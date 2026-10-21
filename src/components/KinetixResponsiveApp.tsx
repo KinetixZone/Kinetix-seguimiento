@@ -127,7 +127,19 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   const [autoOpenBodyModal, setAutoOpenBodyModal] = useState<boolean>(false);
 
   const isStaff = currentUser.role === 'staff';
-  const effectiveUser = inspectedAthlete || currentUser;
+  // Strict Security Isolation:
+  // ONLY staff members can ever inspect another athlete.
+  // For athletes, effectiveUser MUST ALWAYS be currentUser.
+  const effectiveUser = (isStaff && inspectedAthlete) ? inspectedAthlete : currentUser;
+
+  // Clear any inspected athlete and reset tab when logged-in user changes (prevents session cross-contamination)
+  React.useEffect(() => {
+    setInspectedAthlete(null);
+    setAutoOpenEvalModal(false);
+    setAutoOpenBodyModal(false);
+    setCurrentTab('dashboard');
+    setTabHistory(['dashboard']);
+  }, [currentUser.id]);
 
   const userBodyComps = bodyCompRecords.filter(b => b.userId === effectiveUser.id);
   const userEvals = evaluations.filter(e => e.userId === effectiveUser.id);
@@ -223,8 +235,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
 
   return (
     <div className="w-full min-h-[calc(100vh-61px)] flex flex-col bg-neutral-950 text-neutral-100">
-      {/* Top Banner if Coach is inspecting an Athlete */}
-      {inspectedAthlete && (
+      {/* Top Banner if Coach is inspecting an Athlete (Only visible to Staff) */}
+      {isStaff && inspectedAthlete && (
         <div className="bg-red-950/90 border-b border-red-800/80 px-4 py-2 flex items-center justify-between text-xs animate-fade-in sticky top-0 z-40">
           <div className="flex items-center gap-2 text-white">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
@@ -459,8 +471,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             loggedStaffUser={currentUser}
             isStaffUser={isStaff}
             initialOpenAddModal={autoOpenBodyModal}
-            allAthletes={users.filter(u => u.role === 'athlete')}
-            onSelectNextAthlete={(next) => setInspectedAthlete(next)}
+            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
+            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
           />
         )}
 
@@ -475,8 +487,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             loggedStaffUser={currentUser}
             isStaffUser={isStaff}
             initialOpenAddModal={autoOpenEvalModal}
-            allAthletes={users.filter(u => u.role === 'athlete')}
-            onSelectNextAthlete={(next) => setInspectedAthlete(next)}
+            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
+            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
           />
         )}
 

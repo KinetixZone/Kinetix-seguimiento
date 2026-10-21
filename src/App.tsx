@@ -305,7 +305,9 @@ export default function App() {
     setIsProfileModalOpen(false);
     try {
       localStorage.removeItem('kinetix_auth_session');
+      localStorage.removeItem('kinetix_active_user_id');
     } catch {}
+    setCurrentUserId('user-staff-leslie');
   };
 
   // Add Body Comp Record

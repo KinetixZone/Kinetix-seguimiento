@@ -64,16 +64,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   allAthletes,
   onSelectNextAthlete,
 }) => {
-  const canEvaluate = Boolean(currentUser.role === 'staff' || loggedStaffUser?.role === 'staff' || isStaffUser);
+  // Evaluations are strictly conducted by Staff/Coaches
+  const canEvaluate = Boolean(isStaffUser || loggedStaffUser?.role === 'staff');
 
   // Sub-tabs: 'evolution' (Visión General), 'cooper', 'endurance' (Resistencia por tiempo), 'strength' (1RM), 'history' (Historial Staff)
   const [activeTab, setActiveTab] = useState<'evolution' | 'cooper' | 'endurance' | 'strength' | 'history'>('evolution');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
 
   const [evaluatingCoachName, setEvaluatingCoachName] = useState<string>(() => {
-    if (loggedStaffUser?.name) return loggedStaffUser.name;
-    if (currentUser.role === 'staff') return currentUser.name;
-    return 'Leslie (Dueña & Coach)';
+    if (loggedStaffUser?.role === 'staff' && loggedStaffUser.name) return loggedStaffUser.name;
+    if (isStaffUser && currentUser.role === 'staff') return currentUser.name;
+    return 'Coach Kinetix';
   });
 
   // Modals state
@@ -85,6 +86,28 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [showStopwatch, setShowStopwatch] = useState(false);
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
+
+  // Guard against non-staff ever having the evaluation modal open
+  useEffect(() => {
+    if (!canEvaluate && showAddEvalModal) {
+      setShowAddEvalModal(false);
+    }
+  }, [canEvaluate, showAddEvalModal]);
+
+  // Clean form caches when currentUser changes to eliminate cross-account leakage
+  useEffect(() => {
+    setShowAddEvalModal(false);
+    setEditingEval(null);
+    setEvalToDelete(null);
+    setCoachNotes('');
+    setNextAthleteToast(null);
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    if (initialOpenAddModal && canEvaluate) {
+      handleOpenAddModal();
+    }
+  }, [initialOpenAddModal, canEvaluate]);
 
   useEffect(() => {
     let interval: any = null;
@@ -241,7 +264,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   const [nextAthleteToast, setNextAthleteToast] = useState<string | null>(null);
 
-  const athleteList = allAthletes && allAthletes.length > 0
+  const athleteList = (canEvaluate && allAthletes && allAthletes.length > 0)
     ? allAthletes.filter(a => a.role === 'athlete')
     : [];
   const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
@@ -1284,36 +1307,38 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </p>
                 )}
 
-                {/* Staff Control Buttons: Editar y Eliminar */}
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-800/60">
-                  <button
-                    onClick={() => {
-                      setEditingEval(ev);
-                      setEvalDate(ev.evaluationDate);
-                      setSelectedCooperLevel(ev.cooperTest.levelNumber || 5);
-                      setOptionalDistance(ev.cooperTest.distanceMeters || 2800);
-                      setEnduranceExerciseName(ev.enduranceTest.name || 'Evaluación de Resistencia Funcional');
-                      const sec = parseSecondsFromTimeStr(ev.enduranceTest.result);
-                      setEnduranceMinutes(Math.floor(sec / 60));
-                      setEnduranceSeconds(sec % 60);
-                      setCoachNotes(ev.generalCoachNotes || '');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition-colors"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Editar Test</span>
-                  </button>
-
-                  {onDeleteEvaluation && (
+                {/* Staff Control Buttons: Editar y Eliminar (Solo Staff / Coaches) */}
+                {canEvaluate && (
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-800/60">
                     <button
-                      onClick={() => setEvalToDelete(ev)}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-medium border border-red-800/50 transition-colors"
+                      onClick={() => {
+                        setEditingEval(ev);
+                        setEvalDate(ev.evaluationDate);
+                        setSelectedCooperLevel(ev.cooperTest.levelNumber || 5);
+                        setOptionalDistance(ev.cooperTest.distanceMeters || 2800);
+                        setEnduranceExerciseName(ev.enduranceTest.name || 'Evaluación de Resistencia Funcional');
+                        const sec = parseSecondsFromTimeStr(ev.enduranceTest.result);
+                        setEnduranceMinutes(Math.floor(sec / 60));
+                        setEnduranceSeconds(sec % 60);
+                        setCoachNotes(ev.generalCoachNotes || '');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Eliminar</span>
+                      <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Editar Test</span>
                     </button>
-                  )}
-                </div>
+
+                    {onDeleteEvaluation && (
+                      <button
+                        onClick={() => setEvalToDelete(ev)}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-medium border border-red-800/50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Eliminar</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

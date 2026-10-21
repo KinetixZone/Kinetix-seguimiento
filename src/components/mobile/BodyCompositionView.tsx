@@ -65,24 +65,19 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
     }
   }, [initialOpenAddModal]);
 
-  // New Record Form State
-  const [weight, setWeight] = useState<number | ''>(() => {
-    return records.length > 0 ? records[records.length - 1].weightKg : '';
-  });
-  const [muscle, setMuscle] = useState<number | ''>(() => {
-    return records.length > 0 ? records[records.length - 1].muscleMassPercent : '';
-  });
-  const [bodyFat, setBodyFat] = useState<number | ''>(() => {
-    return records.length > 0 ? records[records.length - 1].bodyFatPercent : '';
-  });
-  const [visceralFat, setVisceralFat] = useState<number>(() => {
-    return records.length > 0 ? records[records.length - 1].visceralFatLevel : 1;
-  });
+  // Permissions check: Is the person interacting a coach/staff member?
+  const isStaffActing = Boolean(isStaffUser || loggedStaffUser?.role === 'staff');
+
+  // New Record Form State (Initialized clean to prevent cross-account cache leakage)
+  const [weight, setWeight] = useState<number | ''>('');
+  const [muscle, setMuscle] = useState<number | ''>('');
+  const [bodyFat, setBodyFat] = useState<number | ''>('');
+  const [visceralFat, setVisceralFat] = useState<number>(3);
   const [recordedDate, setRecordedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState<string>('');
 
-  // Calculate athletes in rotation for sequential weigh-in
-  const athleteList = allAthletes && allAthletes.length > 0 
+  // Calculate athletes in rotation for sequential weigh-in (ONLY FOR STAFF)
+  const athleteList = (isStaffActing && allAthletes && allAthletes.length > 0)
     ? allAthletes.filter(a => a.role === 'athlete') 
     : [];
   const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
@@ -90,7 +85,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
     ? athleteList[(currentAthleteIndex + 1) % athleteList.length]
     : (athleteList[0] || null);
 
-  // When currentUser changes (e.g. coach advances to next athlete)
+  // When currentUser or records change, sync form fields strictly for this athlete
   useEffect(() => {
     const userRecords = records.filter(r => r.userId === currentUser.id);
     if (userRecords.length > 0) {
@@ -98,7 +93,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       setWeight(last.weightKg);
       setMuscle(last.muscleMassPercent);
       setBodyFat(last.bodyFatPercent);
-      setVisceralFat(last.visceralFatLevel || 1);
+      setVisceralFat(last.visceralFatLevel || 3);
     } else {
       setWeight('');
       setMuscle('');
@@ -106,7 +101,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       setVisceralFat(3);
     }
     setNotes('');
-  }, [currentUser.id]);
+  }, [currentUser.id, records]);
 
   // Live calculated BMI
   const liveBmi = weight ? calculateBMI(Number(weight), currentUser.heightCm) : 0;
@@ -649,7 +644,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </p>
               )}
 
-              {onDeleteRecord && (
+              {onDeleteRecord && (isStaffActing || rec.recordedByRole !== 'staff') && (
                 <div className="flex justify-end pt-1 border-t border-neutral-800/40">
                   <button
                     onClick={() => setRecordToDelete(rec)}
@@ -724,30 +719,46 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </button>
               </div>
 
-              {/* Active Athlete Banner & Progress in Rotation */}
-              <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+              {/* Active Athlete Banner */}
+              {isStaffActing && athleteList.length > 0 ? (
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-600/30 text-blue-400 border border-blue-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                      {currentUser.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
+                        Pesando a Alumno ({currentAthleteIndex + 1} de {athleteList.length})
+                      </span>
+                      <strong className="text-white text-sm block truncate">
+                        {currentUser.name}
+                      </strong>
+                    </div>
+                  </div>
+                  {nextAthlete && athleteList.length > 1 && (
+                    <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
+                      <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
+                      <span className="text-xs font-bold text-blue-400 block">
+                        {nextAthlete.name.split(' ')[0]} ⏭️
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-neutral-950 border border-neutral-800 flex items-center gap-2.5 shadow-inner">
+                  <div className="w-8 h-8 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
                     {currentUser.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
-                      Pesando a Alumno {athleteList.length > 0 && `(${currentAthleteIndex + 1} de ${athleteList.length})`}
+                    <span className="text-[10px] text-blue-400 uppercase tracking-wider block font-semibold">
+                      Mi Medición Personal
                     </span>
                     <strong className="text-white text-sm block truncate">
                       {currentUser.name}
                     </strong>
                   </div>
                 </div>
-                {nextAthlete && athleteList.length > 1 && (
-                  <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
-                    <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
-                    <span className="text-xs font-bold text-blue-400 block">
-                      {nextAthlete.name.split(' ')[0]} ⏭️
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* In-Modal Feedback Toast when Advancing to Next Student */}
               {nextAthleteToast && (
@@ -871,8 +882,8 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
               className="p-3 sm:p-4 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-800 shrink-0 space-y-2"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              {/* Botón Principal: Guardar y Siguiente Alumno */}
-              {athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
+              {/* Botón Principal: Guardar y Siguiente Alumno (EXCLUSIVO PARA STAFF EVALUANDO ATLETAS) */}
+              {isStaffActing && athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
                 <button
                   type="button"
                   onClick={handleSaveAndNext}
@@ -899,7 +910,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   className="flex-1 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-semibold transition-colors shadow-md shadow-emerald-500/20 text-xs flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Guardar Solo Este</span>
+                  <span>{isStaffActing ? 'Guardar Solo Este' : 'Guardar Mi Medición'}</span>
                 </button>
               </div>
             </div>
