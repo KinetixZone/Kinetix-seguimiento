@@ -468,11 +468,11 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onDeleteRecord={onDeleteBodyCompRecord}
             onUpdateRecord={onUpdateBodyCompRecord}
             onBackToDashboard={handleGoHome}
-            loggedStaffUser={inspectedAthlete ? null : (isStaff ? currentUser : null)}
-            isStaffUser={inspectedAthlete ? false : isStaff}
+            loggedStaffUser={isStaff ? currentUser : null}
+            isStaffUser={isStaff}
             initialOpenAddModal={autoOpenBodyModal}
-            allAthletes={[]}
-            onSelectNextAthlete={undefined}
+            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
+            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
           />
         )}
 
@@ -481,14 +481,14 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             currentUser={effectiveUser}
             evaluations={userEvals}
             onAddEvaluation={onAddEvaluation}
-            onDeleteEvaluation={isStaff && !inspectedAthlete ? onDeleteEvaluation : undefined}
-            onUpdateEvaluation={isStaff && !inspectedAthlete ? onUpdateEvaluation : undefined}
+            onDeleteEvaluation={isStaff ? onDeleteEvaluation : undefined}
+            onUpdateEvaluation={isStaff ? onUpdateEvaluation : undefined}
             onBackToDashboard={handleGoHome}
-            loggedStaffUser={inspectedAthlete ? null : (isStaff ? currentUser : null)}
-            isStaffUser={inspectedAthlete ? false : isStaff}
+            loggedStaffUser={isStaff ? currentUser : null}
+            isStaffUser={isStaff}
             initialOpenAddModal={autoOpenEvalModal}
-            allAthletes={[]}
-            onSelectNextAthlete={undefined}
+            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
+            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
           />
         )}
 

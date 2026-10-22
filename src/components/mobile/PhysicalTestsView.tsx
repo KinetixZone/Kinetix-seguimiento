@@ -81,6 +81,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [showAddEvalModal, setShowAddEvalModal] = useState(false);
   const [editingEval, setEditingEval] = useState<PhysicalEvaluationRecord | null>(null);
   const [evalToDelete, setEvalToDelete] = useState<PhysicalEvaluationRecord | null>(null);
+  const [nextAthleteToast, setNextAthleteToast] = useState<string | null>(null);
+
+  // Athletes list in rotation (ONLY ACTIVE IF canEvaluate IS TRUE)
+  const athleteList = (canEvaluate && allAthletes && allAthletes.length > 0)
+    ? allAthletes.filter(a => a.role === 'athlete')
+    : [];
+  const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
+  const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
+    ? athleteList[(currentAthleteIndex + 1) % athleteList.length]
+    : (athleteList[0] || null);
 
   // Auxiliar stopwatch state (colapsable)
   const [showStopwatch, setShowStopwatch] = useState(false);
@@ -94,35 +104,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     }
   }, [canEvaluate, showAddEvalModal]);
 
-  // Clean form caches when currentUser changes to eliminate cross-account leakage
-  useEffect(() => {
-    setShowAddEvalModal(false);
-    setEditingEval(null);
-    setEvalToDelete(null);
-    setCoachNotes('');
-  }, [currentUser.id]);
-
-  useEffect(() => {
-    if (initialOpenAddModal && canEvaluate) {
-      handleOpenAddModal();
-    }
-  }, [initialOpenAddModal, canEvaluate]);
-
-  useEffect(() => {
-    let interval: any = null;
-    if (isStopwatchRunning) {
-      interval = setInterval(() => {
-        setStopwatchSeconds(sec => sec + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isStopwatchRunning]);
-
-  const formatStopwatch = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  // Evaluaciones del atleta actual ordenadas cronológicamente
+  const userEvals = evaluations.filter(e => e.userId === currentUser.id);
+  const sortedEvals = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
 
   // Form State for New Evaluation Entry (Staff)
   const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -150,9 +134,102 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [rowReps, setRowReps] = useState<number>(12);
   const [coachNotes, setCoachNotes] = useState<string>('');
 
-  // Evaluaciones del atleta actual ordenadas cronológicamente
-  const userEvals = evaluations.filter(e => e.userId === currentUser.id);
-  const sortedEvals = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+  // Loads an athlete's baseline into the form or sets pristine defaults
+  const loadAthleteBaselineIntoForm = (athleteId: string) => {
+    const athleteEvals = evaluations.filter(e => e.userId === athleteId);
+    const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const latest = sorted[sorted.length - 1] || null;
+
+    setEvalDate(new Date().toISOString().slice(0, 10));
+    if (latest) {
+      setSelectedCooperLevel(latest.cooperTest.levelNumber || 5);
+      setOptionalDistance(latest.cooperTest.distanceMeters || 2200);
+      setEnduranceExerciseName(latest.enduranceTest?.name || 'Evaluación de Resistencia Funcional');
+      const timeSec = latest.enduranceTest?.timeSeconds || 420;
+      setEnduranceMinutes(Math.floor(timeSec / 60));
+      setEnduranceSeconds(timeSec % 60);
+      setEnduranceScoreLevel((latest.enduranceTest?.scoreScoreLevel as any) || 'Intermedio');
+
+      const sq = latest.strengthRecords?.find(s => s.exerciseId === 'squats');
+      setSquatWeight(sq ? sq.weightKg : 40);
+      setSquatReps(sq ? sq.reps : 1);
+
+      const dl = latest.strengthRecords?.find(s => s.exerciseId === 'deadlift');
+      setDeadliftWeight(dl ? dl.weightKg : 50);
+      setDeadliftReps(dl ? dl.reps : 1);
+
+      const ht = latest.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
+      setHipThrustWeight(ht ? ht.weightKg : 50);
+      setHipThrustReps(ht ? ht.reps : 1);
+
+      const pr = latest.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
+      setPressWeight(pr ? pr.weightKg : 30);
+      setPressReps(pr ? pr.reps : 1);
+
+      const rw = latest.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
+      if (rw) {
+        setRowWeight(rw.weightKg);
+        setRowReps(rw.reps);
+        setRowExerciseType(rw.exerciseType || (rw.exerciseName.toLowerCase().includes('dominad') ? 'dominadas' : 'remo'));
+      } else {
+        setRowWeight(30);
+        setRowReps(10);
+        setRowExerciseType('remo');
+      }
+      setCoachNotes(''); // Never leak notes from previous athlete
+    } else {
+      setSelectedCooperLevel(5);
+      setOptionalDistance(2000);
+      setEnduranceExerciseName('Evaluación de Resistencia Funcional');
+      setEnduranceMinutes(7);
+      setEnduranceSeconds(0);
+      setEnduranceScoreLevel('Intermedio');
+      setSquatWeight(40);
+      setSquatReps(1);
+      setDeadliftWeight(50);
+      setDeadliftReps(1);
+      setHipThrustWeight(50);
+      setHipThrustReps(1);
+      setPressWeight(30);
+      setPressReps(1);
+      setRowExerciseType('remo');
+      setRowWeight(30);
+      setRowReps(10);
+      setCoachNotes('');
+    }
+  };
+
+  // When currentUser changes: keep modal open only if coach is rotating, but reload clean baseline
+  useEffect(() => {
+    setEditingEval(null);
+    setEvalToDelete(null);
+    setCoachNotes('');
+    if (showAddEvalModal && canEvaluate) {
+      loadAthleteBaselineIntoForm(currentUser.id);
+    }
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    if (initialOpenAddModal && canEvaluate) {
+      handleOpenAddModal();
+    }
+  }, [initialOpenAddModal, canEvaluate]);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (isStopwatchRunning) {
+      interval = setInterval(() => {
+        setStopwatchSeconds(sec => sec + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isStopwatchRunning]);
+
+  const formatStopwatch = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Respaldo robusto para evitar pantallas negras en atletas nuevos sin evaluaciones previas
   const fallbackEval: PhysicalEvaluationRecord = {
@@ -214,50 +291,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     } else if (currentUser.role === 'staff') {
       setEvaluatingCoachName(currentUser.name);
     }
-    setEvalDate(new Date().toISOString().slice(0, 10));
-    setSelectedCooperLevel(latestEval ? (latestEval.cooperTest.levelNumber || 3) : 3);
-    setOptionalDistance(latestEval?.cooperTest.distanceMeters || 2200);
-    setEnduranceExerciseName(latestEval?.enduranceTest?.name || 'Evaluación de Resistencia Funcional');
-    setEnduranceMinutes(7);
-    setEnduranceSeconds(0);
-    setEnduranceScoreLevel('Intermedio');
-    
-    // Copy latest 1RMs as baseline or set clean starting weights
-    if (latestEval?.strengthRecords) {
-      const sq = latestEval.strengthRecords.find(s => s.exerciseId === 'squats');
-      if (sq) { setSquatWeight(sq.weightKg); setSquatReps(sq.reps); }
-      const dl = latestEval.strengthRecords.find(s => s.exerciseId === 'deadlift');
-      if (dl) { setDeadliftWeight(dl.weightKg); setDeadliftReps(dl.reps); }
-      const ht = latestEval.strengthRecords.find(s => s.exerciseId === 'hip_thrust');
-      if (ht) { setHipThrustWeight(ht.weightKg); setHipThrustReps(ht.reps); }
-      const pr = latestEval.strengthRecords.find(s => s.exerciseId === 'horizontal_press');
-      if (pr) { setPressWeight(pr.weightKg); setPressReps(pr.reps); }
-      const rw = latestEval.strengthRecords.find(s => s.exerciseId === 'pullups_or_rows');
-      if (rw) {
-        setRowWeight(rw.weightKg);
-        setRowReps(rw.reps);
-        if (rw.exerciseType) {
-          setRowExerciseType(rw.exerciseType);
-        } else if (rw.exerciseName.toLowerCase().includes('dominad')) {
-          setRowExerciseType('dominadas');
-        } else {
-          setRowExerciseType('remo');
-        }
-      }
-      setCoachNotes(latestEval.generalCoachNotes || '');
-    } else {
-      setSquatWeight(40);
-      setSquatReps(1);
-      setDeadliftWeight(50);
-      setDeadliftReps(1);
-      setHipThrustWeight(50);
-      setHipThrustReps(1);
-      setPressWeight(30);
-      setPressReps(1);
-      setRowWeight(30);
-      setRowReps(10);
-      setCoachNotes('');
-    }
+    loadAthleteBaselineIntoForm(currentUser.id);
     setShowAddEvalModal(true);
   };
 
@@ -341,6 +375,99 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       generalCoachNotes: coachNotes,
     });
     setShowAddEvalModal(false);
+  };
+
+  const handleSaveAndNextEvaluation = () => {
+    const levelInfo = getCooperLevelInfo(selectedCooperLevel);
+    const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
+    const totalSec = enduranceMinutes * 60 + enduranceSeconds;
+
+    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
+      ? 'user-staff-leslie' 
+      : evaluatingCoachName.includes('Gus') 
+      ? 'user-staff-gus' 
+      : 'user-staff-01';
+
+    onAddEvaluation({
+      userId: currentUser.id,
+      evaluationDate: evalDate,
+      coachId: assignedCoachId,
+      coachName: evaluatingCoachName,
+      cooperTest: {
+        level: levelInfo.levelName,
+        levelNumber: selectedCooperLevel,
+        description: levelInfo.description,
+        targetZoneRecommendation: levelInfo.coachingRecommendation,
+        distanceMeters: optionalDistance,
+        estimatedVo2Max: Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)),
+        rating: selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular',
+        notes: `Nivel asignado por evaluación técnica oficial: ${levelInfo.badgeLabel}`,
+      },
+      enduranceTest: {
+        name: enduranceExerciseName,
+        result: formattedResult,
+        timeSeconds: totalSec,
+        scoreScoreLevel: enduranceScoreLevel,
+        notes: `Reto completado en ${formattedResult}.`,
+      },
+      strengthRecords: [
+        {
+          exerciseId: 'squats',
+          exerciseName: 'Sentadillas',
+          weightKg: squatWeight,
+          reps: squatReps,
+          estimated1RMKg: calculate1RM(squatWeight, squatReps),
+          weightUnit: 'kg',
+        },
+        {
+          exerciseId: 'deadlift',
+          exerciseName: 'Peso Muerto',
+          weightKg: deadliftWeight,
+          reps: deadliftReps,
+          estimated1RMKg: calculate1RM(deadliftWeight, deadliftReps),
+          weightUnit: 'kg',
+        },
+        {
+          exerciseId: 'hip_thrust',
+          exerciseName: 'Hip Thrust',
+          weightKg: hipThrustWeight,
+          reps: hipThrustReps,
+          estimated1RMKg: calculate1RM(hipThrustWeight, hipThrustReps),
+          weightUnit: 'kg',
+        },
+        {
+          exerciseId: 'horizontal_press',
+          exerciseName: 'Press Horizontal',
+          weightKg: pressWeight,
+          reps: pressReps,
+          estimated1RMKg: calculate1RM(pressWeight, pressReps),
+          weightUnit: 'kg',
+        },
+        {
+          exerciseId: 'pullups_or_rows',
+          exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+          exerciseType: rowExerciseType,
+          weightKg: rowWeight,
+          reps: rowReps,
+          estimated1RMKg: calculate1RM(rowWeight, rowReps),
+          weightUnit: 'kg',
+        },
+      ],
+      generalCoachNotes: coachNotes,
+    });
+
+    if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
+      const savedName = currentUser.name;
+      const targetNext = nextAthlete;
+
+      // Advance to next athlete and load their clean baseline
+      onSelectNextAthlete(targetNext);
+      loadAthleteBaselineIntoForm(targetNext.id);
+      setNextAthleteToast(`¡Evaluación guardada para ${savedName.split(' ')[0]}! Evaluando ahora a: ${targetNext.name}`);
+      setTimeout(() => setNextAthleteToast(null), 4000);
+    } else {
+      setShowAddEvalModal(false);
+    }
   };
 
   // Quick preset exercises for endurance
@@ -1267,7 +1394,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </button>
               </div>
 
-              {/* Active Athlete Banner */}
+              {/* Active Athlete Banner & Rotation Status */}
               <div className="p-2.5 sm:p-3 rounded-2xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
@@ -1275,17 +1402,36 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10px] text-red-400 uppercase tracking-wider block font-semibold truncate">
-                      Evaluando Expediente Oficial
+                      {canEvaluate && athleteList.length > 1
+                        ? `Pase de Evaluación (${currentAthleteIndex + 1}/${athleteList.length})`
+                        : 'Evaluando Expediente Oficial'}
                     </span>
                     <strong className="text-white text-sm block truncate">
                       {currentUser.name}
                     </strong>
                   </div>
                 </div>
-                <span className="text-[10px] bg-neutral-900 border border-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full font-mono">
-                  {evaluatingCoachName}
-                </span>
+                {canEvaluate && athleteList.length > 1 && nextAthlete && nextAthlete.id !== currentUser.id ? (
+                  <div className="text-right shrink-0 bg-neutral-900 px-2 py-1 rounded-xl border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
+                    <span className="text-xs font-bold text-blue-400 block">
+                      {nextAthlete.name.split(' ')[0]} ⏭️
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] bg-neutral-900 border border-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full font-mono">
+                    {evaluatingCoachName}
+                  </span>
+                )}
               </div>
+
+              {/* Toast when advancing to next student */}
+              {nextAthleteToast && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-lg">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-semibold">{nextAthleteToast}</span>
+                </div>
+              )}
             </div>
 
             {/* Scrollable Form Content */}
@@ -1585,13 +1731,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               className="p-3 sm:p-4 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-800 shrink-0 space-y-2"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
+              {canEvaluate && athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
+                <button
+                  type="button"
+                  onClick={handleSaveAndNextEvaluation}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 active:scale-98 transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  <span>Guardar y Evaluar Siguiente Alumno ({nextAthlete.name.split(' ')[0]})</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddEvalModal(false)}
                   className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors text-xs"
                 >
-                  Cancelar / Volver
+                  Cerrar
                 </button>
                 <button
                   type="submit"

@@ -275,23 +275,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           {/* LOGIN FORM */}
           <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-            {roleTab === 'athlete' && (
-              <div className="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-[11px]">
-                <span className="text-blue-300">💡 ¿Probar como atleta de prueba?</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('aida_pulido@kinetix.fit');
-                    setPassword('kinetix123');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] active:scale-95 transition-all shadow-sm"
-                >
-                  Cargar Aida Pulido
-                </button>
-              </div>
-            )}
-
             <div>
               <label className="text-neutral-300 font-medium block mb-1.5 flex items-center justify-between">
                 <span>Usuario o Correo</span>
