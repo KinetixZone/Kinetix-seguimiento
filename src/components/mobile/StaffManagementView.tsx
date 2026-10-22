@@ -1104,10 +1104,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                   <button
                     onClick={() => onSelectUserToInspect(athlete)}
-                    className="px-2 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-medium transition-colors"
-                    title="Ver inicio de atleta"
+                    className="px-2.5 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700/60 text-[11px] font-medium transition-colors flex items-center gap-1 active:scale-95"
+                    title="Ver la app exactamente como la ve este alumno (Modo Alumno)"
                   >
-                    Perfil
+                    <Eye className="w-3 h-3 text-blue-400" />
+                    <span>Ver como Alumno</span>
                   </button>
 
                   {onOpenBodyCompForUser && (
@@ -1833,6 +1834,23 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-800 text-emerald-200 text-xs flex items-center gap-2 animate-fade-in font-medium">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                           <span>¡Contraseña actualizada con éxito! La nueva clave es: <strong className="text-white font-mono">{athletePassword}</strong></span>
+                        </div>
+                      )}
+
+                      {onSwitchUser && selectedAthleteForPayment.role === 'athlete' && (
+                        <div className="pt-2 border-t border-neutral-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const target = selectedAthleteForPayment;
+                              setSelectedAthleteForPayment(null);
+                              onSwitchUser(target);
+                            }}
+                            className="w-full py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Iniciar Sesión como este Alumno (Modo Prueba)</span>
+                          </button>
                         </div>
                       )}
                     </div>

@@ -235,13 +235,13 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
 
   return (
     <div className="w-full min-h-[calc(100vh-61px)] flex flex-col bg-neutral-950 text-neutral-100">
-      {/* Top Banner if Coach is inspecting an Athlete (Only visible to Staff) */}
+      {/* Top Banner if Coach is viewing an Athlete in Athlete Mode */}
       {isStaff && inspectedAthlete && (
-        <div className="bg-red-950/90 border-b border-red-800/80 px-4 py-2 flex items-center justify-between text-xs animate-fade-in sticky top-0 z-40">
+        <div className="bg-blue-950/95 border-b border-blue-800/80 px-4 py-2 flex items-center justify-between text-xs animate-fade-in sticky top-0 z-40 shadow-md">
           <div className="flex items-center gap-2 text-white">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
             <span>
-              Inspeccionando expediente de: <strong>{inspectedAthlete.name}</strong> ({inspectedAthlete.membership.planName})
+              Vista de Alumno · Viendo app de: <strong>{inspectedAthlete.name}</strong> <span className="text-blue-300 font-mono text-[11px]">({inspectedAthlete.membership.planName})</span>
             </span>
           </div>
           <button
@@ -251,8 +251,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             }}
             className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700 font-semibold transition-colors flex items-center gap-1 shadow-sm active:scale-95"
           >
-            <ArrowLeft className="w-3 h-3 text-red-400" />
-            <span>Volver a Lista de Atletas</span>
+            <ArrowLeft className="w-3 h-3 text-blue-400" />
+            <span>Volver a Panel Staff</span>
           </button>
         </div>
       )}
@@ -468,11 +468,11 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onDeleteRecord={onDeleteBodyCompRecord}
             onUpdateRecord={onUpdateBodyCompRecord}
             onBackToDashboard={handleGoHome}
-            loggedStaffUser={currentUser}
-            isStaffUser={isStaff}
+            loggedStaffUser={inspectedAthlete ? null : (isStaff ? currentUser : null)}
+            isStaffUser={inspectedAthlete ? false : isStaff}
             initialOpenAddModal={autoOpenBodyModal}
-            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
-            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
+            allAthletes={[]}
+            onSelectNextAthlete={undefined}
           />
         )}
 
@@ -481,14 +481,14 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             currentUser={effectiveUser}
             evaluations={userEvals}
             onAddEvaluation={onAddEvaluation}
-            onDeleteEvaluation={onDeleteEvaluation}
-            onUpdateEvaluation={onUpdateEvaluation}
+            onDeleteEvaluation={isStaff && !inspectedAthlete ? onDeleteEvaluation : undefined}
+            onUpdateEvaluation={isStaff && !inspectedAthlete ? onUpdateEvaluation : undefined}
             onBackToDashboard={handleGoHome}
-            loggedStaffUser={currentUser}
-            isStaffUser={isStaff}
+            loggedStaffUser={inspectedAthlete ? null : (isStaff ? currentUser : null)}
+            isStaffUser={inspectedAthlete ? false : isStaff}
             initialOpenAddModal={autoOpenEvalModal}
-            allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
-            onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
+            allAthletes={[]}
+            onSelectNextAthlete={undefined}
           />
         )}
 

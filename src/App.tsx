@@ -827,9 +827,12 @@ export default function App() {
           onDeleteAthlete={handleDeleteAthlete}
           onUpdateAthleteProfile={handleUpdateAthleteProfile}
           onClearDemoAthletes={handleClearDemoAthletes}
-          onRestoreDemoAthletes={handleRestoreDemoAthletes}
-          onSwitchUser={(u) => setCurrentUserId(u.id)}
-          onOpenPrivacyPolicy={() => setIsPrivacyPolicyViewerOpen(true)}
+          onSwitchUser={(u) => {
+            setCurrentUserId(u.id);
+            try {
+              localStorage.setItem('kinetix_active_user_id', u.id);
+            } catch {}
+          }}
           consentHistory={consentHistory}
           gymLogoUrl={gymLogoUrl}
           onSendBatchNotification={handleSendBatchNotification}

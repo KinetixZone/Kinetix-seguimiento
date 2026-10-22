@@ -100,7 +100,6 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setEditingEval(null);
     setEvalToDelete(null);
     setCoachNotes('');
-    setNextAthleteToast(null);
   }, [currentUser.id]);
 
   useEffect(() => {
@@ -260,106 +259,6 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setCoachNotes('');
     }
     setShowAddEvalModal(true);
-  };
-
-  const [nextAthleteToast, setNextAthleteToast] = useState<string | null>(null);
-
-  const athleteList = (canEvaluate && allAthletes && allAthletes.length > 0)
-    ? allAthletes.filter(a => a.role === 'athlete')
-    : [];
-  const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
-  const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
-    ? athleteList[(currentAthleteIndex + 1) % athleteList.length]
-    : (athleteList[0] || null);
-
-  const handleSaveAndNextEvaluation = () => {
-    const levelInfo = getCooperLevelInfo(selectedCooperLevel);
-    const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
-    const totalSec = enduranceMinutes * 60 + enduranceSeconds;
-
-    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
-      ? 'user-staff-leslie' 
-      : evaluatingCoachName.includes('Gus') 
-      ? 'user-staff-gus' 
-      : 'user-staff-01';
-
-    onAddEvaluation({
-      userId: currentUser.id,
-      evaluationDate: evalDate,
-      coachId: assignedCoachId,
-      coachName: evaluatingCoachName,
-      cooperTest: {
-        level: levelInfo.levelName,
-        levelNumber: selectedCooperLevel,
-        description: levelInfo.description,
-        targetZoneRecommendation: levelInfo.coachingRecommendation,
-        distanceMeters: optionalDistance,
-        estimatedVo2Max: Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)),
-        rating: selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular',
-        notes: `Nivel asignado por evaluación técnica oficial: ${levelInfo.badgeLabel}`,
-      },
-      enduranceTest: {
-        name: enduranceExerciseName,
-        result: formattedResult,
-        timeSeconds: totalSec,
-        scoreScoreLevel: enduranceScoreLevel,
-        notes: `Reto completado en ${formattedResult}.`,
-      },
-      strengthRecords: [
-        {
-          exerciseId: 'squats',
-          exerciseName: 'Sentadillas',
-          weightKg: squatWeight,
-          reps: squatReps,
-          estimated1RMKg: calculate1RM(squatWeight, squatReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'deadlift',
-          exerciseName: 'Peso Muerto',
-          weightKg: deadliftWeight,
-          reps: deadliftReps,
-          estimated1RMKg: calculate1RM(deadliftWeight, deadliftReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'hip_thrust',
-          exerciseName: 'Hip Thrust',
-          weightKg: hipThrustWeight,
-          reps: hipThrustReps,
-          estimated1RMKg: calculate1RM(hipThrustWeight, hipThrustReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'horizontal_press',
-          exerciseName: 'Press Horizontal',
-          weightKg: pressWeight,
-          reps: pressReps,
-          estimated1RMKg: calculate1RM(pressWeight, pressReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'pullups_or_rows',
-          exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
-          exerciseType: rowExerciseType,
-          weightKg: rowWeight,
-          reps: rowReps,
-          estimated1RMKg: calculate1RM(rowWeight, rowReps),
-          weightUnit: 'kg',
-        },
-      ],
-      generalCoachNotes: coachNotes,
-    });
-
-    if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
-      const savedName = currentUser.name;
-      const targetNext = nextAthlete;
-      onSelectNextAthlete(targetNext);
-      setNextAthleteToast(`¡Evaluación guardada para ${savedName.split(' ')[0]}! Ahora evaluando a: ${targetNext.name}`);
-      setTimeout(() => setNextAthleteToast(null), 4500);
-    } else {
-      setShowAddEvalModal(false);
-    }
   };
 
   const handleSubmitEvaluation = (e: React.FormEvent) => {
@@ -1368,40 +1267,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </button>
               </div>
 
-              {/* Active Athlete Banner & Progress in Rotation */}
-              {canEvaluate && (
-                <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
-                      {currentUser.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold truncate">
-                        Evaluando a Alumno {athleteList.length > 0 && `(${currentAthleteIndex + 1} de ${athleteList.length})`}
-                      </span>
-                      <strong className="text-white text-sm block truncate">
-                        {currentUser.name}
-                      </strong>
-                    </div>
+              {/* Active Athlete Banner */}
+              <div className="p-2.5 sm:p-3 rounded-2xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                    {currentUser.name.slice(0, 2).toUpperCase()}
                   </div>
-                  {nextAthlete && athleteList.length > 1 && (
-                    <div className="text-right shrink-0 bg-neutral-950/80 px-2.5 py-1 rounded-xl border border-neutral-800">
-                      <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
-                      <span className="text-xs font-bold text-red-400 block">
-                        {nextAthlete.name.split(' ')[0]} ⏭️
-                      </span>
-                    </div>
-                  )}
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-red-400 uppercase tracking-wider block font-semibold truncate">
+                      Evaluando Expediente Oficial
+                    </span>
+                    <strong className="text-white text-sm block truncate">
+                      {currentUser.name}
+                    </strong>
+                  </div>
                 </div>
-              )}
-
-              {/* In-Modal Feedback Toast when Advancing to Next Student */}
-              {nextAthleteToast && (
-                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in shadow-lg">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="font-semibold">{nextAthleteToast}</span>
-                </div>
-              )}
+                <span className="text-[10px] bg-neutral-900 border border-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full font-mono">
+                  {evaluatingCoachName}
+                </span>
+              </div>
             </div>
 
             {/* Scrollable Form Content */}
@@ -1701,21 +1585,6 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               className="p-3 sm:p-4 bg-neutral-950/95 backdrop-blur-md border-t border-neutral-800 shrink-0 space-y-2"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              {/* Botón Principal: Guardar y Evaluar Siguiente Alumno */}
-              {canEvaluate && athleteList.length > 1 && onSelectNextAthlete && nextAthlete && (
-                <button
-                  type="button"
-                  onClick={handleSaveAndNextEvaluation}
-                  className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-red-500/25 active:scale-95 transition-all"
-                >
-                  <span>Guardar y Evaluar Siguiente Alumno</span>
-                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-                  <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded-full font-medium text-red-100">
-                    👉 Evaluar a: {nextAthlete.name.split(' ')[0]}
-                  </span>
-                </button>
-              )}
-
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1729,7 +1598,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors shadow-md shadow-blue-500/20 text-xs flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Guardar Este Solo</span>
+                  <span>Guardar Evaluación</span>
                 </button>
               </div>
             </div>
