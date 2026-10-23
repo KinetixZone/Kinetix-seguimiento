@@ -15,7 +15,9 @@ import {
   Award,
   MessageCircle,
   FileText,
-  ShieldAlert
+  ShieldAlert,
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
 
 interface UserProfileAndLogoModalProps {
@@ -45,9 +47,34 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
     return localStorage.getItem('kinetix_coach_whatsapp') || '+52 56 2730 3189';
   });
   const [whatsappSaved, setWhatsappSaved] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleForceUpdateAndClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        for (const key of cacheKeys) {
+          await caches.delete(key);
+        }
+      }
+      sessionStorage.clear();
+    } catch (err) {
+      console.warn('Cache clear error:', err);
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 350);
+  };
 
   const handleSaveWhatsApp = () => {
     const trimmed = whatsappNumber.trim();
@@ -402,6 +429,40 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
                 ✓ Contraseña actualizada correctamente en tu dispositivo.
               </span>
             )}
+          </div>
+
+          {/* Caché Móvil y Actualización de Versión */}
+          <div className="pt-2 border-t border-neutral-800/80 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-neutral-300 flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+                <span>Actualización & Caché Móvil:</span>
+              </span>
+              <span className="text-[9px] bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded-full font-mono border border-blue-800/60">
+                v2026.10 (Oficial)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleForceUpdateAndClearCache}
+              disabled={isClearingCache}
+              className="w-full p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-left flex items-center justify-between transition-colors group active:scale-98"
+            >
+              <div className="flex items-center gap-2">
+                <RefreshCw className={`w-4 h-4 text-emerald-400 ${isClearingCache ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                <div>
+                  <strong className="text-xs text-white block">
+                    {isClearingCache ? 'Actualizando y limpiando caché...' : 'Limpiar Caché y Forzar Versión Más Reciente'}
+                  </strong>
+                  <span className="text-[10px] text-neutral-400 block">
+                    Resuelve pantallas congeladas en Safari / Chrome móvil
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] text-emerald-400 font-bold group-hover:scale-105 transition-transform shrink-0">
+                {isClearingCache ? '...' : 'Actualizar'}
+              </span>
+            </button>
           </div>
 
           {/* Legal y Privacidad: Acceso permanente al Aviso de Privacidad Integral */}

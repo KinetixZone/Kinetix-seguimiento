@@ -77,15 +77,19 @@ export type CooperLevel = string;
 
 export type CooperRating = 'Muy Malo' | 'Malo' | 'Regular' | 'Bueno' | 'Excelente' | 'Superior';
 
+export type EvaluationStatus = 'completed' | 'na' | 'np';
+
 export interface CooperTestRecord {
-  level: string; // e.g., 'Nivel 1 (Adaptación Inicial)' to 'Nivel 20 (Ultra Élite Kinetix)'
-  levelNumber: number; // 1 to 20
+  level: string; // e.g., 'Nivel 1 (Adaptación Inicial)' to 'Nivel 20 (Ultra Élite Kinetix)' o 'NA (No Aplica)'
+  levelNumber: number; // 1 to 20 (or 0 if NA/NP)
   description: string;
   targetZoneRecommendation?: string;
   distanceMeters?: number; // Opcional de referencia para el staff
   estimatedVo2Max?: number;
   rating?: CooperRating;
   notes?: string;
+  status?: EvaluationStatus; // 'completed' | 'na' | 'np'
+  statusReason?: string; // Motivo: Adulto mayor, Niños, Lesión, Enfermedad
 }
 
 export type BrandTheme = 'blue' | 'red';
@@ -99,14 +103,18 @@ export interface StrengthMaxRecord {
   estimated1RMKg: number;
   weightUnit: 'kg' | 'lbs';
   notes?: string;
+  status?: EvaluationStatus; // 'completed' | 'na' | 'np'
+  statusReason?: string;
 }
 
 export interface EnduranceTimeTestRecord {
   name: string; // e.g., "Evaluación de Resistencia Funcional" o "Remo 2000m"
-  result: string; // e.g., "7:14 min"
+  result: string; // e.g., "7:14 min" o "NA" / "NP"
   timeSeconds?: number;
-  scoreScoreLevel?: 'Básico' | 'Intermedio' | 'Avanzado' | 'Élite';
+  scoreScoreLevel?: 'Básico' | 'Intermedio' | 'Avanzado' | 'Élite' | 'Exento';
   notes?: string;
+  status?: EvaluationStatus; // 'completed' | 'na' | 'np'
+  statusReason?: string;
 }
 
 export interface PhysicalEvaluationRecord {

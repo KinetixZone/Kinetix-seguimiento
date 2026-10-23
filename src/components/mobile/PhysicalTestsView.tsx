@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { PhysicalEvaluationRecord, UserProfile, CooperLevel, StrengthMaxRecord } from '../../types';
+import { 
+  PhysicalEvaluationRecord, 
+  UserProfile, 
+  CooperLevel, 
+  StrengthMaxRecord, 
+  EvaluationStatus, 
+  CooperTestRecord, 
+  EnduranceTimeTestRecord 
+} from '../../types';
 import { 
   calculate1RM, 
   getCooperLevelInfo, 
@@ -36,6 +44,16 @@ import {
   ShieldCheck,
   ArrowRight
 } from 'lucide-react';
+
+const parseSecondsFromTimeStr = (str?: string): number => {
+  if (!str) return 0;
+  const match = str.match(/(\d+):(\d+)/);
+  if (match) {
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  }
+  const num = parseInt(str, 10);
+  return isNaN(num) ? 0 : num;
+};
 
 interface PhysicalTestsViewProps {
   currentUser: UserProfile;
@@ -110,63 +128,95 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Form State for New Evaluation Entry (Staff)
   const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  
+  // Cooper Test State (Supports completed, NA - niños/adultos mayores, NP - no presentada/lesión)
+  const [cooperStatus, setCooperStatus] = useState<EvaluationStatus>('completed');
+  const [cooperReason, setCooperReason] = useState<string>('');
   const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
   
-  // Test de Resistencia (Por tiempo)
+  // Test de Resistencia (Por tiempo) (Supports completed, NA, NP)
+  const [enduranceStatus, setEnduranceStatus] = useState<EvaluationStatus>('completed');
+  const [enduranceReason, setEnduranceReason] = useState<string>('');
   const [enduranceExerciseName, setEnduranceExerciseName] = useState<string>('Evaluación de Resistencia Funcional');
   const [enduranceMinutes, setEnduranceMinutes] = useState<number>(7);
   const [enduranceSeconds, setEnduranceSeconds] = useState<number>(14);
   const [enduranceScoreLevel, setEnduranceScoreLevel] = useState<'Básico' | 'Intermedio' | 'Avanzado' | 'Élite'>('Avanzado');
 
-  // 5 Key Strength Exercises
+  // 5 Key Strength Exercises (Each can be completed, NA - niños/adultos mayores, NP - no presentada/enfermedad)
+  const [squatStatus, setSquatStatus] = useState<EvaluationStatus>('completed');
   const [squatWeight, setSquatWeight] = useState<number>(120);
   const [squatReps, setSquatReps] = useState<number>(1);
+
+  const [deadliftStatus, setDeadliftStatus] = useState<EvaluationStatus>('completed');
   const [deadliftWeight, setDeadliftWeight] = useState<number>(140);
   const [deadliftReps, setDeadliftReps] = useState<number>(1);
+
+  const [hipThrustStatus, setHipThrustStatus] = useState<EvaluationStatus>('completed');
   const [hipThrustWeight, setHipThrustWeight] = useState<number>(150);
   const [hipThrustReps, setHipThrustReps] = useState<number>(1);
+
+  const [pressStatus, setPressStatus] = useState<EvaluationStatus>('completed');
   const [pressWeight, setPressWeight] = useState<number>(90);
   const [pressReps, setPressReps] = useState<number>(1);
+
   // Remo vs Dominadas Selector & Weight
+  const [rowStatus, setRowStatus] = useState<EvaluationStatus>('completed');
   const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
   const [rowWeight, setRowWeight] = useState<number>(75);
   const [rowReps, setRowReps] = useState<number>(12);
   const [coachNotes, setCoachNotes] = useState<string>('');
 
   // Loads an athlete's baseline into the form or sets pristine defaults
-  const loadAthleteBaselineIntoForm = (athleteId: string) => {
+  const loadAthleteBaselineIntoForm = (athleteId: string, customEval?: PhysicalEvaluationRecord | null) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-    const latest = sorted[sorted.length - 1] || null;
+    const latest = customEval !== undefined ? customEval : (sorted[sorted.length - 1] || null);
 
     setEvalDate(new Date().toISOString().slice(0, 10));
     if (latest) {
+      // Cooper Test state
+      const cpStatus = latest.cooperTest.status || 
+        (latest.cooperTest.level?.includes('NA') ? 'na' : latest.cooperTest.level?.includes('NP') ? 'np' : 'completed');
+      setCooperStatus(cpStatus);
+      setCooperReason(latest.cooperTest.statusReason || '');
       setSelectedCooperLevel(latest.cooperTest.levelNumber || 5);
       setOptionalDistance(latest.cooperTest.distanceMeters || 2200);
+
+      // Endurance Test state
+      const endStatus = latest.enduranceTest?.status || 
+        (latest.enduranceTest?.result === 'NA' ? 'na' : latest.enduranceTest?.result === 'NP' ? 'np' : 'completed');
+      setEnduranceStatus(endStatus);
+      setEnduranceReason(latest.enduranceTest?.statusReason || '');
       setEnduranceExerciseName(latest.enduranceTest?.name || 'Evaluación de Resistencia Funcional');
       const timeSec = latest.enduranceTest?.timeSeconds || 420;
       setEnduranceMinutes(Math.floor(timeSec / 60));
       setEnduranceSeconds(timeSec % 60);
       setEnduranceScoreLevel((latest.enduranceTest?.scoreScoreLevel as any) || 'Intermedio');
 
+      // Strength records state
       const sq = latest.strengthRecords?.find(s => s.exerciseId === 'squats');
+      setSquatStatus(sq?.status || (sq && sq.weightKg === 0 && sq.notes?.includes('NA') ? 'na' : 'completed'));
       setSquatWeight(sq ? sq.weightKg : 40);
       setSquatReps(sq ? sq.reps : 1);
 
       const dl = latest.strengthRecords?.find(s => s.exerciseId === 'deadlift');
+      setDeadliftStatus(dl?.status || (dl && dl.weightKg === 0 && dl.notes?.includes('NA') ? 'na' : 'completed'));
       setDeadliftWeight(dl ? dl.weightKg : 50);
       setDeadliftReps(dl ? dl.reps : 1);
 
       const ht = latest.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
+      setHipThrustStatus(ht?.status || (ht && ht.weightKg === 0 && ht.notes?.includes('NA') ? 'na' : 'completed'));
       setHipThrustWeight(ht ? ht.weightKg : 50);
       setHipThrustReps(ht ? ht.reps : 1);
 
       const pr = latest.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
+      setPressStatus(pr?.status || (pr && pr.weightKg === 0 && pr.notes?.includes('NA') ? 'na' : 'completed'));
       setPressWeight(pr ? pr.weightKg : 30);
       setPressReps(pr ? pr.reps : 1);
 
       const rw = latest.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
+      setRowStatus(rw?.status || (rw && rw.weightKg === 0 && rw.notes?.includes('NA') ? 'na' : 'completed'));
       if (rw) {
         setRowWeight(rw.weightKg);
         setRowReps(rw.reps);
@@ -178,20 +228,29 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       }
       setCoachNotes(''); // Never leak notes from previous athlete
     } else {
+      setCooperStatus('completed');
+      setCooperReason('');
       setSelectedCooperLevel(5);
       setOptionalDistance(2000);
+      setEnduranceStatus('completed');
+      setEnduranceReason('');
       setEnduranceExerciseName('Evaluación de Resistencia Funcional');
       setEnduranceMinutes(7);
       setEnduranceSeconds(0);
       setEnduranceScoreLevel('Intermedio');
+      setSquatStatus('completed');
       setSquatWeight(40);
       setSquatReps(1);
+      setDeadliftStatus('completed');
       setDeadliftWeight(50);
       setDeadliftReps(1);
+      setHipThrustStatus('completed');
       setHipThrustWeight(50);
       setHipThrustReps(1);
+      setPressStatus('completed');
       setPressWeight(30);
       setPressReps(1);
+      setRowStatus('completed');
       setRowExerciseType('remo');
       setRowWeight(30);
       setRowReps(10);
@@ -199,15 +258,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     }
   };
 
-  // When currentUser changes: keep modal open only if coach is rotating, but reload clean baseline
-  useEffect(() => {
-    setEditingEval(null);
-    setEvalToDelete(null);
-    setCoachNotes('');
-    if (showAddEvalModal && canEvaluate) {
-      loadAthleteBaselineIntoForm(currentUser.id);
-    }
-  }, [currentUser.id]);
+  const handleOpenAddModal = () => {
+    loadAthleteBaselineIntoForm(currentUser.id);
+    setShowAddEvalModal(true);
+  };
 
   useEffect(() => {
     if (initialOpenAddModal && canEvaluate) {
@@ -215,246 +269,122 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     }
   }, [initialOpenAddModal, canEvaluate]);
 
-  useEffect(() => {
-    let interval: any = null;
-    if (isStopwatchRunning) {
-      interval = setInterval(() => {
-        setStopwatchSeconds(sec => sec + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isStopwatchRunning]);
+  // Helper to build a validated evaluation payload
+  const buildEvaluationPayload = () => {
+    const levelInfo = getCooperLevelInfo(selectedCooperLevel);
+    const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
+    const totalSec = enduranceMinutes * 60 + enduranceSeconds;
 
-  const formatStopwatch = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
+      ? 'user-staff-leslie' 
+      : evaluatingCoachName.includes('Gus') 
+      ? 'user-staff-gus' 
+      : 'user-staff-01';
 
-  // Respaldo robusto para evitar pantallas negras en atletas nuevos sin evaluaciones previas
-  const fallbackEval: PhysicalEvaluationRecord = {
-    id: `fallback-${currentUser.id}`,
-    userId: currentUser.id,
-    evaluationDate: new Date().toISOString().slice(0, 10),
-    coachId: 'user-staff-01',
-    coachName: 'Coach Jorge',
-    cooperTest: {
-      level: 'Nivel 5 (Excelente / Élite)',
-      levelNumber: 5,
-      description: 'Capacidad aeróbica funcional excelente y ritmo constante.',
-      targetZoneRecommendation: 'Zona 4 - 5 de alta intensidad funcional.',
-      distanceMeters: 2800,
-      estimatedVo2Max: 56.0,
-      rating: 'Excelente',
-      notes: 'Evaluación base',
-    },
-    enduranceTest: {
-      name: 'Evaluación de Resistencia Funcional',
-      result: '07:14 min',
-      timeSeconds: 434,
-      scoreScoreLevel: 'Avanzado',
-      notes: 'Completado con excelente ritmo.',
-    },
-    strengthRecords: [
-      { exerciseId: 'squats', exerciseName: 'Sentadillas', weightKg: 120, reps: 1, estimated1RMKg: 120, weightUnit: 'kg' },
-      { exerciseId: 'deadlift', exerciseName: 'Peso Muerto', weightKg: 140, reps: 1, estimated1RMKg: 140, weightUnit: 'kg' },
-      { exerciseId: 'hip_thrust', exerciseName: 'Hip Thrust', weightKg: 160, reps: 1, estimated1RMKg: 160, weightUnit: 'kg' },
-      { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 95, reps: 1, estimated1RMKg: 95, weightUnit: 'kg' },
-      { exerciseId: 'pullups_or_rows', exerciseName: 'Dominadas / Remo', weightKg: 85, reps: 1, estimated1RMKg: 85, weightUnit: 'kg' },
-    ],
-    generalCoachNotes: 'Listo para registrar su primera sesión oficial de evaluación.',
-  };
+    const isCooperDone = cooperStatus === 'completed';
+    const isEnduranceDone = enduranceStatus === 'completed';
 
-  const latestEval = sortedEvals[sortedEvals.length - 1] || null;
-  const prevEval = sortedEvals.length > 1 ? sortedEvals[sortedEvals.length - 2] : null;
+    const cooperTestObj: CooperTestRecord = {
+      level: isCooperDone ? levelInfo.levelName : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+      levelNumber: isCooperDone ? selectedCooperLevel : 0,
+      description: isCooperDone 
+        ? levelInfo.description 
+        : (cooperStatus === 'na' 
+            ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' 
+            : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
+      targetZoneRecommendation: isCooperDone ? levelInfo.coachingRecommendation : 'Acondicionamiento físico adaptado.',
+      distanceMeters: isCooperDone ? optionalDistance : 0,
+      estimatedVo2Max: isCooperDone ? Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)) : 0,
+      rating: isCooperDone ? (selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular') : undefined,
+      notes: cooperReason ? `${cooperStatus.toUpperCase()}: ${cooperReason}` : (isCooperDone ? `Nivel oficial: ${levelInfo.badgeLabel}` : `Estado: ${cooperStatus.toUpperCase()}`),
+      status: cooperStatus,
+      statusReason: cooperReason,
+    };
 
-  // Helpers para parsear tiempos de resistencia (ej. "7:14 min" o "07:14")
-  const parseSecondsFromTimeStr = (str: string): number => {
-    if (!str) return 0;
-    const clean = str.replace(/[^\d:]/g, '');
-    const parts = clean.split(':');
-    if (parts.length === 2) {
-      return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-    }
-    return 0;
-  };
+    const enduranceTestObj: EnduranceTimeTestRecord = {
+      name: enduranceExerciseName,
+      result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
+      timeSeconds: isEnduranceDone ? totalSec : 0,
+      scoreScoreLevel: isEnduranceDone ? enduranceScoreLevel : 'Exento',
+      notes: enduranceReason ? `${enduranceStatus.toUpperCase()}: ${enduranceReason}` : (isEnduranceDone ? `Reto completado en ${formattedResult}.` : `Estado: ${enduranceStatus.toUpperCase()}`),
+      status: enduranceStatus,
+      statusReason: enduranceReason,
+    };
 
-  const latestEnduranceSec = latestEval?.enduranceTest?.result ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : 0;
-  const prevEnduranceSec = prevEval?.enduranceTest?.result ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : 0;
-  const enduranceDeltaSec = prevEnduranceSec > 0 && latestEnduranceSec > 0 ? prevEnduranceSec - latestEnduranceSec : 0;
-  const endurancePercentImprovement = prevEnduranceSec > 0 && enduranceDeltaSec > 0 ? ((enduranceDeltaSec / prevEnduranceSec) * 100).toFixed(1) : null;
+    const strengthRecordsList: StrengthMaxRecord[] = [
+      {
+        exerciseId: 'squats',
+        exerciseName: 'Sentadillas',
+        weightKg: squatStatus === 'completed' ? squatWeight : 0,
+        reps: squatStatus === 'completed' ? squatReps : 0,
+        estimated1RMKg: squatStatus === 'completed' ? calculate1RM(squatWeight, squatReps) : 0,
+        weightUnit: 'kg',
+        status: squatStatus,
+        notes: squatStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : squatStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+      },
+      {
+        exerciseId: 'deadlift',
+        exerciseName: 'Peso Muerto',
+        weightKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
+        reps: deadliftStatus === 'completed' ? deadliftReps : 0,
+        estimated1RMKg: deadliftStatus === 'completed' ? calculate1RM(deadliftWeight, deadliftReps) : 0,
+        weightUnit: 'kg',
+        status: deadliftStatus,
+        notes: deadliftStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : deadliftStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+      },
+      {
+        exerciseId: 'hip_thrust',
+        exerciseName: 'Hip Thrust',
+        weightKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
+        reps: hipThrustStatus === 'completed' ? hipThrustReps : 0,
+        estimated1RMKg: hipThrustStatus === 'completed' ? calculate1RM(hipThrustWeight, hipThrustReps) : 0,
+        weightUnit: 'kg',
+        status: hipThrustStatus,
+        notes: hipThrustStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : hipThrustStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+      },
+      {
+        exerciseId: 'horizontal_press',
+        exerciseName: 'Press Horizontal',
+        weightKg: pressStatus === 'completed' ? pressWeight : 0,
+        reps: pressStatus === 'completed' ? pressReps : 0,
+        estimated1RMKg: pressStatus === 'completed' ? calculate1RM(pressWeight, pressReps) : 0,
+        weightUnit: 'kg',
+        status: pressStatus,
+        notes: pressStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : pressStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+      },
+      {
+        exerciseId: 'pullups_or_rows',
+        exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+        exerciseType: rowExerciseType,
+        weightKg: rowStatus === 'completed' ? rowWeight : 0,
+        reps: rowStatus === 'completed' ? rowReps : 0,
+        estimated1RMKg: rowStatus === 'completed' ? calculate1RM(rowWeight, rowReps) : 0,
+        weightUnit: 'kg',
+        status: rowStatus,
+        notes: rowStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : rowStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+      },
+    ];
 
-  // Reset Form for New Evaluation
-  const handleOpenAddModal = () => {
-    if (loggedStaffUser?.name) {
-      setEvaluatingCoachName(loggedStaffUser.name);
-    } else if (currentUser.role === 'staff') {
-      setEvaluatingCoachName(currentUser.name);
-    }
-    loadAthleteBaselineIntoForm(currentUser.id);
-    setShowAddEvalModal(true);
+    return {
+      userId: currentUser.id,
+      evaluationDate: evalDate,
+      coachId: assignedCoachId,
+      coachName: evaluatingCoachName,
+      cooperTest: cooperTestObj,
+      enduranceTest: enduranceTestObj,
+      strengthRecords: strengthRecordsList,
+      generalCoachNotes: coachNotes,
+    };
   };
 
   const handleSubmitEvaluation = (e: React.FormEvent) => {
     e.preventDefault();
-    const levelInfo = getCooperLevelInfo(selectedCooperLevel);
-    const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
-    const totalSec = enduranceMinutes * 60 + enduranceSeconds;
-
-    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
-      ? 'user-staff-leslie' 
-      : evaluatingCoachName.includes('Gus') 
-      ? 'user-staff-gus' 
-      : 'user-staff-01';
-
-    onAddEvaluation({
-      userId: currentUser.id,
-      evaluationDate: evalDate,
-      coachId: assignedCoachId,
-      coachName: evaluatingCoachName,
-      cooperTest: {
-        level: levelInfo.levelName,
-        levelNumber: selectedCooperLevel,
-        description: levelInfo.description,
-        targetZoneRecommendation: levelInfo.coachingRecommendation,
-        distanceMeters: optionalDistance,
-        estimatedVo2Max: Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)),
-        rating: selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular',
-        notes: `Nivel asignado por evaluación técnica oficial: ${levelInfo.badgeLabel}`,
-      },
-      enduranceTest: {
-        name: enduranceExerciseName,
-        result: formattedResult,
-        timeSeconds: totalSec,
-        scoreScoreLevel: enduranceScoreLevel,
-        notes: `Reto completado en ${formattedResult}.`,
-      },
-      strengthRecords: [
-        {
-          exerciseId: 'squats',
-          exerciseName: 'Sentadillas',
-          weightKg: squatWeight,
-          reps: squatReps,
-          estimated1RMKg: calculate1RM(squatWeight, squatReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'deadlift',
-          exerciseName: 'Peso Muerto',
-          weightKg: deadliftWeight,
-          reps: deadliftReps,
-          estimated1RMKg: calculate1RM(deadliftWeight, deadliftReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'hip_thrust',
-          exerciseName: 'Hip Thrust',
-          weightKg: hipThrustWeight,
-          reps: hipThrustReps,
-          estimated1RMKg: calculate1RM(hipThrustWeight, hipThrustReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'horizontal_press',
-          exerciseName: 'Press Horizontal',
-          weightKg: pressWeight,
-          reps: pressReps,
-          estimated1RMKg: calculate1RM(pressWeight, pressReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'pullups_or_rows',
-          exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
-          exerciseType: rowExerciseType,
-          weightKg: rowWeight,
-          reps: rowReps,
-          estimated1RMKg: calculate1RM(rowWeight, rowReps),
-          weightUnit: 'kg',
-        },
-      ],
-      generalCoachNotes: coachNotes,
-    });
+    onAddEvaluation(buildEvaluationPayload());
     setShowAddEvalModal(false);
   };
 
   const handleSaveAndNextEvaluation = () => {
-    const levelInfo = getCooperLevelInfo(selectedCooperLevel);
-    const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
-    const totalSec = enduranceMinutes * 60 + enduranceSeconds;
-
-    const assignedCoachId = evaluatingCoachName.includes('Leslie') 
-      ? 'user-staff-leslie' 
-      : evaluatingCoachName.includes('Gus') 
-      ? 'user-staff-gus' 
-      : 'user-staff-01';
-
-    onAddEvaluation({
-      userId: currentUser.id,
-      evaluationDate: evalDate,
-      coachId: assignedCoachId,
-      coachName: evaluatingCoachName,
-      cooperTest: {
-        level: levelInfo.levelName,
-        levelNumber: selectedCooperLevel,
-        description: levelInfo.description,
-        targetZoneRecommendation: levelInfo.coachingRecommendation,
-        distanceMeters: optionalDistance,
-        estimatedVo2Max: Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)),
-        rating: selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular',
-        notes: `Nivel asignado por evaluación técnica oficial: ${levelInfo.badgeLabel}`,
-      },
-      enduranceTest: {
-        name: enduranceExerciseName,
-        result: formattedResult,
-        timeSeconds: totalSec,
-        scoreScoreLevel: enduranceScoreLevel,
-        notes: `Reto completado en ${formattedResult}.`,
-      },
-      strengthRecords: [
-        {
-          exerciseId: 'squats',
-          exerciseName: 'Sentadillas',
-          weightKg: squatWeight,
-          reps: squatReps,
-          estimated1RMKg: calculate1RM(squatWeight, squatReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'deadlift',
-          exerciseName: 'Peso Muerto',
-          weightKg: deadliftWeight,
-          reps: deadliftReps,
-          estimated1RMKg: calculate1RM(deadliftWeight, deadliftReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'hip_thrust',
-          exerciseName: 'Hip Thrust',
-          weightKg: hipThrustWeight,
-          reps: hipThrustReps,
-          estimated1RMKg: calculate1RM(hipThrustWeight, hipThrustReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'horizontal_press',
-          exerciseName: 'Press Horizontal',
-          weightKg: pressWeight,
-          reps: pressReps,
-          estimated1RMKg: calculate1RM(pressWeight, pressReps),
-          weightUnit: 'kg',
-        },
-        {
-          exerciseId: 'pullups_or_rows',
-          exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
-          exerciseType: rowExerciseType,
-          weightKg: rowWeight,
-          reps: rowReps,
-          estimated1RMKg: calculate1RM(rowWeight, rowReps),
-          weightUnit: 'kg',
-        },
-      ],
-      generalCoachNotes: coachNotes,
-    });
+    onAddEvaluation(buildEvaluationPayload());
 
     if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
       const savedName = currentUser.name;
@@ -479,6 +409,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     '800m Carrera + 50 Pull-ups',
     'Reto Funcional Libre',
   ];
+
+  const latestEval = sortedEvals[sortedEvals.length - 1] || null;
+  const prevEval = sortedEvals.length > 1 ? sortedEvals[sortedEvals.length - 2] : null;
+
+  const prevEnduranceSeconds = prevEval ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : null;
+  const currentEnduranceSeconds = latestEval ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : null;
+  const enduranceDeltaSec = (prevEnduranceSeconds !== null && currentEnduranceSeconds !== null && prevEnduranceSeconds > currentEnduranceSeconds)
+    ? (prevEnduranceSeconds - currentEnduranceSeconds)
+    : 0;
+
+  const endurancePercentImprovement = (prevEnduranceSeconds && currentEnduranceSeconds && prevEnduranceSeconds > currentEnduranceSeconds)
+    ? Math.round(((prevEnduranceSeconds - currentEnduranceSeconds) / prevEnduranceSeconds) * 100)
+    : null;
+
+  const formatStopwatch = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="space-y-4 pb-20 px-3 sm:px-4 pt-2">
@@ -666,7 +615,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <Heart className="w-4 h-4 text-red-500" />
                 <span>1. Test de Cooper (12 Minutos)</span>
               </span>
-              {prevEval ? (
+              {latestEval.cooperTest.status === 'na' ? (
+                <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
+                  🚫 No Aplica (NA)
+                </span>
+              ) : latestEval.cooperTest.status === 'np' ? (
+                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                  ⚠️ No Presentada (NP)
+                </span>
+              ) : prevEval ? (
                 <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />
                   <span>+1 Nivel Superado</span>
@@ -678,62 +635,82 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
-                <span className="text-[10px] text-neutral-400 block font-medium">
-                  En el anterior sacaste ({prevEval ? prevEval.evaluationDate : 'Base inicial'}):
+            {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-neutral-400">
+                    {latestEval.cooperTest.status === 'na' ? 'Prueba No Aplicable' : 'Prueba No Presentada'}
+                  </span>
+                  <p className="text-xs text-neutral-300 mt-0.5">
+                    {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na' ? 'Adaptación por perfil de edad o condición médica.' : 'Sin registro en esta sesión.')}
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                  latestEval.cooperTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {latestEval.cooperTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
                 </span>
-                <div className="text-2xl font-extrabold text-neutral-300 font-brand">
-                  NIVEL {prevEval?.cooperTest.levelNumber || 4}
-                </div>
-                <div className="text-[10px] text-neutral-400 font-mono">
-                  {prevEval?.cooperTest.distanceMeters || 2550} metros recorridos
-                </div>
               </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
+                    <span className="text-[10px] text-neutral-400 block font-medium">
+                      En el anterior sacaste ({prevEval ? prevEval.evaluationDate : 'Base inicial'}):
+                    </span>
+                    <div className="text-2xl font-extrabold text-neutral-300 font-brand">
+                      NIVEL {prevEval?.cooperTest.levelNumber || 4}
+                    </div>
+                    <div className="text-[10px] text-neutral-400 font-mono">
+                      {prevEval?.cooperTest.distanceMeters || 2550} metros recorridos
+                    </div>
+                  </div>
 
-              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 space-y-1">
-                <span className="text-[10px] text-blue-400 block font-semibold">
-                  Ahora sacaste ({latestEval.evaluationDate}):
-                </span>
-                <div className="text-2xl font-extrabold text-blue-300 font-brand">
-                  NIVEL {latestEval.cooperTest.levelNumber || 5}
+                  <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 space-y-1">
+                    <span className="text-[10px] text-blue-400 block font-semibold">
+                      Ahora sacaste ({latestEval.evaluationDate}):
+                    </span>
+                    <div className="text-2xl font-extrabold text-blue-300 font-brand">
+                      NIVEL {latestEval.cooperTest.levelNumber || 5}
+                    </div>
+                    <div className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
+                      <span>{latestEval.cooperTest.distanceMeters || 2800}m</span>
+                      {prevEval && <span className="text-emerald-300">(+250m de distancia)</span>}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                  <span>{latestEval.cooperTest.distanceMeters || 2800}m</span>
-                  {prevEval && <span className="text-emerald-300">(+250m de distancia)</span>}
-                </div>
-              </div>
-            </div>
 
-            {/* Visual Level Progress Bar */}
-            <div className="space-y-1 pt-1">
-              <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
-                <span>Nivel 1 (Base)</span>
-                <span className="text-emerald-400 font-bold">
-                  {prevEval?.cooperTest.levelNumber ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
-                </span>
-                <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
-              </div>
-              <div className="grid grid-cols-5 gap-1.5 h-2">
-                {[1, 2, 3, 4, 5].map((lvl) => {
-                  const currentLvl = latestEval.cooperTest.levelNumber || 1;
-                  const isReached = lvl <= currentLvl;
-                  const isNew = prevEval && prevEval.cooperTest.levelNumber && lvl === currentLvl && currentLvl > prevEval.cooperTest.levelNumber;
-                  return (
-                    <div
-                      key={lvl}
-                      className={`h-full rounded-full transition-all ${
-                        isNew
-                          ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50 animate-pulse'
-                          : isReached
-                          ? 'bg-blue-500'
-                          : 'bg-neutral-800'
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
+                {/* Visual Level Progress Bar */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+                    <span>Nivel 1 (Base)</span>
+                    <span className="text-emerald-400 font-bold">
+                      {prevEval?.cooperTest.levelNumber ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
+                    </span>
+                    <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 h-2">
+                    {[1, 2, 3, 4, 5].map((lvl) => {
+                      const currentLvl = latestEval.cooperTest.levelNumber || 1;
+                      const isReached = lvl <= currentLvl;
+                      const isNew = prevEval && prevEval.cooperTest.levelNumber && lvl === currentLvl && currentLvl > prevEval.cooperTest.levelNumber;
+                      return (
+                        <div
+                          key={lvl}
+                          className={`h-full rounded-full transition-all ${
+                            isNew
+                              ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50 animate-pulse'
+                              : isReached
+                              ? 'bg-blue-500'
+                              : 'bg-neutral-800'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             <button
               onClick={() => setActiveTab('cooper')}
@@ -750,7 +727,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <Flame className="w-4 h-4 text-red-500" />
                 <span>2. Test de Resistencia Funcional (Por Tiempo)</span>
               </span>
-              {enduranceDeltaSec > 0 ? (
+              {latestEval.enduranceTest.status === 'na' ? (
+                <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
+                  🚫 No Aplica (NA)
+                </span>
+              ) : latestEval.enduranceTest.status === 'np' ? (
+                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                  ⚠️ No Presentada (NP)
+                </span>
+              ) : enduranceDeltaSec > 0 ? (
                 <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />
                   <span>¡{enduranceDeltaSec} seg más rápido!</span>
@@ -762,36 +747,56 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               )}
             </div>
 
-            <div className="text-[11px] text-neutral-300 bg-neutral-950 p-2 rounded-xl border border-neutral-800 flex items-center justify-between">
-              <span className="text-neutral-400">Reto Evaluado:</span>
-              <strong className="text-white">{latestEval.enduranceTest.name}</strong>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
-                <span className="text-[10px] text-neutral-400 block font-medium">
-                  {prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}
+            {latestEval.enduranceTest.status === 'na' || latestEval.enduranceTest.status === 'np' ? (
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-neutral-400">
+                    {latestEval.enduranceTest.status === 'na' ? 'Reto No Aplicable' : 'Reto No Presentado'}
+                  </span>
+                  <p className="text-xs text-neutral-300 mt-0.5">
+                    {latestEval.enduranceTest.statusReason || (latestEval.enduranceTest.status === 'na' ? 'Adaptado o exento según la condición del atleta.' : 'Sin registro en esta sesión.')}
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                  latestEval.enduranceTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {latestEval.enduranceTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
                 </span>
-                <div className="text-xl font-extrabold text-neutral-300 font-mono">
-                  {prevEval ? prevEval.enduranceTest.result : 'Primer Reto'}
-                </div>
-                <div className="text-[10px] text-neutral-500 font-mono">
-                  {prevEval ? prevEval.evaluationDate : 'Línea base registrada'}
-                </div>
               </div>
+            ) : (
+              <>
+                <div className="text-[11px] text-neutral-300 bg-neutral-950 p-2 rounded-xl border border-neutral-800 flex items-center justify-between">
+                  <span className="text-neutral-400">Reto Evaluado:</span>
+                  <strong className="text-white">{latestEval.enduranceTest.name}</strong>
+                </div>
 
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 space-y-1">
-                <span className="text-[10px] text-emerald-400 block font-semibold">
-                  Ahora hiciste:
-                </span>
-                <div className="text-xl font-extrabold text-emerald-300 font-mono">
-                  {latestEval.enduranceTest.result}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
+                    <span className="text-[10px] text-neutral-400 block font-medium">
+                      {prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}
+                    </span>
+                    <div className="text-xl font-extrabold text-neutral-300 font-mono">
+                      {prevEval ? prevEval.enduranceTest.result : 'Primer Reto'}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 font-mono">
+                      {prevEval ? prevEval.evaluationDate : 'Línea base registrada'}
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 space-y-1">
+                    <span className="text-[10px] text-emerald-400 block font-semibold">
+                      Ahora hiciste:
+                    </span>
+                    <div className="text-xl font-extrabold text-emerald-300 font-mono">
+                      {latestEval.enduranceTest.result}
+                    </div>
+                    <div className="text-[10px] text-emerald-400 font-medium">
+                      {endurancePercentImprovement ? `Mejora del ${endurancePercentImprovement}% en velocidad muscular` : 'Tiempo oficial validado'}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[10px] text-emerald-400 font-medium">
-                  {endurancePercentImprovement ? `Mejora del ${endurancePercentImprovement}% en velocidad muscular` : 'Tiempo oficial validado'}
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
             <button
               onClick={() => setActiveTab('endurance')}
@@ -816,8 +821,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     </span>
                   );
                 }
-                const totalCurrent = latestEval.strengthRecords.reduce((acc, r) => acc + r.weightKg, 0);
-                const totalPrev = prevEval.strengthRecords.reduce((acc, r) => acc + r.weightKg, 0);
+                const totalCurrent = latestEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
+                const totalPrev = prevEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
                 const diff = totalCurrent - totalPrev;
                 return (
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
@@ -831,9 +836,33 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
             <div className="space-y-2">
               {latestEval.strengthRecords.map((rec) => {
+                if (rec.status === 'na' || rec.status === 'np') {
+                  const isNA = rec.status === 'na';
+                  return (
+                    <div
+                      key={rec.exerciseId}
+                      className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          <span className="text-neutral-400">{rec.exerciseName}</span>
+                        </div>
+                        <div className="text-[10px] text-neutral-500">
+                          {rec.statusReason || (isNA ? 'No aplica por prescripción médica / edad' : 'No realizada en esta sesión')}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        isNA ? 'bg-neutral-800 text-neutral-400 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {isNA ? '🚫 NA' : '⚠️ NP'}
+                      </span>
+                    </div>
+                  );
+                }
+
                 const prevRec = prevEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
                 const hasPrev = Boolean(prevRec);
-                const deltaKg = hasPrev && prevRec ? rec.weightKg - prevRec.weightKg : null;
+                const deltaKg = hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? rec.weightKg - prevRec.weightKg : null;
 
                 return (
                   <div
@@ -845,7 +874,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <span className="text-neutral-400">{rec.exerciseName}</span>
                       </div>
                       <div className="text-[10px] text-neutral-400">
-                        {hasPrev && prevRec ? (
+                        {hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? (
                           <>Anterior: <strong className="text-neutral-300">{prevRec.weightKg} kg</strong> &rarr; Ahora:{' '}</>
                         ) : (
                           <>Marca actual:{' '}</>
@@ -894,113 +923,154 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'cooper' && latestEval && (
         <div className="space-y-4">
-          {/* Main Level Showcase Card */}
-          <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
-            <div className="absolute -right-12 -top-12 w-40 h-40 bg-blue-600/15 rounded-full blur-2xl pointer-events-none" />
-
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-                <Heart className="w-4 h-4 text-red-500" />
-                Test de Cooper (12 Minutos) · Resultado Oficial
-              </span>
-              <span className="text-[10px] text-neutral-400 font-mono">
-                {latestEval.evaluationDate}
-              </span>
-            </div>
-
-            {/* BIG PROMINENT LEVEL DISPLAY (User Requirement: Solo mostrar el nivel al que llegaron) */}
-            <div className="text-center py-2 space-y-2">
-              <span className="text-[11px] font-mono tracking-widest text-blue-400 uppercase font-bold">
-                Nivel Alcanzado en Test de 12 Minutos
-              </span>
-              
-              <div className="text-5xl font-extrabold text-white tracking-tight font-brand">
-                {latestEval.cooperTest.levelNumber ? `NIVEL ${latestEval.cooperTest.levelNumber}` : 'NIVEL 5'}
-              </div>
-
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-red-400">
-                <Flame className="w-3.5 h-3.5 text-red-500" />
-                <span>{latestEval.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Excelente / Élite Kinetix'}</span>
-              </div>
-            </div>
-
-            {/* 20-Step Visual Level Progression Bar */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
-                <span>Nivel 1 (Adaptación)</span>
-                <span>Nivel 10 (Avanzado)</span>
-                <span className="text-red-500 font-bold">Nivel 20 (Ultra Élite)</span>
-              </div>
-              <div className="grid grid-cols-20 gap-0.5 h-2.5 bg-neutral-900 rounded-full p-0.5 border border-neutral-800">
-                {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
-                  const currentLvl = latestEval.cooperTest.levelNumber || 10;
-                  const isReached = lvl <= currentLvl;
-                  const isCurrent = lvl === currentLvl;
-                  return (
-                    <div
-                      key={lvl}
-                      title={`Nivel ${lvl}`}
-                      className={`h-full rounded-sm transition-all ${
-                        isCurrent
-                          ? 'bg-red-500 shadow-sm shadow-red-500/80 scale-y-125'
-                          : isReached
-                          ? 'bg-blue-500'
-                          : 'bg-neutral-800/80'
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Comparativa Visual Directa con Test Anterior */}
-            {prevEval && (
-              <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2 text-xs">
-                <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
-                  Comparativa Contra Test Anterior
+          {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
+            <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Heart className="w-4 h-4 text-red-500" />
+                  Test de Cooper (12 Minutos) · Exención / Adaptación
                 </span>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
-                    <span className="text-[10px] text-neutral-400 block">En el anterior sacaste:</span>
-                    <div className="text-base font-bold text-neutral-300 font-brand">
-                      NIVEL {prevEval.cooperTest.levelNumber}
-                    </div>
-                    <span className="text-[10px] text-neutral-500 font-mono">{prevEval.evaluationDate}</span>
-                  </div>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {latestEval.evaluationDate}
+                </span>
+              </div>
 
-                  <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/60">
-                    <span className="text-[10px] text-blue-400 block font-semibold">Ahora sacaste:</span>
-                    <div className="text-base font-bold text-blue-300 font-brand">
-                      NIVEL {latestEval.cooperTest.levelNumber}
-                    </div>
-                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3" />
-                      <span>¡Superaste tu nivel!</span>
-                    </span>
-                  </div>
+              <div className="text-center py-6 space-y-2.5">
+                <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                  latestEval.cooperTest.status === 'na'
+                    ? 'bg-neutral-800 text-neutral-200 border border-neutral-700'
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {latestEval.cooperTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
+                </span>
+                <div className="text-2xl font-bold text-white">
+                  {latestEval.cooperTest.status === 'na'
+                    ? 'Prueba no requerida para este atleta'
+                    : 'Prueba no presentada en esta fecha'}
                 </div>
-              </div>
-            )}
-
-            {/* Description & Coaching Recommendation */}
-            <div className="space-y-2 pt-2 border-t border-neutral-800/80 text-xs">
-              <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/60 space-y-1">
-                <span className="text-[10px] font-semibold text-blue-400 uppercase">
-                  Diagnóstico Fisiológico
-                </span>
-                <p className="text-neutral-300 text-[11px] leading-relaxed">
-                  {latestEval.cooperTest.description}
+                <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                  {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na'
+                    ? 'Adaptación cardiovascular por categoría de edad (adulto mayor, niño) o prescripción física del coach.'
+                    : 'El atleta no realizó o reprogramó esta prueba de campo en esta sesión.')}
                 </p>
               </div>
 
-              {latestEval.cooperTest.targetZoneRecommendation && (
-                <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
-                  <strong className="text-white block mb-0.5">Pauta del Coach Jorge:</strong>
-                  {latestEval.cooperTest.targetZoneRecommendation}
+              <div className="p-3.5 rounded-2xl bg-neutral-950/60 border border-neutral-800 text-[11px] text-neutral-400 space-y-1">
+                <strong className="text-neutral-200 block">¿Por qué puede figurar NA o NP?</strong>
+                <p>
+                  En Kinetix adaptamos la evaluación a cada atleta. Niños, personas mayores o alumnos con prescripción médica están exentos de la prueba de 12 min sin que afecte su avance ni registros anteriores.
+                </p>
+              </div>
+            </div>
+          ) : (
+            /* Main Level Showcase Card */
+            <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
+              <div className="absolute -right-12 -top-12 w-40 h-40 bg-blue-600/15 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Heart className="w-4 h-4 text-red-500" />
+                  Test de Cooper (12 Minutos) · Resultado Oficial
+                </span>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {latestEval.evaluationDate}
+                </span>
+              </div>
+
+              {/* BIG PROMINENT LEVEL DISPLAY (User Requirement: Solo mostrar el nivel al que llegaron) */}
+              <div className="text-center py-2 space-y-2">
+                <span className="text-[11px] font-mono tracking-widest text-blue-400 uppercase font-bold">
+                  Nivel Alcanzado en Test de 12 Minutos
+                </span>
+                
+                <div className="text-5xl font-extrabold text-white tracking-tight font-brand">
+                  {latestEval.cooperTest.levelNumber ? `NIVEL ${latestEval.cooperTest.levelNumber}` : 'NIVEL 5'}
+                </div>
+
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-red-400">
+                  <Flame className="w-3.5 h-3.5 text-red-500" />
+                  <span>{latestEval.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Excelente / Élite Kinetix'}</span>
+                </div>
+              </div>
+
+              {/* 20-Step Visual Level Progression Bar */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+                  <span>Nivel 1 (Adaptación)</span>
+                  <span>Nivel 10 (Avanzado)</span>
+                  <span className="text-red-500 font-bold">Nivel 20 (Ultra Élite)</span>
+                </div>
+                <div className="grid grid-cols-20 gap-0.5 h-2.5 bg-neutral-900 rounded-full p-0.5 border border-neutral-800">
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
+                    const currentLvl = latestEval.cooperTest.levelNumber || 10;
+                    const isReached = lvl <= currentLvl;
+                    const isCurrent = lvl === currentLvl;
+                    return (
+                      <div
+                        key={lvl}
+                        title={`Nivel ${lvl}`}
+                        className={`h-full rounded-sm transition-all ${
+                          isCurrent
+                            ? 'bg-red-500 shadow-sm shadow-red-500/80 scale-y-125'
+                            : isReached
+                            ? 'bg-blue-500'
+                            : 'bg-neutral-800/80'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Comparativa Visual Directa con Test Anterior */}
+              {prevEval && (
+                <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2 text-xs">
+                  <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                    Comparativa Contra Test Anterior
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                      <span className="text-[10px] text-neutral-400 block">En el anterior sacaste:</span>
+                      <div className="text-base font-bold text-neutral-300 font-brand">
+                        NIVEL {prevEval.cooperTest.levelNumber}
+                      </div>
+                      <span className="text-[10px] text-neutral-500 font-mono">{prevEval.evaluationDate}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/60">
+                      <span className="text-[10px] text-blue-400 block font-semibold">Ahora sacaste:</span>
+                      <div className="text-base font-bold text-blue-300 font-brand">
+                        NIVEL {latestEval.cooperTest.levelNumber}
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" />
+                        <span>¡Superaste tu nivel!</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
+
+              {/* Description & Coaching Recommendation */}
+              <div className="space-y-2 pt-2 border-t border-neutral-800/80 text-xs">
+                <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/60 space-y-1">
+                  <span className="text-[10px] font-semibold text-blue-400 uppercase">
+                    Diagnóstico Fisiológico
+                  </span>
+                  <p className="text-neutral-300 text-[11px] leading-relaxed">
+                    {latestEval.cooperTest.description}
+                  </p>
+                </div>
+
+                {latestEval.cooperTest.targetZoneRecommendation && (
+                  <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
+                    <strong className="text-white block mb-0.5">Pauta del Coach Jorge:</strong>
+                    {latestEval.cooperTest.targetZoneRecommendation}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -1009,78 +1079,119 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'endurance' && latestEval && (
         <div className="space-y-4">
-          {/* Main Endurance Card */}
-          <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-red-500" />
-                <span>Test de Resistencia Funcional (Por Tiempo)</span>
-              </span>
-              <span className="text-[10px] text-neutral-400 font-mono">
-                {latestEval.evaluationDate}
-              </span>
-            </div>
-
-            {/* Big Time Display */}
-            <div className="text-center py-2 space-y-2">
-              <span className="text-[11px] font-mono tracking-widest text-emerald-400 uppercase font-bold">
-                Tiempo Logrado en el Reto
-              </span>
-              
-              <div className="text-5xl font-extrabold text-emerald-400 tracking-tight font-mono">
-                {latestEval.enduranceTest.result}
-              </div>
-
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-white">
-                <Activity className="w-3.5 h-3.5 text-blue-400" />
-                <span>Reto: <strong className="text-blue-300">{latestEval.enduranceTest.name}</strong></span>
-              </div>
-            </div>
-
-            {/* Comparativa Visual Directa: En el anterior sacaste tanto vs ahora */}
-            <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+          {latestEval.enduranceTest.status === 'na' || latestEval.enduranceTest.status === 'np' ? (
+            <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
-                  Comparativa de Tiempo vs Test Anterior
+                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-red-500" />
+                  Test de Resistencia Funcional · Exención / Adaptación
                 </span>
-                {enduranceDeltaSec > 0 && (
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.2 rounded-full border border-emerald-500/30">
-                    -{enduranceDeltaSec}s más veloz
-                  </span>
-                )}
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {latestEval.evaluationDate}
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800">
-                  <span className="text-[10px] text-neutral-400 block">{prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}</span>
-                  <div className="text-base font-bold text-neutral-300 font-mono mt-0.5">
-                    {prevEval ? prevEval.enduranceTest.result : 'Primer Test'}
-                  </div>
-                  <span className="text-[10px] text-neutral-500 font-mono">{prevEval ? prevEval.evaluationDate : 'Línea base registrada'}</span>
+              <div className="text-center py-6 space-y-2.5">
+                <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                  latestEval.enduranceTest.status === 'na'
+                    ? 'bg-neutral-800 text-neutral-200 border border-neutral-700'
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {latestEval.enduranceTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
+                </span>
+                <div className="text-2xl font-bold text-white">
+                  {latestEval.enduranceTest.status === 'na'
+                    ? 'Reto adaptado / No requerido'
+                    : 'Reto no presentado en esta sesión'}
                 </div>
+                <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                  {latestEval.enduranceTest.statusReason || (latestEval.enduranceTest.status === 'na'
+                    ? 'Adaptación funcional neuromuscular específica según la edad o prescripción del coach.'
+                    : 'Prueba no realizada en esta sesión evaluativa.')}
+                </p>
+              </div>
 
-                <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60">
-                  <span className="text-[10px] text-emerald-400 block font-semibold">Ahora hiciste:</span>
-                  <div className="text-base font-bold text-emerald-300 font-mono mt-0.5">
-                    {latestEval.enduranceTest.result}
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>¡Menor tiempo = Mayor potencia!</span>
-                  </span>
-                </div>
+              <div className="p-3.5 rounded-2xl bg-neutral-950/60 border border-neutral-800 text-[11px] text-neutral-400 space-y-1">
+                <strong className="text-neutral-200 block">Personalización Kinetix</strong>
+                <p>
+                  Si un alumno presenta alguna limitación temporal o requiere retos de bajo impacto, el coach registra NA o NP protegiendo la salud sin borrar su historial.
+                </p>
               </div>
             </div>
+          ) : (
+            /* Main Endurance Card */
+            <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-red-500" />
+                  <span>Test de Resistencia Funcional (Por Tiempo)</span>
+                </span>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {latestEval.evaluationDate}
+                </span>
+              </div>
 
-            {/* Explanation of the Endurance Test */}
-            <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/80 text-[11px] text-neutral-400 space-y-1">
-              <strong className="text-neutral-200 block">¿Cómo funciona el Test de Resistencia en Kinetix?</strong>
-              <p className="leading-relaxed">
-                Los ejercicios van rotando según el ciclo de entrenamiento (ej. <strong>50 burpees</strong>, <strong>remo 2000m</strong>, <strong>100 sentadillas</strong>). 
-                El Coach solo registra el <strong>tiempo total</strong> en que lo completas para medir tu potencia anaeróbica y velocidad de recuperación neuromuscular.
-              </p>
+              {/* Big Time Display */}
+              <div className="text-center py-2 space-y-2">
+                <span className="text-[11px] font-mono tracking-widest text-emerald-400 uppercase font-bold">
+                  Tiempo Logrado en el Reto
+                </span>
+                
+                <div className="text-5xl font-extrabold text-emerald-400 tracking-tight font-mono">
+                  {latestEval.enduranceTest.result}
+                </div>
+
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-white">
+                  <Activity className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Reto: <strong className="text-blue-300">{latestEval.enduranceTest.name}</strong></span>
+                </div>
+              </div>
+
+              {/* Comparativa Visual Directa: En el anterior sacaste tanto vs ahora */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                    Comparativa de Tiempo vs Test Anterior
+                  </span>
+                  {enduranceDeltaSec > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.2 rounded-full border border-emerald-500/30">
+                      -{enduranceDeltaSec}s más veloz
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-400 block">{prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}</span>
+                    <div className="text-base font-bold text-neutral-300 font-mono mt-0.5">
+                      {prevEval ? prevEval.enduranceTest.result : 'Primer Test'}
+                    </div>
+                    <span className="text-[10px] text-neutral-500 font-mono">{prevEval ? prevEval.evaluationDate : 'Línea base registrada'}</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60">
+                    <span className="text-[10px] text-emerald-400 block font-semibold">Ahora hiciste:</span>
+                    <div className="text-base font-bold text-emerald-300 font-mono mt-0.5">
+                      {latestEval.enduranceTest.result}
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                      <TrendingUp className="w-3 h-3" />
+                      <span>¡Menor tiempo = Mayor potencia!</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Explanation of the Endurance Test */}
+              <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800/80 text-[11px] text-neutral-400 space-y-1">
+                <strong className="text-neutral-200 block">¿Cómo funciona el Test de Resistencia en Kinetix?</strong>
+                <p className="leading-relaxed">
+                  Los ejercicios van rotando según el ciclo de entrenamiento (ej. <strong>50 burpees</strong>, <strong>remo 2000m</strong>, <strong>100 sentadillas</strong>). 
+                  El Coach solo registra el <strong>tiempo total</strong> en que lo completas para medir tu potencia anaeróbica y velocidad de recuperación neuromuscular.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Cronómetro Auxiliar Opcional (Colapsable para no saturar) */}
           <div className="p-4 rounded-3xl bg-neutral-900/70 border border-neutral-800 space-y-3">
@@ -1163,8 +1274,35 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           <div className="space-y-2.5">
             {latestEval.strengthRecords.map((rec) => {
+              if (rec.status === 'na' || rec.status === 'np') {
+                const isNA = rec.status === 'na';
+                return (
+                  <div
+                    key={rec.exerciseId}
+                    className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-1.5 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Dumbbell className="w-3.5 h-3.5 text-neutral-400" />
+                          {rec.exerciseName}
+                        </h4>
+                        <span className="text-[10px] text-neutral-500">
+                          {rec.statusReason || (isNA ? 'Ejercicio exento por edad, condición física o prescripción médica.' : 'Prueba pospuesta o no realizada en esta sesión.')}
+                        </span>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        isNA ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {isNA ? '🚫 NA (No Aplica)' : '⚠️ NP (No Presentada)'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
               const prevRec = prevEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
-              const prevWeight = prevRec ? prevRec.weightKg : (rec.weightKg > 10 ? rec.weightKg - 10 : rec.weightKg);
+              const prevWeight = prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? prevRec.weightKg : (rec.weightKg > 10 ? rec.weightKg - 10 : rec.weightKg);
               const deltaKg = rec.weightKg - prevWeight;
 
               const displayWeight = weightUnit === 'kg' ? rec.weightKg : kgToLbs(rec.weightKg);
@@ -1305,25 +1443,42 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
                     <span className="text-[10px] text-neutral-400 block">Nivel Cooper</span>
                     <div className="font-extrabold text-blue-400 font-brand text-sm">
-                      Nivel {ev.cooperTest.levelNumber || 5}
+                      {ev.cooperTest.status === 'na' ? '🚫 NA' : ev.cooperTest.status === 'np' ? '⚠️ NP' : `Nivel ${ev.cooperTest.levelNumber || 5}`}
                     </div>
-                    <span className="text-[10px] text-neutral-500 font-mono">{ev.cooperTest.distanceMeters || 2800}m</span>
+                    <span className="text-[10px] text-neutral-500 font-mono truncate block">
+                      {ev.cooperTest.status === 'na' || ev.cooperTest.status === 'np' ? (ev.cooperTest.statusReason || 'Exento') : `${ev.cooperTest.distanceMeters || 2800}m`}
+                    </span>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
                     <span className="text-[10px] text-neutral-400 block truncate">Resistencia</span>
                     <div className="font-extrabold text-emerald-400 font-mono text-sm">
-                      {ev.enduranceTest.result}
+                      {ev.enduranceTest.status === 'na' ? '🚫 NA' : ev.enduranceTest.status === 'np' ? '⚠️ NP' : ev.enduranceTest.result}
                     </div>
-                    <span className="text-[10px] text-neutral-500 truncate block">{ev.enduranceTest.name}</span>
+                    <span className="text-[10px] text-neutral-500 truncate block">
+                      {ev.enduranceTest.status === 'na' || ev.enduranceTest.status === 'np' ? (ev.enduranceTest.statusReason || 'Exento') : ev.enduranceTest.name}
+                    </span>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
                     <span className="text-[10px] text-neutral-400 block">Sentadilla 1RM</span>
-                    <div className="font-extrabold text-[#ff5500] font-mono text-sm">
-                      {ev.strengthRecords.find(s => s.exerciseId === 'squats')?.weightKg || 120} kg
-                    </div>
-                    <span className="text-[10px] text-neutral-500">1RM máx</span>
+                    {(() => {
+                      const squat = ev.strengthRecords.find(s => s.exerciseId === 'squats');
+                      if (squat?.status === 'na') {
+                        return <div className="font-extrabold text-neutral-400 font-mono text-sm">🚫 NA</div>;
+                      }
+                      if (squat?.status === 'np') {
+                        return <div className="font-extrabold text-amber-400 font-mono text-sm">⚠️ NP</div>;
+                      }
+                      return (
+                        <>
+                          <div className="font-extrabold text-[#ff5500] font-mono text-sm">
+                            {squat?.weightKg || 120} kg
+                          </div>
+                          <span className="text-[10px] text-neutral-500">1RM máx</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1339,13 +1494,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     <button
                       onClick={() => {
                         setEditingEval(ev);
+                        loadAthleteBaselineIntoForm(currentUser.id, ev);
                         setEvalDate(ev.evaluationDate);
-                        setSelectedCooperLevel(ev.cooperTest.levelNumber || 5);
-                        setOptionalDistance(ev.cooperTest.distanceMeters || 2800);
-                        setEnduranceExerciseName(ev.enduranceTest.name || 'Evaluación de Resistencia Funcional');
-                        const sec = parseSecondsFromTimeStr(ev.enduranceTest.result);
-                        setEnduranceMinutes(Math.floor(sec / 60));
-                        setEnduranceSeconds(sec % 60);
                         setCoachNotes(ev.generalCoachNotes || '');
                       }}
                       className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition-colors"
@@ -1438,8 +1588,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <form onSubmit={handleSubmitEvaluation} className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               {/* Fecha */}
+              {/* Fecha (Permite registrar cualquier mes anterior para cargar historiales sin perder avances) */}
               <div>
-                <label className="text-neutral-300 font-medium block mb-1">Fecha de la Prueba</label>
+                <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                  <span>Fecha de la Prueba</span>
+                  <span className="text-[10px] text-blue-400 font-mono">📅 Carga histórica permitida</span>
+                </label>
                 <input
                   type="date"
                   value={evalDate}
@@ -1447,244 +1601,629 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-blue-500 outline-none"
                   required
                 />
+                <span className="text-[10px] text-neutral-500 block mt-1">
+                  * Puedes elegir cualquier fecha de meses anteriores para cargar expedientes históricos sin perder tu progreso ganado.
+                </span>
               </div>
 
-              {/* SECCIÓN 1: TEST DE COOPER (NIVELES 1 AL 20) */}
+              {/* SECCIÓN 1: TEST DE COOPER (NIVELES 1 AL 20 / NA / NP) */}
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-white flex items-center gap-1.5">
                     <Heart className="w-3.5 h-3.5 text-red-500" />
-                    <span>1. Nivel en Test de Cooper (12 Minutos) — Escala 1 al 20</span>
+                    <span>1. Test de Cooper (12 Minutos)</span>
                   </span>
-                  <span className="text-[11px] text-blue-400 font-mono font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">
-                    Nivel {selectedCooperLevel} de 20
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-10 gap-1">
-                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
-                    const isSelected = selectedCooperLevel === lvl;
-                    return (
-                      <button
-                        type="button"
-                        key={lvl}
-                        onClick={() => setSelectedCooperLevel(lvl)}
-                        className={`py-1.5 rounded-lg border flex flex-col items-center justify-center transition-all ${
-                          isSelected
-                            ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-md shadow-blue-500/30 scale-105'
-                            : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-                        }`}
-                        title={`Nivel ${lvl}`}
-                      >
-                        <span className="text-xs font-bold">{lvl}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="text-[11px] text-neutral-300 bg-neutral-900/80 p-3 rounded-xl border border-neutral-800/80 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <strong className="text-white">
-                      {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.levelName || `Nivel ${selectedCooperLevel}`}
-                    </strong>
-                    <span className="text-emerald-400 font-mono font-semibold text-[10px]">
-                      {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.referenceDistance}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-400 leading-snug">
-                    {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.description}
-                  </p>
-                  <div className="text-[10px] text-blue-400 pt-0.5">
-                    Pauta de entreno: {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.coachingRecommendation}
+                  
+                  {/* Selector: Normal / NA / NP */}
+                  <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setCooperStatus('completed')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        cooperStatus === 'completed'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      ✓ Calificado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCooperStatus('na')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        cooperStatus === 'na'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                      title="No Aplica (Niños, Adultos Mayores)"
+                    >
+                      🚫 NA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCooperStatus('np')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        cooperStatus === 'np'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                      title="No Presentada (Enfermedad, Lesión)"
+                    >
+                      ⚠️ NP
+                    </button>
                   </div>
                 </div>
+
+                {cooperStatus === 'completed' ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-neutral-400">Escala de Nivel:</span>
+                      <span className="text-[11px] text-blue-400 font-mono font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">
+                        Nivel {selectedCooperLevel} de 20
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-10 gap-1">
+                      {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
+                        const isSelected = selectedCooperLevel === lvl;
+                        return (
+                          <button
+                            type="button"
+                            key={lvl}
+                            onClick={() => setSelectedCooperLevel(lvl)}
+                            className={`py-1.5 rounded-lg border flex flex-col items-center justify-center transition-all ${
+                              isSelected
+                                ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-md shadow-blue-500/30 scale-105'
+                                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                            }`}
+                            title={`Nivel ${lvl}`}
+                          >
+                            <span className="text-xs font-bold">{lvl}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="text-[11px] text-neutral-300 bg-neutral-900/80 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <strong className="text-white">
+                          {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.levelName || `Nivel ${selectedCooperLevel}`}
+                        </strong>
+                        <span className="text-emerald-400 font-mono font-semibold text-[10px]">
+                          {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.referenceDistance}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-400 leading-snug">
+                        {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.description}
+                      </p>
+                      <div className="text-[10px] text-blue-400 pt-0.5">
+                        Pauta de entreno: {COOPER_LEVELS_CATALOG[selectedCooperLevel]?.coachingRecommendation}
+                      </div>
+                    </div>
+                  </>
+                ) : cooperStatus === 'na' ? (
+                  <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <span>🚫 Prueba marcada como NA (No Aplica)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                      Exento de evaluación de carrera de 12 minutos por edad (niños/infantil o adultos mayores) o prescripción de movilidad suave.
+                    </p>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Motivo / Condición (Opcional):</label>
+                      <input
+                        type="text"
+                        value={cooperReason}
+                        onChange={(e) => setCooperReason(e.target.value)}
+                        placeholder="Ej. Adulto mayor (Movilidad funcional adaptada) o Etapa infantil"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-red-950/40 border border-red-600/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center gap-2 text-red-300 font-bold">
+                      <span>⚠️ Prueba marcada como NP (No Presentada)</span>
+                    </div>
+                    <p className="text-[11px] text-red-200/80 leading-relaxed">
+                      El atleta no presentó la prueba por enfermedad, lesión temporal o recomendación médica de descanso.
+                    </p>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Motivo de no presentación:</label>
+                      <input
+                        type="text"
+                        value={cooperReason}
+                        onChange={(e) => setCooperReason(e.target.value)}
+                        placeholder="Ej. Cuadro gripal, lesión muscular o prescripción médica"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* SECCIÓN 2: TEST DE RESISTENCIA POR TIEMPO (RETO ROTATIVO) */}
+              {/* SECCIÓN 2: TEST DE RESISTENCIA POR TIEMPO (RETO ROTATIVO / NA / NP) */}
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-white flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5 text-red-500" />
                     <span>2. Test de Resistencia (Por Tiempo)</span>
                   </span>
-                  <span className="text-[10px] text-emerald-400 font-mono font-bold">
-                    {enduranceMinutes.toString().padStart(2, '0')}:{enduranceSeconds.toString().padStart(2, '0')} min
+
+                  {/* Selector: Normal / NA / NP */}
+                  <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('completed')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        enduranceStatus === 'completed'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      ✓ Calificado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('na')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        enduranceStatus === 'na'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                      title="No Aplica (Niños, Adultos Mayores)"
+                    >
+                      🚫 NA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('np')}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                        enduranceStatus === 'np'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                      title="No Presentada (Enfermedad, Lesión)"
+                    >
+                      ⚠️ NP
+                    </button>
+                  </div>
+                </div>
+
+                {enduranceStatus === 'completed' ? (
+                  <>
+                    {/* Reto Rotativo */}
+                    <div>
+                      <label className="text-neutral-400 text-[11px] block mb-1">Ejercicio / Reto del Ciclo:</label>
+                      <select
+                        value={enduranceExerciseName}
+                        onChange={(e) => setEnduranceExerciseName(e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-500"
+                      >
+                        {ENDURANCE_PRESETS.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* TIEMPO EN EL QUE LO HICIERON (MINUTOS Y SEGUNDOS) */}
+                    <div>
+                      <label className="text-neutral-300 font-medium block mb-1">
+                        Tiempo en el que lo hicieron (Minutos y Segundos):
+                      </label>
+                      <div className="grid grid-cols-2 gap-3 items-center">
+                        <div>
+                          <span className="text-[10px] text-neutral-400 block mb-0.5">Minutos</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="120"
+                            value={enduranceMinutes}
+                            onChange={(e) => setEnduranceMinutes(parseInt(e.target.value, 10) || 0)}
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-center font-mono font-bold text-sm focus:border-emerald-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-neutral-400 block mb-0.5">Segundos</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="59"
+                            value={enduranceSeconds}
+                            onChange={(e) => setEnduranceSeconds(parseInt(e.target.value, 10) || 0)}
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-center font-mono font-bold text-sm focus:border-emerald-500 outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-neutral-400 bg-neutral-900/60 p-2 rounded-xl">
+                      * Este tiempo se guardará como <strong>{enduranceMinutes.toString().padStart(2, '0')}:{enduranceSeconds.toString().padStart(2, '0')} min</strong> y se comparará automáticamente con el test anterior.
+                    </div>
+                  </>
+                ) : enduranceStatus === 'na' ? (
+                  <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <span>🚫 Prueba marcada como NA (No Aplica)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                      Reto de resistencia por tiempo exento para niños o adultos mayores.
+                    </p>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Motivo / Condición (Opcional):</label>
+                      <input
+                        type="text"
+                        value={enduranceReason}
+                        onChange={(e) => setEnduranceReason(e.target.value)}
+                        placeholder="Ej. Movilidad para tercera edad o adaptación inicial infantil"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-red-950/40 border border-red-600/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center gap-2 text-red-300 font-bold">
+                      <span>⚠️ Prueba marcada como NP (No Presentada)</span>
+                    </div>
+                    <p className="text-[11px] text-red-200/80 leading-relaxed">
+                      No se presentó la prueba por motivo de enfermedad o lesión.
+                    </p>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Motivo de no presentación:</label>
+                      <input
+                        type="text"
+                        value={enduranceReason}
+                        onChange={(e) => setEnduranceReason(e.target.value)}
+                        placeholder="Ej. Molestia muscular, recomendación médica o reposo"
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECCIÓN 3: FUERZA 1RM (5 EJERCICIOS CON SELECTOR NA / NP INDIVIDUAL) */}
+              <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Dumbbell className="w-3.5 h-3.5 text-[#ff5500]" />
+                    <span>3. Cargas Máximas 1RM (5 Ejercicios)</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    Marca NA o NP si el alumno no realiza algún ejercicio
                   </span>
                 </div>
 
-                {/* Reto Rotativo */}
-                <div>
-                  <label className="text-neutral-400 text-[11px] block mb-1">Ejercicio / Reto del Ciclo:</label>
-                  <select
-                    value={enduranceExerciseName}
-                    onChange={(e) => setEnduranceExerciseName(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-500"
-                  >
-                    {ENDURANCE_PRESETS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* TIEMPO EN EL QUE LO HICIERON (MINUTOS Y SEGUNDOS) */}
-                <div>
-                  <label className="text-neutral-300 font-medium block mb-1">
-                    Tiempo en el que lo hicieron (Minutos y Segundos):
-                  </label>
-                  <div className="grid grid-cols-2 gap-3 items-center">
-                    <div>
-                      <span className="text-[10px] text-neutral-400 block mb-0.5">Minutos</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="120"
-                        value={enduranceMinutes}
-                        onChange={(e) => setEnduranceMinutes(parseInt(e.target.value, 10) || 0)}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-center font-mono font-bold text-sm focus:border-emerald-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-neutral-400 block mb-0.5">Segundos</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="59"
-                        value={enduranceSeconds}
-                        onChange={(e) => setEnduranceSeconds(parseInt(e.target.value, 10) || 0)}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white text-center font-mono font-bold text-sm focus:border-emerald-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-neutral-400 bg-neutral-900/60 p-2 rounded-xl">
-                  * Este tiempo se guardará como <strong>{enduranceMinutes.toString().padStart(2, '0')}:{enduranceSeconds.toString().padStart(2, '0')} min</strong> y se comparará automáticamente con el test anterior.
-                </div>
-              </div>
-
-              {/* SECCIÓN 3: FUERZA 1RM (5 EJERCICIOS) */}
-              <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2">
-                <span className="font-bold text-white flex items-center gap-1.5">
-                  <Dumbbell className="w-3.5 h-3.5 text-[#ff5500]" />
-                  <span>3. Cargas Máximas 1RM (5 Ejercicios)</span>
-                </span>
-
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {/* Sentadillas */}
-                  <div className="grid grid-cols-3 gap-2 items-center bg-neutral-900 p-2 rounded-xl">
-                    <span className="text-neutral-300 font-medium text-xs">Sentadillas</span>
-                    <input
-                      type="number"
-                      value={squatWeight}
-                      onChange={(e) => setSquatWeight(parseFloat(e.target.value) || 0)}
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs"
-                      placeholder="kg"
-                    />
-                    <span className="text-[10px] text-neutral-400 text-right">
-                      1RM: {calculate1RM(squatWeight, squatReps)}kg
-                    </span>
+                  <div className="bg-neutral-900 p-2.5 rounded-xl space-y-1.5 border border-neutral-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-200 font-semibold text-xs">Sentadillas</span>
+                      <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            squatStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          ✓ 1RM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('na')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            squatStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Aplica (Niños / Tercera edad)"
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('np')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            squatStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Presentada (Lesión / Enfermedad)"
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {squatStatus === 'completed' ? (
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-6">
+                          <input
+                            type="number"
+                            value={squatWeight}
+                            onChange={(e) => setSquatWeight(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
+                            placeholder="Carga kg"
+                          />
+                        </div>
+                        <div className="col-span-6 text-right">
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            1RM: <strong className="text-white">{calculate1RM(squatWeight, squatReps)}kg</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-1 rounded-lg">
+                        {squatStatus === 'na' ? '🚫 NA · Exento por edad o adaptación funcional' : '⚠️ NP · No Presentada por lesión o enfermedad'}
+                      </div>
+                    )}
                   </div>
 
                   {/* Peso Muerto */}
-                  <div className="grid grid-cols-3 gap-2 items-center bg-neutral-900 p-2 rounded-xl">
-                    <span className="text-neutral-300 font-medium text-xs">Peso Muerto</span>
-                    <input
-                      type="number"
-                      value={deadliftWeight}
-                      onChange={(e) => setDeadliftWeight(parseFloat(e.target.value) || 0)}
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs"
-                      placeholder="kg"
-                    />
-                    <span className="text-[10px] text-neutral-400 text-right">
-                      1RM: {calculate1RM(deadliftWeight, deadliftReps)}kg
-                    </span>
+                  <div className="bg-neutral-900 p-2.5 rounded-xl space-y-1.5 border border-neutral-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-200 font-semibold text-xs">Peso Muerto</span>
+                      <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            deadliftStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          ✓ 1RM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('na')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            deadliftStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Aplica (Niños / Tercera edad)"
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('np')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            deadliftStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Presentada (Lesión / Enfermedad)"
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {deadliftStatus === 'completed' ? (
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-6">
+                          <input
+                            type="number"
+                            value={deadliftWeight}
+                            onChange={(e) => setDeadliftWeight(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
+                            placeholder="Carga kg"
+                          />
+                        </div>
+                        <div className="col-span-6 text-right">
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            1RM: <strong className="text-white">{calculate1RM(deadliftWeight, deadliftReps)}kg</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-1 rounded-lg">
+                        {deadliftStatus === 'na' ? '🚫 NA · Exento por edad o adaptación funcional' : '⚠️ NP · No Presentada por lesión o enfermedad'}
+                      </div>
+                    )}
                   </div>
 
                   {/* Hip Thrust */}
-                  <div className="grid grid-cols-3 gap-2 items-center bg-neutral-900 p-2 rounded-xl">
-                    <span className="text-neutral-300 font-medium text-xs">Hip Thrust</span>
-                    <input
-                      type="number"
-                      value={hipThrustWeight}
-                      onChange={(e) => setHipThrustWeight(parseFloat(e.target.value) || 0)}
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs"
-                      placeholder="kg"
-                    />
-                    <span className="text-[10px] text-neutral-400 text-right">
-                      1RM: {calculate1RM(hipThrustWeight, hipThrustReps)}kg
-                    </span>
+                  <div className="bg-neutral-900 p-2.5 rounded-xl space-y-1.5 border border-neutral-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-200 font-semibold text-xs">Hip Thrust</span>
+                      <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            hipThrustStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          ✓ 1RM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('na')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            hipThrustStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Aplica (Niños / Tercera edad)"
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('np')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            hipThrustStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Presentada (Lesión / Enfermedad)"
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {hipThrustStatus === 'completed' ? (
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-6">
+                          <input
+                            type="number"
+                            value={hipThrustWeight}
+                            onChange={(e) => setHipThrustWeight(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
+                            placeholder="Carga kg"
+                          />
+                        </div>
+                        <div className="col-span-6 text-right">
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            1RM: <strong className="text-white">{calculate1RM(hipThrustWeight, hipThrustReps)}kg</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-1 rounded-lg">
+                        {hipThrustStatus === 'na' ? '🚫 NA · Exento por edad o adaptación funcional' : '⚠️ NP · No Presentada por lesión o enfermedad'}
+                      </div>
+                    )}
                   </div>
 
                   {/* Press Horizontal */}
-                  <div className="grid grid-cols-3 gap-2 items-center bg-neutral-900 p-2 rounded-xl">
-                    <span className="text-neutral-300 font-medium text-xs">Press Horiz.</span>
-                    <input
-                      type="number"
-                      value={pressWeight}
-                      onChange={(e) => setPressWeight(parseFloat(e.target.value) || 0)}
-                      className="bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs"
-                      placeholder="kg"
-                    />
-                    <span className="text-[10px] text-neutral-400 text-right">
-                      1RM: {calculate1RM(pressWeight, pressReps)}kg
-                    </span>
+                  <div className="bg-neutral-900 p-2.5 rounded-xl space-y-1.5 border border-neutral-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-200 font-semibold text-xs">Press Horizontal</span>
+                      <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            pressStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          ✓ 1RM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('na')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            pressStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Aplica (Niños / Tercera edad)"
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('np')}
+                          className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                            pressStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                          }`}
+                          title="No Presentada (Lesión / Enfermedad)"
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {pressStatus === 'completed' ? (
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-6">
+                          <input
+                            type="number"
+                            value={pressWeight}
+                            onChange={(e) => setPressWeight(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
+                            placeholder="Carga kg"
+                          />
+                        </div>
+                        <div className="col-span-6 text-right">
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            1RM: <strong className="text-white">{calculate1RM(pressWeight, pressReps)}kg</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-1 rounded-lg">
+                        {pressStatus === 'na' ? '🚫 NA · Exento por edad o adaptación funcional' : '⚠️ NP · No Presentada por lesión o enfermedad'}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Remo / Dominadas */}
                   {/* 5. Remo o Dominadas con selector y peso */}
                   <div className="bg-neutral-900 p-2.5 rounded-xl space-y-2 border border-neutral-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-300 font-semibold text-xs flex items-center gap-1.5">
+                    <div className="flex items-center justify-between flex-wrap gap-1.5">
+                      <span className="text-neutral-200 font-semibold text-xs flex items-center gap-1.5">
                         <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>5. Tracción (Remo o Dominadas)</span>
+                        <span>5. Tracción (Remo / Dominadas)</span>
                       </span>
 
-                      {/* Selector de Ejercicio */}
-                      <div className="flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800 text-[10px]">
-                        <button
-                          type="button"
-                          onClick={() => setRowExerciseType('remo')}
-                          className={`px-2.5 py-1 rounded font-bold transition-all ${
-                            rowExerciseType === 'remo'
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-neutral-400 hover:text-white'
-                          }`}
-                        >
-                          Remo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRowExerciseType('dominadas')}
-                          className={`px-2.5 py-1 rounded font-bold transition-all ${
-                            rowExerciseType === 'dominadas'
-                              ? 'bg-red-600 text-white shadow-sm'
-                              : 'text-neutral-400 hover:text-white'
-                          }`}
-                        >
-                          Dominadas
-                        </button>
+                      <div className="flex items-center gap-1.5">
+                        {/* Selector de Ejercicio */}
+                        <div className="flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setRowExerciseType('remo')}
+                            className={`px-2 py-0.5 rounded font-bold transition-all ${
+                              rowExerciseType === 'remo'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Remo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRowExerciseType('dominadas')}
+                            className={`px-2 py-0.5 rounded font-bold transition-all ${
+                              rowExerciseType === 'dominadas'
+                                ? 'bg-red-600 text-white shadow-sm'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Dominadas
+                          </button>
+                        </div>
+
+                        {/* Status NA / NP */}
+                        <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setRowStatus('completed')}
+                            className={`px-1.5 py-0.5 rounded font-semibold ${rowStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400'}`}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRowStatus('na')}
+                            className={`px-1.5 py-0.5 rounded font-semibold ${rowStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400'}`}
+                            title="No Aplica"
+                          >
+                            NA
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRowStatus('np')}
+                            className={`px-1.5 py-0.5 rounded font-semibold ${rowStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400'}`}
+                            title="No Presentada"
+                          >
+                            NP
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-5 text-[11px] text-neutral-300 font-medium">
-                        {rowExerciseType === 'remo' ? 'Remo (Barra / Polea)' : 'Dominadas (Pull-ups)'}
+                    {rowStatus === 'completed' ? (
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-5 text-[11px] text-neutral-300 font-medium">
+                          {rowExerciseType === 'remo' ? 'Remo (Barra / Polea)' : 'Dominadas (Pull-ups)'}
+                        </div>
+                        <div className="col-span-4">
+                          <input
+                            type="number"
+                            value={rowWeight}
+                            onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs focus:border-blue-500 outline-none"
+                            placeholder={rowExerciseType === 'remo' ? 'Peso (kg)' : 'Peso / Lastre kg'}
+                          />
+                        </div>
+                        <div className="col-span-3 text-right">
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            1RM: <strong className="text-white">{calculate1RM(rowWeight, rowReps)}kg</strong>
+                          </span>
+                        </div>
                       </div>
-                      <div className="col-span-4">
-                        <input
-                          type="number"
-                          value={rowWeight}
-                          onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs focus:border-blue-500 outline-none"
-                          placeholder={rowExerciseType === 'remo' ? 'Peso (kg)' : 'Peso / Lastre kg'}
-                        />
+                    ) : (
+                      <div className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-1 rounded-lg">
+                        {rowStatus === 'na' ? '🚫 NA · Exento por edad o adaptación funcional' : '⚠️ NP · No Presentada por lesión o enfermedad'}
                       </div>
-                      <div className="col-span-3 text-right">
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          1RM: <strong className="text-white">{calculate1RM(rowWeight, rowReps)}kg</strong>
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1799,31 +2338,102 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 />
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-neutral-300 font-medium">Nivel Cooper (1 al 20)</label>
-                  <span className="text-[10px] text-blue-400 font-mono font-bold">Nivel {selectedCooperLevel} de 20</span>
-                </div>
-                <div className="grid grid-cols-10 gap-1">
-                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+              {/* SECCIÓN 1: COOPER EN EDICIÓN */}
+              <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-neutral-300 font-medium">Test de Cooper (12 Minutos)</label>
+                  <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
                     <button
                       type="button"
-                      key={lvl}
-                      onClick={() => setSelectedCooperLevel(lvl)}
-                      className={`py-1.5 rounded-lg border text-center font-bold text-xs transition-all ${
-                        selectedCooperLevel === lvl
-                          ? 'bg-blue-600 border-blue-400 text-white shadow-md'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
-                      }`}
+                      onClick={() => setCooperStatus('completed')}
+                      className={`px-2 py-0.5 rounded font-semibold ${cooperStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400'}`}
                     >
-                      {lvl}
+                      ✓ Calificado
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setCooperStatus('na')}
+                      className={`px-2 py-0.5 rounded font-semibold ${cooperStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400'}`}
+                      title="No Aplica"
+                    >
+                      🚫 NA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCooperStatus('np')}
+                      className={`px-2 py-0.5 rounded font-semibold ${cooperStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400'}`}
+                      title="No Presentada"
+                    >
+                      ⚠️ NP
+                    </button>
+                  </div>
                 </div>
+
+                {cooperStatus === 'completed' ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-neutral-400 font-mono">Nivel Cooper (1 al 20):</span>
+                      <span className="text-[10px] text-blue-400 font-mono font-bold">Nivel {selectedCooperLevel} de 20</span>
+                    </div>
+                    <div className="grid grid-cols-10 gap-1">
+                      {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+                        <button
+                          type="button"
+                          key={lvl}
+                          onClick={() => setSelectedCooperLevel(lvl)}
+                          className={`py-1.5 rounded-lg border text-center font-bold text-xs transition-all ${
+                            selectedCooperLevel === lvl
+                              ? 'bg-blue-600 border-blue-400 text-white shadow-md'
+                              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <input
+                    type="text"
+                    value={cooperReason}
+                    onChange={(e) => setCooperReason(e.target.value)}
+                    placeholder={cooperStatus === 'na' ? 'Motivo NA: Adulto mayor, niño, etc.' : 'Motivo NP: Enfermedad, lesión, etc.'}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-xs"
+                  />
+                )}
               </div>
 
+              {/* SECCIÓN 2: RESISTENCIA EN EDICIÓN */}
               <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
-                <span className="font-bold text-white block">Resistencia (Tiempo)</span>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="font-bold text-white block">Resistencia (Tiempo)</span>
+                  <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('completed')}
+                      className={`px-2 py-0.5 rounded font-semibold ${enduranceStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-400'}`}
+                    >
+                      ✓ Calificado
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('na')}
+                      className={`px-2 py-0.5 rounded font-semibold ${enduranceStatus === 'na' ? 'bg-amber-600 text-white' : 'text-neutral-400'}`}
+                      title="No Aplica"
+                    >
+                      🚫 NA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnduranceStatus('np')}
+                      className={`px-2 py-0.5 rounded font-semibold ${enduranceStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-400'}`}
+                      title="No Presentada"
+                    >
+                      ⚠️ NP
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-[10px] text-neutral-400 block mb-0.5">Reto</label>
                   <input
@@ -1833,26 +2443,37 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-xs"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] text-neutral-400 block mb-0.5">Minutos</span>
-                    <input
-                      type="number"
-                      value={enduranceMinutes}
-                      onChange={(e) => setEnduranceMinutes(parseInt(e.target.value, 10) || 0)}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-center font-mono font-bold"
-                    />
+
+                {enduranceStatus === 'completed' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-neutral-400 block mb-0.5">Minutos</span>
+                      <input
+                        type="number"
+                        value={enduranceMinutes}
+                        onChange={(e) => setEnduranceMinutes(parseInt(e.target.value, 10) || 0)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-center font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-neutral-400 block mb-0.5">Segundos</span>
+                      <input
+                        type="number"
+                        value={enduranceSeconds}
+                        onChange={(e) => setEnduranceSeconds(parseInt(e.target.value, 10) || 0)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-center font-mono font-bold"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-400 block mb-0.5">Segundos</span>
-                    <input
-                      type="number"
-                      value={enduranceSeconds}
-                      onChange={(e) => setEnduranceSeconds(parseInt(e.target.value, 10) || 0)}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-center font-mono font-bold"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={enduranceReason}
+                    onChange={(e) => setEnduranceReason(e.target.value)}
+                    placeholder={enduranceStatus === 'na' ? 'Motivo NA: Reto adaptado por prescripción...' : 'Motivo NP: Pospospuesto por salud/enfermedad...'}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-white text-xs"
+                  />
+                )}
               </div>
 
               <div>
@@ -1876,20 +2497,29 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    const isCooperDone = cooperStatus === 'completed';
+                    const isEnduranceDone = enduranceStatus === 'completed';
                     const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
                     const levelInfo = getCooperLevelInfo(selectedCooperLevel);
+
                     onUpdateEvaluation(editingEval.id, {
                       evaluationDate: evalDate,
                       cooperTest: {
                         ...editingEval.cooperTest,
-                        level: levelInfo.levelName,
-                        levelNumber: selectedCooperLevel,
-                        description: levelInfo.description,
+                        status: cooperStatus,
+                        statusReason: cooperReason,
+                        level: isCooperDone ? levelInfo.levelName : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+                        levelNumber: isCooperDone ? selectedCooperLevel : 0,
+                        description: isCooperDone ? levelInfo.description : (cooperStatus === 'na' ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
+                        targetZoneRecommendation: isCooperDone ? levelInfo.coachingRecommendation : 'Acondicionamiento físico adaptado.',
                       },
                       enduranceTest: {
                         ...editingEval.enduranceTest,
+                        status: enduranceStatus,
+                        statusReason: enduranceReason,
                         name: enduranceExerciseName,
-                        result: formattedResult,
+                        result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
+                        timeSeconds: isEnduranceDone ? (enduranceMinutes * 60 + enduranceSeconds) : 0,
                       },
                       generalCoachNotes: coachNotes,
                     });

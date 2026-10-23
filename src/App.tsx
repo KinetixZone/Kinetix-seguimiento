@@ -35,11 +35,28 @@ import {
   loadAllFromSupabase 
 } from './lib/supabase';
 
+export const KINETIX_APP_VERSION = '2026.10.23-v4';
+
 export default function App() {
   const [brandTheme] = useState<BrandTheme>('blue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [isSendNotificationOpen, setIsSendNotificationOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  // Automated Cache-Buster & Version Invalidation on Mobile Devices
+  useEffect(() => {
+    try {
+      const storedVersion = localStorage.getItem('kinetix_app_build_version');
+      if (storedVersion !== KINETIX_APP_VERSION) {
+        localStorage.setItem('kinetix_app_build_version', KINETIX_APP_VERSION);
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            keys.forEach((k) => caches.delete(k));
+          });
+        }
+      }
+    } catch {}
+  }, []);
 
   // Privacy Policy & Consent State
   const [isPrivacyConsentOpen, setIsPrivacyConsentOpen] = useState<boolean>(false);
