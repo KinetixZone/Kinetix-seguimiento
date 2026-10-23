@@ -185,6 +185,8 @@ CREATE TABLE IF NOT EXISTS public.physical_evaluations (
   user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
   evaluation_date DATE NOT NULL,
   evaluator_coach TEXT,
+  coach_id TEXT,
+  coach_name TEXT,
   general_coach_notes TEXT,
   cooper_test JSONB,
   endurance_test JSONB,
@@ -192,7 +194,10 @@ CREATE TABLE IF NOT EXISTS public.physical_evaluations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Asegurar columnas JSONB por si la tabla ya existía
+-- Asegurar columnas por si la tabla ya existía
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS coach_id TEXT;
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS coach_name TEXT;
+ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS evaluator_coach TEXT;
 ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS cooper_test JSONB;
 ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS endurance_test JSONB;
 ALTER TABLE public.physical_evaluations ADD COLUMN IF NOT EXISTS strength_records JSONB;
