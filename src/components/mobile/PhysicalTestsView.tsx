@@ -126,6 +126,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [expressWeight, setExpressWeight] = useState<number>(60);
   const [expressReps, setExpressReps] = useState<number>(1);
   const [expressNotes, setExpressNotes] = useState<string>('');
+  const [expressApplyToAllInCycle, setExpressApplyToAllInCycle] = useState<boolean>(false);
   const [expressSuccessMessage, setExpressSuccessMessage] = useState<string | null>(null);
 
   // Sync express target athlete when currentUser changes
@@ -166,6 +167,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setExpressStatus('completed');
     setExpressReason('');
     setExpressNotes('');
+    setExpressApplyToAllInCycle(false);
     preloadExpressValues(currentUser.id, ex);
     setShowExpressModal(true);
   };
@@ -201,27 +203,90 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // 5 Key Strength Exercises (Each can be completed, NA - niños/adultos mayores, NP - no presentada/enfermedad)
   const [squatStatus, setSquatStatus] = useState<EvaluationStatus>('completed');
+  const [squatReason, setSquatReason] = useState<string>('');
   const [squatWeight, setSquatWeight] = useState<number>(120);
   const [squatReps, setSquatReps] = useState<number>(1);
 
   const [deadliftStatus, setDeadliftStatus] = useState<EvaluationStatus>('completed');
+  const [deadliftReason, setDeadliftReason] = useState<string>('');
   const [deadliftWeight, setDeadliftWeight] = useState<number>(140);
   const [deadliftReps, setDeadliftReps] = useState<number>(1);
 
   const [hipThrustStatus, setHipThrustStatus] = useState<EvaluationStatus>('completed');
+  const [hipThrustReason, setHipThrustReason] = useState<string>('');
   const [hipThrustWeight, setHipThrustWeight] = useState<number>(150);
   const [hipThrustReps, setHipThrustReps] = useState<number>(1);
 
   const [pressStatus, setPressStatus] = useState<EvaluationStatus>('completed');
+  const [pressReason, setPressReason] = useState<string>('');
   const [pressWeight, setPressWeight] = useState<number>(90);
   const [pressReps, setPressReps] = useState<number>(1);
 
   // Remo vs Dominadas Selector & Weight
   const [rowStatus, setRowStatus] = useState<EvaluationStatus>('completed');
+  const [rowReason, setRowReason] = useState<string>('');
   const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
   const [rowWeight, setRowWeight] = useState<number>(75);
   const [rowReps, setRowReps] = useState<number>(12);
   const [coachNotes, setCoachNotes] = useState<string>('');
+
+  // NA Presets for fast selection
+  const NA_PRESETS = [
+    'Ingreso posterior a fecha de pruebas',
+    'Adulto mayor / Exento por edad',
+    'Etapa formativa infantil',
+    'Lesión / Incapacidad médica temporal',
+    'Baja temporal / Ausencia justificada',
+  ];
+
+  // Helper to detect if all evaluation modules are marked NA
+  const isFormAllNA = cooperStatus === 'na' && 
+    enduranceStatus === 'na' && 
+    squatStatus === 'na' && 
+    deadliftStatus === 'na' && 
+    hipThrustStatus === 'na' && 
+    pressStatus === 'na' && 
+    rowStatus === 'na';
+
+  // 1-Click Action to mark the entire evaluation cycle as NA (Nuevo ingreso, exento)
+  const applyGlobalNA = (reasonText: string = 'Ingreso posterior a fecha de pruebas') => {
+    setCooperStatus('na');
+    setCooperReason(reasonText);
+    setEnduranceStatus('na');
+    setEnduranceReason(reasonText);
+    setSquatStatus('na');
+    setSquatReason(reasonText);
+    setDeadliftStatus('na');
+    setDeadliftReason(reasonText);
+    setHipThrustStatus('na');
+    setHipThrustReason(reasonText);
+    setPressStatus('na');
+    setPressReason(reasonText);
+    setRowStatus('na');
+    setRowReason(reasonText);
+    setCoachNotes(prev => {
+      const clean = prev.replace(/^Periodo exento con NA General.*$/gm, '').trim();
+      return clean ? `${clean} | NA General: ${reasonText}` : `Periodo exento con NA General (${reasonText}).`;
+    });
+  };
+
+  // 1-Click Action to restore all tests back to completed
+  const restoreAllToCompleted = () => {
+    setCooperStatus('completed');
+    setCooperReason('');
+    setEnduranceStatus('completed');
+    setEnduranceReason('');
+    setSquatStatus('completed');
+    setSquatReason('');
+    setDeadliftStatus('completed');
+    setDeadliftReason('');
+    setHipThrustStatus('completed');
+    setHipThrustReason('');
+    setPressStatus('completed');
+    setPressReason('');
+    setRowStatus('completed');
+    setRowReason('');
+  };
 
   // Loads an athlete's baseline into the form or sets pristine defaults
   const loadAthleteBaselineIntoForm = (athleteId: string, customEval?: PhysicalEvaluationRecord | null) => {
@@ -253,26 +318,31 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       // Strength records state
       const sq = latest.strengthRecords?.find(s => s.exerciseId === 'squats');
       setSquatStatus(sq?.status || (sq && sq.weightKg === 0 && sq.notes?.includes('NA') ? 'na' : 'completed'));
+      setSquatReason(sq?.statusReason || (sq?.notes?.includes('NA') ? sq.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setSquatWeight(sq ? sq.weightKg : 40);
       setSquatReps(sq ? sq.reps : 1);
 
       const dl = latest.strengthRecords?.find(s => s.exerciseId === 'deadlift');
       setDeadliftStatus(dl?.status || (dl && dl.weightKg === 0 && dl.notes?.includes('NA') ? 'na' : 'completed'));
+      setDeadliftReason(dl?.statusReason || (dl?.notes?.includes('NA') ? dl.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setDeadliftWeight(dl ? dl.weightKg : 50);
       setDeadliftReps(dl ? dl.reps : 1);
 
       const ht = latest.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
       setHipThrustStatus(ht?.status || (ht && ht.weightKg === 0 && ht.notes?.includes('NA') ? 'na' : 'completed'));
+      setHipThrustReason(ht?.statusReason || (ht?.notes?.includes('NA') ? ht.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setHipThrustWeight(ht ? ht.weightKg : 50);
       setHipThrustReps(ht ? ht.reps : 1);
 
       const pr = latest.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
       setPressStatus(pr?.status || (pr && pr.weightKg === 0 && pr.notes?.includes('NA') ? 'na' : 'completed'));
+      setPressReason(pr?.statusReason || (pr?.notes?.includes('NA') ? pr.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setPressWeight(pr ? pr.weightKg : 30);
       setPressReps(pr ? pr.reps : 1);
 
       const rw = latest.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
       setRowStatus(rw?.status || (rw && rw.weightKg === 0 && rw.notes?.includes('NA') ? 'na' : 'completed'));
+      setRowReason(rw?.statusReason || (rw?.notes?.includes('NA') ? rw.notes.replace(/^NA:\s*/i, '').trim() : ''));
       if (rw) {
         setRowWeight(rw.weightKg);
         setRowReps(rw.reps);
@@ -295,18 +365,23 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setEnduranceSeconds(0);
       setEnduranceScoreLevel('Intermedio');
       setSquatStatus('completed');
+      setSquatReason('');
       setSquatWeight(40);
       setSquatReps(1);
       setDeadliftStatus('completed');
+      setDeadliftReason('');
       setDeadliftWeight(50);
       setDeadliftReps(1);
       setHipThrustStatus('completed');
+      setHipThrustReason('');
       setHipThrustWeight(50);
       setHipThrustReps(1);
       setPressStatus('completed');
+      setPressReason('');
       setPressWeight(30);
       setPressReps(1);
       setRowStatus('completed');
+      setRowReason('');
       setRowExerciseType('remo');
       setRowWeight(30);
       setRowReps(10);
@@ -376,7 +451,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         estimated1RMKg: squatStatus === 'completed' ? calculate1RM(squatWeight, squatReps) : 0,
         weightUnit: 'kg',
         status: squatStatus,
-        notes: squatStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : squatStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+        statusReason: squatReason || cooperReason || (squatStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
+        notes: squatStatus === 'na' ? `NA: ${squatReason || cooperReason || 'Exento (Adulto mayor / Infantil / Nuevo ingreso)'}` : squatStatus === 'np' ? `NP: ${squatReason || 'No Presentada (Lesión / Enfermedad)'}` : undefined,
       },
       {
         exerciseId: 'deadlift',
@@ -386,7 +462,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         estimated1RMKg: deadliftStatus === 'completed' ? calculate1RM(deadliftWeight, deadliftReps) : 0,
         weightUnit: 'kg',
         status: deadliftStatus,
-        notes: deadliftStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : deadliftStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+        statusReason: deadliftReason || cooperReason || (deadliftStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
+        notes: deadliftStatus === 'na' ? `NA: ${deadliftReason || cooperReason || 'Exento (Adulto mayor / Infantil / Nuevo ingreso)'}` : deadliftStatus === 'np' ? `NP: ${deadliftReason || 'No Presentada (Lesión / Enfermedad)'}` : undefined,
       },
       {
         exerciseId: 'hip_thrust',
@@ -396,7 +473,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         estimated1RMKg: hipThrustStatus === 'completed' ? calculate1RM(hipThrustWeight, hipThrustReps) : 0,
         weightUnit: 'kg',
         status: hipThrustStatus,
-        notes: hipThrustStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : hipThrustStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+        statusReason: hipThrustReason || cooperReason || (hipThrustStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
+        notes: hipThrustStatus === 'na' ? `NA: ${hipThrustReason || cooperReason || 'Exento (Adulto mayor / Infantil / Nuevo ingreso)'}` : hipThrustStatus === 'np' ? `NP: ${hipThrustReason || 'No Presentada (Lesión / Enfermedad)'}` : undefined,
       },
       {
         exerciseId: 'horizontal_press',
@@ -406,7 +484,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         estimated1RMKg: pressStatus === 'completed' ? calculate1RM(pressWeight, pressReps) : 0,
         weightUnit: 'kg',
         status: pressStatus,
-        notes: pressStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : pressStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+        statusReason: pressReason || cooperReason || (pressStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
+        notes: pressStatus === 'na' ? `NA: ${pressReason || cooperReason || 'Exento (Adulto mayor / Infantil / Nuevo ingreso)'}` : pressStatus === 'np' ? `NP: ${pressReason || 'No Presentada (Lesión / Enfermedad)'}` : undefined,
       },
       {
         exerciseId: 'pullups_or_rows',
@@ -417,7 +496,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         estimated1RMKg: rowStatus === 'completed' ? calculate1RM(rowWeight, rowReps) : 0,
         weightUnit: 'kg',
         status: rowStatus,
-        notes: rowStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : rowStatus === 'np' ? 'NP: No Presentada (Lesión / Enfermedad)' : undefined,
+        statusReason: rowReason || cooperReason || (rowStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
+        notes: rowStatus === 'na' ? `NA: ${rowReason || cooperReason || 'Exento (Adulto mayor / Infantil / Nuevo ingreso)'}` : rowStatus === 'np' ? `NP: ${rowReason || 'No Presentada (Lesión / Enfermedad)'}` : undefined,
       },
     ];
 
@@ -460,6 +540,147 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     const targetId = expressTargetUserId || currentUser.id;
     const targetUser = athleteList.find(a => a.id === targetId) || currentUser;
 
+    const existingEval = evaluations.find(e => e.userId === targetId && e.evaluationDate === expressDate);
+
+    // NA GENERAL EN EXPRESS: Si el coach marcó aplicar a todo el ciclo del atleta (e.g. nuevo ingreso)
+    if (expressApplyToAllInCycle) {
+      const reason = expressReason || 'Ingreso posterior a fecha de pruebas';
+      const assignedCoachId = evaluatingCoachName.includes('Leslie') 
+        ? 'user-staff-leslie' 
+        : evaluatingCoachName.includes('Gus') 
+        ? 'user-staff-gus' 
+        : 'user-staff-01';
+
+      const allNAStrength: StrengthMaxRecord[] = [
+        {
+          exerciseId: 'squats',
+          exerciseName: 'Sentadillas',
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
+          weightUnit: 'kg',
+          status: 'na',
+          statusReason: reason,
+          notes: `NA: ${reason}`,
+        },
+        {
+          exerciseId: 'deadlift',
+          exerciseName: 'Peso Muerto',
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
+          weightUnit: 'kg',
+          status: 'na',
+          statusReason: reason,
+          notes: `NA: ${reason}`,
+        },
+        {
+          exerciseId: 'hip_thrust',
+          exerciseName: 'Hip Thrust',
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
+          weightUnit: 'kg',
+          status: 'na',
+          statusReason: reason,
+          notes: `NA: ${reason}`,
+        },
+        {
+          exerciseId: 'horizontal_press',
+          exerciseName: 'Press Horizontal',
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
+          weightUnit: 'kg',
+          status: 'na',
+          statusReason: reason,
+          notes: `NA: ${reason}`,
+        },
+        {
+          exerciseId: 'pullups_or_rows',
+          exerciseName: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+          exerciseType: expressRowType,
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
+          weightUnit: 'kg',
+          status: 'na',
+          statusReason: reason,
+          notes: `NA: ${reason}`,
+        },
+      ];
+
+      const naCooper: CooperTestRecord = {
+        level: 'NA (No Aplica)',
+        levelNumber: 0,
+        description: 'Prueba exenta este ciclo.',
+        targetZoneRecommendation: 'Acondicionamiento físico general adaptado.',
+        distanceMeters: 0,
+        estimatedVo2Max: 0,
+        status: 'na',
+        statusReason: reason,
+        notes: `NA: ${reason}`,
+      };
+
+      const naEndurance: EnduranceTimeTestRecord = {
+        name: 'Evaluación de Resistencia Funcional',
+        result: 'NA',
+        timeSeconds: 0,
+        scoreScoreLevel: 'Exento',
+        status: 'na',
+        statusReason: reason,
+        notes: `NA: ${reason}`,
+      };
+
+      const naNotes = expressNotes 
+        ? `NA General: ${reason} | ${expressNotes}` 
+        : `Evaluación completa exenta con NA General (${reason}).`;
+
+      if (existingEval && onUpdateEvaluation) {
+        onUpdateEvaluation(existingEval.id, {
+          cooperTest: naCooper,
+          enduranceTest: naEndurance,
+          strengthRecords: allNAStrength,
+          generalCoachNotes: naNotes,
+        });
+      } else {
+        onAddEvaluation({
+          userId: targetId,
+          evaluationDate: expressDate,
+          coachId: assignedCoachId,
+          coachName: evaluatingCoachName,
+          cooperTest: naCooper,
+          enduranceTest: naEndurance,
+          strengthRecords: allNAStrength,
+          generalCoachNotes: naNotes,
+        });
+      }
+
+      const savedMsg = `¡Ciclo completo marcado como NA para ${targetUser.name.split(' ')[0]}! (${reason})`;
+
+      if (andNext && athleteList.length > 0 && onSelectNextAthlete) {
+        const currentIdx = athleteList.findIndex(a => a.id === targetId);
+        const nextIdx = currentIdx !== -1 ? (currentIdx + 1) % athleteList.length : 0;
+        const nextAthleteObj = athleteList[nextIdx];
+
+        if (nextAthleteObj) {
+          onSelectNextAthlete(nextAthleteObj);
+          setExpressTargetUserId(nextAthleteObj.id);
+          preloadExpressValues(nextAthleteObj.id, expressExerciseId);
+          setExpressApplyToAllInCycle(false);
+          setExpressSuccessMessage(`${savedMsg} → Siguiente en clase: ${nextAthleteObj.name}`);
+          setTimeout(() => setExpressSuccessMessage(null), 3500);
+          return;
+        }
+      }
+
+      setShowExpressModal(false);
+      setExpressApplyToAllInCycle(false);
+      setNextAthleteToast(savedMsg);
+      setTimeout(() => setNextAthleteToast(null), 4000);
+      return;
+    }
+
     const exerciseNameMap: Record<string, string> = {
       squats: 'Sentadillas',
       deadlift: 'Peso Muerto',
@@ -484,8 +705,6 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         ? expressNotes 
         : (expressStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : expressStatus === 'np' ? 'NP: No Presentada' : undefined),
     };
-
-    const existingEval = evaluations.find(e => e.userId === targetId && e.evaluationDate === expressDate);
 
     if (existingEval && onUpdateEvaluation) {
       // Merge into existing evaluation
@@ -808,6 +1027,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               Comparativa directa de evolución en <strong>Nivel Cooper</strong>, <strong>Resistencia por tiempo</strong> y <strong>Fuerza máxima 1RM</strong>.
             </p>
           </div>
+
+          {/* Aviso especial si la evaluación completa es NA (ej. Nuevo ingreso posterior a pruebas o exento) */}
+          {(() => {
+            const isAllNA = latestEval.cooperTest.status === 'na' && 
+              latestEval.enduranceTest.status === 'na' && 
+              (latestEval.strengthRecords?.length ? latestEval.strengthRecords.every(s => s.status === 'na') : true);
+            if (!isAllNA) return null;
+            return (
+              <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/50 flex items-start gap-3 shadow-lg shadow-amber-950/20 animate-fade-in">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-xs font-black">NA</span>
+                </div>
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <span className="text-xs font-bold text-amber-200">Ciclo Completo Exento · No Aplica (NA General)</span>
+                    <span className="text-[10px] font-mono text-amber-400/90 bg-neutral-900 px-2 py-0.5 rounded-md border border-amber-500/30 font-semibold">
+                      {latestEval.evaluationDate}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-300 leading-snug">
+                    {latestEval.generalCoachNotes || latestEval.cooperTest.statusReason || 'Este periodo fue marcado como No Aplica (ej. ingreso posterior a la fecha de pruebas o adaptación funcional). Tus marcas oficiales se activarán en el próximo ciclo de evaluación.'}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* TARJETA COMPARATIVA 1: TEST DE COOPER */}
           <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
@@ -1861,6 +2106,74 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </span>
               </div>
 
+              {/* BANNER ACCIÓN RÁPIDA: NA GENERAL (EXENTAR CICLO COMPLETO / NUEVO INGRESO) */}
+              <div className={`p-3 rounded-2xl border transition-all ${
+                isFormAllNA 
+                  ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-950/20' 
+                  : 'bg-neutral-950 border-neutral-800'
+              }`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                      isFormAllNA ? 'bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30' : 'bg-neutral-900 text-amber-400 border border-neutral-800'
+                    }`}>
+                      NA
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>{isFormAllNA ? 'Evaluación Completa en NA (No Aplica)' : 'NA General (Todo el Periodo)'}</span>
+                        {isFormAllNA && (
+                          <span className="text-[10px] text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30 font-semibold">
+                            Activo
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-neutral-400 block">
+                        Para nuevos ingresos posteriores a pruebas o alumnos exentos
+                      </span>
+                    </div>
+                  </div>
+
+                  {isFormAllNA ? (
+                    <button
+                      type="button"
+                      onClick={restoreAllToCompleted}
+                      className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 active:scale-95 transition-all"
+                    >
+                      Restaurar Pruebas
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => applyGlobalNA('Ingreso posterior a fecha de pruebas')}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-extrabold active:scale-95 transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                      <span>⚡ Marcar Todo como NA</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick preset chips */}
+                <div className="pt-2 mt-2 border-t border-neutral-800/80 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <span className="text-[10px] text-neutral-500 shrink-0 font-medium">Motivos rápidos:</span>
+                  {NA_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => applyGlobalNA(preset)}
+                      className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all ${
+                        cooperReason === preset && isFormAllNA
+                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* SECCIÓN 1: TEST DE COOPER (NIVELES 1 AL 20 / NA / NP) */}
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -2593,6 +2906,68 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 />
               </div>
 
+              {/* BANNER ACCIÓN RÁPIDA EN EDICIÓN: NA GENERAL */}
+              <div className={`p-3 rounded-2xl border transition-all ${
+                isFormAllNA 
+                  ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-950/20' 
+                  : 'bg-neutral-950 border-neutral-800'
+              }`}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
+                      isFormAllNA ? 'bg-amber-500 text-neutral-950 font-bold' : 'bg-neutral-900 text-amber-400 border border-neutral-800'
+                    }`}>
+                      NA
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block">
+                        {isFormAllNA ? 'Evaluación Completa en NA' : 'NA General (Todo el Periodo)'}
+                      </span>
+                      <span className="text-[10px] text-neutral-400 block">
+                        Para nuevos ingresos o ciclos exentos
+                      </span>
+                    </div>
+                  </div>
+
+                  {isFormAllNA ? (
+                    <button
+                      type="button"
+                      onClick={restoreAllToCompleted}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold border border-neutral-700"
+                    >
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => applyGlobalNA('Ingreso posterior a fecha de pruebas')}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[11px] font-extrabold flex items-center gap-1 shadow-sm"
+                    >
+                      <Zap className="w-3 h-3 fill-neutral-950" />
+                      <span>⚡ Marcar Todo NA</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="pt-2 mt-2 border-t border-neutral-800 flex items-center gap-1 overflow-x-auto pb-0.5">
+                  <span className="text-[10px] text-neutral-500 shrink-0 font-medium">Motivo:</span>
+                  {NA_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => applyGlobalNA(preset)}
+                      className={`px-2 py-0.5 rounded border text-[10px] whitespace-nowrap ${
+                        cooperReason === preset && isFormAllNA
+                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* SECCIÓN 1: COOPER EN EDICIÓN */}
               <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-1">
@@ -2757,6 +3132,18 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
                     const levelInfo = getCooperLevelInfo(selectedCooperLevel);
 
+                    const updatedStrengthRecords: StrengthMaxRecord[] = isFormAllNA
+                      ? (editingEval.strengthRecords || []).map(s => ({
+                          ...s,
+                          weightKg: 0,
+                          reps: 0,
+                          estimated1RMKg: 0,
+                          status: 'na' as EvaluationStatus,
+                          statusReason: cooperReason || 'Ingreso posterior a fecha de pruebas',
+                          notes: `NA: ${cooperReason || 'Ingreso posterior a fecha de pruebas'}`,
+                        }))
+                      : editingEval.strengthRecords;
+
                     onUpdateEvaluation(editingEval.id, {
                       evaluationDate: evalDate,
                       cooperTest: {
@@ -2776,6 +3163,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
                         timeSeconds: isEnduranceDone ? (enduranceMinutes * 60 + enduranceSeconds) : 0,
                       },
+                      strengthRecords: updatedStrengthRecords,
                       generalCoachNotes: coachNotes,
                     });
                     setEditingEval(null);
@@ -2981,14 +3369,36 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </div>
 
             {/* Status Toggle: Realizada / NA / NP */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-neutral-300 block">
-                Estado del Ejercicio:
-              </label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-neutral-300">
+                  Estado de la Evaluación:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpressStatus('na');
+                    setExpressReason('Ingreso posterior a fecha de pruebas');
+                    setExpressApplyToAllInCycle(true);
+                  }}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all flex items-center gap-1 ${
+                    expressStatus === 'na' && expressApplyToAllInCycle
+                      ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-sm'
+                      : 'bg-neutral-950 border-amber-500/40 text-amber-300 hover:bg-neutral-900'
+                  }`}
+                >
+                  <Zap className="w-3 h-3 fill-current" />
+                  <span>⚡ NA General (Nuevo Ingreso)</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setExpressStatus('completed')}
+                  onClick={() => {
+                    setExpressStatus('completed');
+                    setExpressApplyToAllInCycle(false);
+                  }}
                   className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                     expressStatus === 'completed'
                       ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
@@ -3002,7 +3412,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   onClick={() => setExpressStatus('na')}
                   className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                     expressStatus === 'na'
-                      ? 'bg-neutral-800 border-neutral-600 text-white'
+                      ? 'bg-amber-500 text-neutral-950 border-amber-400 font-extrabold shadow-sm'
                       : 'bg-neutral-950 border-neutral-800 text-neutral-400'
                   }`}
                 >
@@ -3010,10 +3420,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setExpressStatus('np')}
+                  onClick={() => {
+                    setExpressStatus('np');
+                    setExpressApplyToAllInCycle(false);
+                  }}
                   className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
                     expressStatus === 'np'
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      ? 'bg-red-500/20 border-red-500 text-red-300'
                       : 'bg-neutral-950 border-neutral-800 text-neutral-400'
                   }`}
                 >
@@ -3021,13 +3434,80 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </button>
               </div>
 
-              {expressStatus !== 'completed' && (
+              {expressStatus === 'na' && (
+                <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-300">
+                      Motivo de No Aplica (NA):
+                    </span>
+                    <span className="text-[10px] text-amber-400/80 font-mono">
+                      {expressApplyToAllInCycle ? 'Ciclo Completo' : 'Solo este ejercicio'}
+                    </span>
+                  </div>
+
+                  {/* Quick chips for reasons */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    {[
+                      'Ingreso posterior a fecha de pruebas',
+                      'Adulto mayor / Exento por edad',
+                      'Etapa formativa infantil',
+                      'Lesión temporal / Médico'
+                    ].map((reasonChip) => (
+                      <button
+                        key={reasonChip}
+                        type="button"
+                        onClick={() => {
+                          setExpressReason(reasonChip);
+                          if (reasonChip.includes('Ingreso posterior')) {
+                            setExpressApplyToAllInCycle(true);
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all ${
+                          expressReason === reasonChip
+                            ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                            : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        {reasonChip}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Motivo personalizado (ej. Ingresó el día 18 después de pruebas)..."
+                    value={expressReason}
+                    onChange={(e) => setExpressReason(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-amber-500"
+                  />
+
+                  {/* CHECKBOX APLICAR NA A TODO EL CICLO */}
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-neutral-950/80 border border-amber-500/30 cursor-pointer hover:border-amber-500/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={expressApplyToAllInCycle}
+                      onChange={(e) => setExpressApplyToAllInCycle(e.target.checked)}
+                      className="mt-0.5 rounded border-neutral-700 text-amber-500 focus:ring-amber-500 w-4 h-4 shrink-0"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-amber-200 block">
+                        Aplicar NA General a toda la evaluación del ciclo
+                      </span>
+                      <span className="text-[10px] text-neutral-400 block leading-tight mt-0.5">
+                        Exenta Cooper (12m), Resistencia Funcional y los 5 ejercicios de fuerza para este alumno (ideal para nuevos ingresos o periodos especiales).
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {expressStatus === 'np' && (
                 <input
                   type="text"
-                  placeholder={expressStatus === 'na' ? 'Motivo: Adulto mayor, niño, prescripción...' : 'Motivo: Lesión de hombro, pospuesto...'}
+                  placeholder="Motivo NP: Lesión de hombro, pospuesto por enfermedad..."
                   value={expressReason}
                   onChange={(e) => setExpressReason(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs mt-1 outline-none focus:border-amber-500"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs mt-1 outline-none focus:border-red-500"
                 />
               )}
             </div>
@@ -3172,10 +3652,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleSaveExpress(false)}
-                className="w-full sm:flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                className={`w-full sm:flex-1 py-3 rounded-2xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
+                  expressApplyToAllInCycle
+                    ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
+                    : 'bg-neutral-800 hover:bg-neutral-700 text-white'
+                }`}
               >
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>Guardar Marca</span>
+                <span>
+                  {expressApplyToAllInCycle ? 'Guardar NA General de Ciclo' : 'Guardar Marca'}
+                </span>
               </button>
 
               {athleteList.length > 1 && onSelectNextAthlete && (
@@ -3185,7 +3671,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   className="w-full sm:flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 active:scale-95"
                 >
                   <Zap className="w-4 h-4 fill-neutral-950" />
-                  <span>Guardar y Siguiente Atleta ⚡</span>
+                  <span>
+                    {expressApplyToAllInCycle ? 'Guardar NA y Siguiente Atleta ⚡' : 'Guardar y Siguiente Atleta ⚡'}
+                  </span>
                 </button>
               )}
             </div>
