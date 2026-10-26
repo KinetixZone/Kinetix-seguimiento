@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord, MembershipStatus, KinetixPlanName, PrivacyConsentRecord } from '../../types';
+import { 
+  UserProfile, 
+  BodyCompositionRecord, 
+  PhysicalEvaluationRecord, 
+  MembershipStatus, 
+  KinetixPlanName, 
+  PrivacyConsentRecord,
+  EvaluationStatus,
+  StrengthMaxRecord,
+  CooperTestRecord,
+  EnduranceTimeTestRecord
+} from '../../types';
+import { calculate1RM } from '../../utils/fitnessCalculations';
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
@@ -44,9 +56,11 @@ import {
   Copy,
   Cloud,
   Check,
+  CheckCheck,
   RefreshCw,
   Download,
-  Pencil
+  Pencil,
+  Zap
 } from 'lucide-react';
 import { 
   KINETIX_OFFICIAL_SUPABASE_SQL, 
@@ -100,6 +114,8 @@ interface StaffManagementViewProps {
   currentUser?: UserProfile;
   onSwitchUser?: (user: UserProfile) => void;
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
+  onAddEvaluation?: (evaluation: Omit<PhysicalEvaluationRecord, 'id'>) => void;
+  onUpdateEvaluation?: (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => void;
 }
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
@@ -124,6 +140,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   currentUser,
   onSwitchUser,
   consentHistory,
+  onAddEvaluation,
+  onUpdateEvaluation,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateStaffModal, setShowCreateStaffModal] = useState(false);
@@ -202,6 +220,292 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30 | 'due_soon'>('all');
   const [batchSentSuccess, setBatchSentSuccess] = useState<boolean>(false);
   const [isBatchSending, setIsBatchSending] = useState<boolean>(false);
+
+  // EXPRESS STRENGTH EVALUATION MODULE STATE (Staff / Entrenador)
+  const [showExpressModal, setShowExpressModal] = useState<boolean>(false);
+  const [expressMode, setExpressMode] = useState<'single' | 'multiple' | 'all'>('single');
+  const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
+  const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
+  const [expressDate, setExpressDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [expressTargetSingleId, setExpressTargetSingleId] = useState<string>('');
+  const [expressSingleWeight, setExpressSingleWeight] = useState<number>(60);
+  const [expressSingleReps, setExpressSingleReps] = useState<number>(1);
+  const [expressSingleStatus, setExpressSingleStatus] = useState<EvaluationStatus>('completed');
+  const [expressSingleReason, setExpressSingleReason] = useState<string>('');
+  const [expressNotes, setExpressNotes] = useState<string>('');
+  const [expressApplyAllCycleSingle, setExpressApplyAllCycleSingle] = useState<boolean>(false);
+
+  // Multiple and All-Athletes batch mode state
+  const [selectedAthleteIdsForExpress, setSelectedAthleteIdsForExpress] = useState<string[]>([]);
+  const [expressAthleteInputs, setExpressAthleteInputs] = useState<Record<string, { weightKg: number; reps: number; status: EvaluationStatus; statusReason: string }>>({});
+  const [commonBatchWeight, setCommonBatchWeight] = useState<number>(60);
+  const [commonBatchReps, setCommonBatchReps] = useState<number>(1);
+  const [expressSaveSuccessMsg, setExpressSaveSuccessMsg] = useState<string | null>(null);
+
+  // Helper to retrieve latest recorded strength data for an athlete in a specific exercise
+  const getLatestAthleteExerciseData = (athleteId: string, exId: string) => {
+    const userEvals = evaluations.filter(e => e.userId === athleteId);
+    const sorted = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const latest = sorted[sorted.length - 1];
+    return latest?.strengthRecords?.find(s => s.exerciseId === exId);
+  };
+
+  const handleOpenExpressForStaff = (initialMode: 'single' | 'multiple' | 'all' = 'single', targetAthleteId?: string) => {
+    const athleteList = users.filter(u => u.role === 'athlete');
+    const firstId = targetAthleteId || (athleteList[0]?.id || '');
+
+    setExpressMode(initialMode);
+    setExpressDate(new Date().toISOString().slice(0, 10));
+    setExpressNotes('');
+    setExpressApplyAllCycleSingle(false);
+    setExpressSaveSuccessMsg(null);
+    setExpressTargetSingleId(firstId);
+
+    // Default values for single mode
+    if (firstId) {
+      const rec = getLatestAthleteExerciseData(firstId, expressExerciseId);
+      if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+        setExpressSingleWeight(rec.weightKg);
+        setExpressSingleReps(rec.reps || 1);
+        setExpressSingleStatus('completed');
+        setExpressSingleReason('');
+      } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+        setExpressSingleStatus(rec.status);
+        setExpressSingleReason(rec.statusReason || '');
+        setExpressSingleWeight(expressExerciseId === 'deadlift' ? 60 : expressExerciseId === 'squats' ? 50 : 40);
+        setExpressSingleReps(1);
+      } else {
+        setExpressSingleWeight(expressExerciseId === 'deadlift' ? 60 : expressExerciseId === 'squats' ? 50 : expressExerciseId === 'hip_thrust' ? 50 : 35);
+        setExpressSingleReps(1);
+        setExpressSingleStatus('completed');
+        setExpressSingleReason('');
+      }
+    }
+
+    // Set batch athlete IDs
+    if (initialMode === 'all') {
+      setSelectedAthleteIdsForExpress(athleteList.map(a => a.id));
+    } else if (initialMode === 'multiple') {
+      setSelectedAthleteIdsForExpress(targetAthleteId ? [targetAthleteId] : athleteList.slice(0, 5).map(a => a.id));
+    } else {
+      setSelectedAthleteIdsForExpress([firstId]);
+    }
+
+    // Build inputs map for all athletes
+    const inputsMap: Record<string, { weightKg: number; reps: number; status: EvaluationStatus; statusReason: string }> = {};
+    athleteList.forEach(ath => {
+      const rec = getLatestAthleteExerciseData(ath.id, expressExerciseId);
+      if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+        inputsMap[ath.id] = { weightKg: rec.weightKg, reps: rec.reps || 1, status: 'completed', statusReason: '' };
+      } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+        inputsMap[ath.id] = { weightKg: 50, reps: 1, status: rec.status, statusReason: rec.statusReason || '' };
+      } else {
+        inputsMap[ath.id] = { weightKg: expressExerciseId === 'deadlift' ? 60 : 50, reps: 1, status: 'completed', statusReason: '' };
+      }
+    });
+    setExpressAthleteInputs(inputsMap);
+    setShowExpressModal(true);
+  };
+
+  const handleSaveExpressRecord = (targetAthleteIds: string[]) => {
+    if (!onAddEvaluation && !onUpdateEvaluation) {
+      return;
+    }
+    if (targetAthleteIds.length === 0) return;
+
+    const exerciseNameMap: Record<string, string> = {
+      squats: 'Sentadillas',
+      deadlift: 'Peso Muerto',
+      hip_thrust: 'Hip Thrust',
+      horizontal_press: 'Press Horizontal',
+      pullups_or_rows: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+    };
+
+    let countSaved = 0;
+
+    targetAthleteIds.forEach(athId => {
+      let weight = 0;
+      let reps = 0;
+      let status: EvaluationStatus = 'completed';
+      let reason = '';
+
+      if (expressMode === 'single') {
+        weight = expressSingleWeight;
+        reps = expressSingleReps;
+        status = expressSingleStatus;
+        reason = expressSingleReason;
+      } else {
+        const inp = expressAthleteInputs[athId];
+        weight = inp ? inp.weightKg : commonBatchWeight;
+        reps = inp ? inp.reps : commonBatchReps;
+        status = inp ? inp.status : 'completed';
+        reason = inp ? inp.statusReason : '';
+      }
+
+      // Check NA general cycle option in single mode
+      if (expressMode === 'single' && expressApplyAllCycleSingle) {
+        const genReason = reason || 'Ingreso posterior a fecha de pruebas';
+        const allNAStrength: StrengthMaxRecord[] = [
+          { exerciseId: 'squats', exerciseName: 'Sentadillas', weightKg: 0, reps: 0, estimated1RMKg: 0, weightUnit: 'kg', status: 'na', statusReason: genReason, notes: `NA: ${genReason}` },
+          { exerciseId: 'deadlift', exerciseName: 'Peso Muerto', weightKg: 0, reps: 0, estimated1RMKg: 0, weightUnit: 'kg', status: 'na', statusReason: genReason, notes: `NA: ${genReason}` },
+          { exerciseId: 'hip_thrust', exerciseName: 'Hip Thrust', weightKg: 0, reps: 0, estimated1RMKg: 0, weightUnit: 'kg', status: 'na', statusReason: genReason, notes: `NA: ${genReason}` },
+          { exerciseId: 'horizontal_press', exerciseName: 'Press Horizontal', weightKg: 0, reps: 0, estimated1RMKg: 0, weightUnit: 'kg', status: 'na', statusReason: genReason, notes: `NA: ${genReason}` },
+          { exerciseId: 'pullups_or_rows', exerciseName: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)', exerciseType: expressRowType, weightKg: 0, reps: 0, estimated1RMKg: 0, weightUnit: 'kg', status: 'na', statusReason: genReason, notes: `NA: ${genReason}` },
+        ];
+        const naCooper: CooperTestRecord = {
+          level: 'NA (No Aplica)',
+          levelNumber: 0,
+          description: 'Prueba exenta este ciclo.',
+          targetZoneRecommendation: 'Acondicionamiento físico general adaptado.',
+          distanceMeters: 0,
+          estimatedVo2Max: 0,
+          status: 'na',
+          statusReason: genReason,
+          notes: `NA: ${genReason}`,
+        };
+        const naEndurance: EnduranceTimeTestRecord = {
+          name: 'Evaluación de Resistencia Funcional',
+          result: 'NA',
+          timeSeconds: 0,
+          scoreScoreLevel: 'Exento',
+          status: 'na',
+          statusReason: genReason,
+          notes: `NA: ${genReason}`,
+        };
+
+        const existingEval = evaluations.find(e => e.userId === athId && e.evaluationDate === expressDate);
+        if (existingEval && onUpdateEvaluation) {
+          onUpdateEvaluation(existingEval.id, {
+            cooperTest: naCooper,
+            enduranceTest: naEndurance,
+            strengthRecords: allNAStrength,
+            generalCoachNotes: `NA General (${genReason}) registrado en Staff.`,
+          });
+        } else if (onAddEvaluation) {
+          onAddEvaluation({
+            userId: athId,
+            evaluationDate: expressDate,
+            coachId: activeStaff.id,
+            coachName: activeStaff.name,
+            cooperTest: naCooper,
+            enduranceTest: naEndurance,
+            strengthRecords: allNAStrength,
+            generalCoachNotes: `NA General (${genReason}) registrado en Staff.`,
+          });
+        }
+        countSaved++;
+        return;
+      }
+
+      const calculated1RM = status === 'completed' ? calculate1RM(weight, reps) : 0;
+      const newRec: StrengthMaxRecord = {
+        exerciseId: expressExerciseId,
+        exerciseName: exerciseNameMap[expressExerciseId] || 'Fuerza',
+        exerciseType: expressExerciseId === 'pullups_or_rows' ? expressRowType : undefined,
+        weightKg: status === 'completed' ? weight : 0,
+        reps: status === 'completed' ? reps : 0,
+        estimated1RMKg: calculated1RM,
+        weightUnit: 'kg',
+        status,
+        statusReason: reason || undefined,
+        notes: expressNotes ? expressNotes : (status === 'na' ? `NA: ${reason || 'Exento'}` : status === 'np' ? `NP: ${reason || 'No Presentada'}` : undefined),
+      };
+
+      const existingEval = evaluations.find(e => e.userId === athId && e.evaluationDate === expressDate);
+      if (existingEval && onUpdateEvaluation) {
+        const existingRecs = existingEval.strengthRecords || [];
+        const idx = existingRecs.findIndex(r => r.exerciseId === expressExerciseId);
+        let updatedRecs: StrengthMaxRecord[];
+        if (idx >= 0) {
+          updatedRecs = [...existingRecs];
+          updatedRecs[idx] = newRec;
+        } else {
+          updatedRecs = [...existingRecs, newRec];
+        }
+        onUpdateEvaluation(existingEval.id, {
+          strengthRecords: updatedRecs,
+        });
+      } else if (onAddEvaluation) {
+        const pastEvals = evaluations.filter(e => e.userId === athId);
+        const sortedPast = [...pastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+        const latestPast = sortedPast[sortedPast.length - 1];
+
+        const defaultCooper: CooperTestRecord = latestPast?.cooperTest || {
+          level: 'Nivel 5',
+          levelNumber: 5,
+          description: 'Capacidad aeróbica estándar.',
+          targetZoneRecommendation: 'Zona 2 y 3',
+          distanceMeters: 2000,
+          estimatedVo2Max: 48,
+          status: 'completed',
+        };
+
+        const defaultEndurance: EnduranceTimeTestRecord = latestPast?.enduranceTest || {
+          name: 'Evaluación de Resistencia Funcional',
+          result: '07:00 min',
+          timeSeconds: 420,
+          scoreScoreLevel: 'Intermedio',
+          status: 'completed',
+        };
+
+        const baseStrength: StrengthMaxRecord[] = latestPast?.strengthRecords?.map(s => {
+          if (s.exerciseId === expressExerciseId) return newRec;
+          return s;
+        }) || [newRec];
+
+        if (!baseStrength.some(s => s.exerciseId === expressExerciseId)) {
+          baseStrength.push(newRec);
+        }
+
+        onAddEvaluation({
+          userId: athId,
+          evaluationDate: expressDate,
+          coachId: activeStaff.id,
+          coachName: activeStaff.name,
+          cooperTest: defaultCooper,
+          enduranceTest: defaultEndurance,
+          strengthRecords: baseStrength,
+          generalCoachNotes: expressNotes || `Marca Express de ${newRec.exerciseName} registrada en clase.`,
+        });
+      }
+      countSaved++;
+    });
+
+    const msg = countSaved === 1 
+      ? `¡Evaluación Express guardada correctamente!`
+      : `¡Evaluación Express guardada para ${countSaved} atletas!`;
+    setExpressSaveSuccessMsg(msg);
+    setTimeout(() => {
+      setExpressSaveSuccessMsg(null);
+      setShowExpressModal(false);
+    }, 1800);
+  };
+
+  const handleSaveAndNextSingleExpress = () => {
+    const athleteList = users.filter(u => u.role === 'athlete');
+    handleSaveExpressRecord([expressTargetSingleId]);
+
+    const currentIdx = athleteList.findIndex(a => a.id === expressTargetSingleId);
+    const nextIdx = currentIdx !== -1 ? (currentIdx + 1) % athleteList.length : 0;
+    const nextAth = athleteList[nextIdx];
+    if (nextAth) {
+      setExpressTargetSingleId(nextAth.id);
+      const rec = getLatestAthleteExerciseData(nextAth.id, expressExerciseId);
+      if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+        setExpressSingleWeight(rec.weightKg);
+        setExpressSingleReps(rec.reps || 1);
+        setExpressSingleStatus('completed');
+        setExpressSingleReason('');
+      } else {
+        setExpressSingleWeight(50);
+        setExpressSingleReps(1);
+        setExpressSingleStatus('completed');
+        setExpressSingleReason('');
+      }
+      setExpressSaveSuccessMsg(`¡Guardado! Evaluando ahora a: ${nextAth.name}`);
+      setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
+    }
+  };
 
   const activeStaff = currentUser && currentUser.role === 'staff' 
     ? currentUser 
@@ -443,6 +747,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               <span>Limpiar Atletas Demo</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => handleOpenExpressForStaff('single')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+            title="Registrar una marca de fuerza (Peso Muerto, Sentadilla, etc.) en segundos"
+          >
+            <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+            <span>Evaluar Express ⚡</span>
+          </button>
 
           <button
             onClick={() => setShowExportModal(true)}
@@ -824,6 +1138,57 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       </div>
 
+      {/* BANNER COACH: EVALUACIÓN EXPRESS DE PRUEBAS & FUERZA */}
+      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-amber-950/40 border border-amber-500/40 space-y-3 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Zap className="w-5 h-5 fill-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <strong className="text-white text-xs sm:text-sm font-brand">Evaluación Express de Fuerza (1RM & PRs)</strong>
+                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.2 rounded-full font-bold">
+                  Coach Móvil ⚡
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Registra marcas de Peso Muerto, Sentadilla, Banco, etc. para <strong>1 atleta</strong>, un <strong>grupo seleccionado</strong> o <strong>todos los alumnos</strong> en segundos.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleOpenExpressForStaff('single')}
+              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+            >
+              <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+              <span>1 Atleta</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenExpressForStaff('multiple')}
+              className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-semibold text-xs flex items-center gap-1 transition-all active:scale-95"
+            >
+              <Users className="w-3.5 h-3.5 text-blue-400" />
+              <span>Elegir Varios</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenExpressForStaff('all')}
+              className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 font-semibold text-xs flex items-center gap-1 transition-all active:scale-95"
+            >
+              <CheckCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span>Todos ({users.filter(u => u.role === 'athlete').length})</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Search Input con botón de borrado rápido para celular */}
       <div className="relative">
         <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1121,6 +1486,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       <span>Cuerpo</span>
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenExpressForStaff('single', athlete.id)}
+                    className="px-2 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+                    title="Captura Express de Fuerza (1RM) para este alumno"
+                  >
+                    <Zap className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <span>Express</span>
+                  </button>
 
                   <button
                     onClick={() => onOpenTestEntryForUser(athlete)}
@@ -2339,6 +2714,741 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL COACH: EVALUACIÓN EXPRESS DE FUERZA (1RM & PRs) */}
+      {showExpressModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+          <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <Zap className="w-5 h-5 fill-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-brand flex items-center gap-1.5">
+                    <span>Captura Express de Fuerza</span>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+                      1RM & PR
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Registra marcas de forma ágil para un alumno, grupo o todos en la clase
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowExpressModal(false)}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors"
+                title="Cerrar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Notification / Success Feedback */}
+            {expressSaveSuccessMsg && (
+              <div className="p-3 rounded-2xl bg-emerald-950/90 border border-emerald-700 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-fade-in shadow-md">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{expressSaveSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* STEP 1: SELECTOR DE MODO DE EVALUACIÓN (Pregunta del usuario: ¿A todos o solo elegir unos?) */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider block">
+                1. ¿A quiénes deseas evaluar?
+              </label>
+              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setExpressMode('single')}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    expressMode === 'single'
+                      ? 'bg-amber-500 text-neutral-950 shadow-md font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>1 Atleta</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpressMode('multiple');
+                    if (selectedAthleteIdsForExpress.length === 0) {
+                      const athList = users.filter(u => u.role === 'athlete');
+                      setSelectedAthleteIdsForExpress(athList.slice(0, 4).map(a => a.id));
+                    }
+                  }}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    expressMode === 'multiple'
+                      ? 'bg-amber-500 text-neutral-950 shadow-md font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Elegir Varios</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpressMode('all');
+                    setSelectedAthleteIdsForExpress(users.filter(u => u.role === 'athlete').map(a => a.id));
+                  }}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    expressMode === 'all'
+                      ? 'bg-amber-500 text-neutral-950 shadow-md font-bold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  <span>Todos ({users.filter(u => u.role === 'athlete').length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* STEP 2: SELECTOR DE EJERCICIO DE FUERZA */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider block">
+                2. Ejercicio de Fuerza Oficial
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs">
+                {[
+                  { id: 'deadlift', name: 'Peso Muerto', emoji: '🏋️' },
+                  { id: 'squats', name: 'Sentadilla', emoji: '🦵' },
+                  { id: 'hip_thrust', name: 'Hip Thrust', emoji: '🍑' },
+                  { id: 'horizontal_press', name: 'Press Banco', emoji: '🏋️‍♂️' },
+                  { id: 'pullups_or_rows', name: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas', emoji: '💪' },
+                ].map((ex) => {
+                  const isSelected = expressExerciseId === ex.id;
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        setExpressExerciseId(ex.id as any);
+                        if (expressTargetSingleId) {
+                          const rec = getLatestAthleteExerciseData(expressTargetSingleId, ex.id);
+                          if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+                            setExpressSingleWeight(rec.weightKg);
+                            setExpressSingleReps(rec.reps || 1);
+                          }
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
+                        isSelected
+                          ? 'bg-red-600 text-white border-red-500 shadow-md font-bold ring-2 ring-red-500/40'
+                          : 'bg-neutral-950/70 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                      }`}
+                    >
+                      <span className="text-base">{ex.emoji}</span>
+                      <span className="text-[11px] font-semibold">{ex.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {expressExerciseId === 'pullups_or_rows' && (
+                <div className="flex items-center gap-2 pt-1 pl-1">
+                  <span className="text-[11px] text-neutral-400">Variante:</span>
+                  <button
+                    type="button"
+                    onClick={() => setExpressRowType('remo')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                      expressRowType === 'remo'
+                        ? 'bg-blue-600 text-white border-blue-400'
+                        : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                    }`}
+                  >
+                    Remo con Barra
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpressRowType('dominadas')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                      expressRowType === 'dominadas'
+                        ? 'bg-blue-600 text-white border-blue-400'
+                        : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                    }`}
+                  >
+                    Dominadas (Pull-ups)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* STEP 3: FECHA DE EVALUACIÓN (Permite cargar fechas anteriores sin alterar registros ganados) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-2xl bg-neutral-950/60 border border-neutral-800/80">
+              <div className="flex items-center gap-2 text-xs text-neutral-300">
+                <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>Fecha del Registro:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={expressDate}
+                  onChange={(e) => setExpressDate(e.target.value)}
+                  className="bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setExpressDate(new Date().toISOString().slice(0, 10))}
+                  className="text-[10px] text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700"
+                >
+                  Hoy
+                </button>
+              </div>
+            </div>
+
+            {/* ============================================================== */}
+            {/* MODO 1: UN ATLETA INDIVIDUAL */}
+            {/* ============================================================== */}
+            {expressMode === 'single' && (
+              <div className="space-y-4 p-4 rounded-2xl bg-neutral-950/70 border border-neutral-800">
+                {/* Athlete Selector */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider block">
+                    Seleccionar Alumno
+                  </label>
+                  <select
+                    value={expressTargetSingleId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setExpressTargetSingleId(newId);
+                      const rec = getLatestAthleteExerciseData(newId, expressExerciseId);
+                      if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+                        setExpressSingleWeight(rec.weightKg);
+                        setExpressSingleReps(rec.reps || 1);
+                        setExpressSingleStatus('completed');
+                        setExpressSingleReason('');
+                      } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+                        setExpressSingleStatus(rec.status);
+                        setExpressSingleReason(rec.statusReason || '');
+                      }
+                    }}
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-amber-500"
+                  >
+                    {users.filter(u => u.role === 'athlete').map((ath) => (
+                      <option key={ath.id} value={ath.id}>
+                        {ath.name} ({ath.membership.planName}) · Corte Día {ath.membership.billingDayOfMonth || 15}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Toggle: Válido, NA, NP */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider block">
+                    Estado de la Prueba
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpressSingleStatus('completed');
+                        setExpressSingleReason('');
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        expressSingleStatus === 'completed'
+                          ? 'bg-emerald-600 text-white border-emerald-400 shadow-md'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                      }`}
+                    >
+                      ✓ Marca Válida
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpressSingleStatus('na');
+                        if (!expressSingleReason) setExpressSingleReason('Ingreso posterior a fecha de pruebas');
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        expressSingleStatus === 'na'
+                          ? 'bg-blue-600 text-white border-blue-400 shadow-md'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                      }`}
+                    >
+                      NA (No Aplica)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpressSingleStatus('np');
+                        if (!expressSingleReason) setExpressSingleReason('Lesión o Molestia');
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        expressSingleStatus === 'np'
+                          ? 'bg-red-600 text-white border-red-400 shadow-md'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                      }`}
+                    >
+                      NP (No Presentada)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Weight and Reps (If completed) */}
+                {expressSingleStatus === 'completed' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Weight */}
+                      <div className="p-3 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+                        <span className="text-[11px] text-neutral-400 block font-medium">Peso Levantado (kg)</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="500"
+                            step="0.5"
+                            value={expressSingleWeight}
+                            onChange={(e) => setExpressSingleWeight(Number(e.target.value))}
+                            className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-lg font-extrabold text-white text-center font-mono outline-none focus:border-amber-500"
+                          />
+                          <span className="text-xs text-neutral-400 font-bold">kg</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-1">
+                          {[-5, -2.5, +2.5, +5].map((delta) => (
+                            <button
+                              key={delta}
+                              type="button"
+                              onClick={() => setExpressSingleWeight(w => Math.max(0, Number((w + delta).toFixed(1))))}
+                              className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[10px] font-mono font-bold"
+                            >
+                              {delta > 0 ? `+${delta}` : delta}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Reps */}
+                      <div className="p-3 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+                        <span className="text-[11px] text-neutral-400 block font-medium">Repeticiones Realizadas</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={expressSingleReps}
+                            onChange={(e) => setExpressSingleReps(Math.max(1, Number(e.target.value)))}
+                            className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-lg font-extrabold text-white text-center font-mono outline-none focus:border-amber-500"
+                          />
+                          <span className="text-xs text-neutral-400 font-bold">reps</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-1">
+                          {[1, 3, 5, 8, 10].map((r) => (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => setExpressSingleReps(r)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold transition-colors ${
+                                expressSingleReps === r 
+                                  ? 'bg-amber-500 text-black' 
+                                  : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                              }`}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 1RM Calculated Preview */}
+                    <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 to-amber-950/30 border border-amber-500/30 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Flame className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs text-neutral-300 font-medium">1RM Máximo Estimado (Fórmula Epley):</span>
+                      </div>
+                      <span className="text-base font-extrabold text-amber-400 font-mono">
+                        {calculate1RM(expressSingleWeight, expressSingleReps)} kg
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Reason Selector for NA / NP */
+                  <div className="p-3 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2.5">
+                    <span className="text-[11px] text-neutral-400 block font-medium">
+                      Motivo de {expressSingleStatus === 'na' ? 'Exención (NA)' : 'Inasistencia (NP)'}:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        'Ingreso posterior a fecha de pruebas',
+                        'Niño / Adulto mayor (Exento)',
+                        'Lesión o Molestia articular',
+                        'Prescripción médica',
+                        'Falta / Inasistencia a clase'
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setExpressSingleReason(preset)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                            expressSingleReason === preset
+                              ? 'bg-blue-600 text-white border-blue-400 font-bold'
+                              : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={expressSingleReason}
+                      onChange={(e) => setExpressSingleReason(e.target.value)}
+                      placeholder="O escribe un motivo personalizado..."
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500"
+                    />
+
+                    {/* NA General Cycle Checkbox */}
+                    {expressSingleStatus === 'na' && (
+                      <label className="flex items-center gap-2 pt-1 text-xs text-neutral-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={expressApplyAllCycleSingle}
+                          onChange={(e) => setExpressApplyAllCycleSingle(e.target.checked)}
+                          className="w-4 h-4 rounded text-blue-600 focus:ring-0 bg-neutral-950 border-neutral-700"
+                        />
+                        <span>
+                          Aplicar <strong>NA General</strong> a todas las pruebas de este mes (Sentadilla, Banco, Cooper, etc.)
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* Optional Coach Notes */}
+                <input
+                  type="text"
+                  value={expressNotes}
+                  onChange={(e) => setExpressNotes(e.target.value)}
+                  placeholder="Observaciones técnicas (opcional, ej. muy buena postura, subió 5kg)..."
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 outline-none focus:border-amber-500"
+                />
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveExpressRecord([expressTargetSingleId])}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Guardar Registro</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveAndNextSingleExpress}
+                    className="py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 border border-neutral-700 active:scale-95 transition-all"
+                    title="Guardar este atleta y pasar inmediatamente al siguiente"
+                  >
+                    <span>Guardar y Siguiente</span>
+                    <ArrowLeft className="w-3.5 h-3.5 rotate-180 text-amber-400" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* MODO 2 Y 3: ELEGIR VARIOS ATLETAS O TODOS */}
+            {/* ============================================================== */}
+            {(expressMode === 'multiple' || expressMode === 'all') && (
+              <div className="space-y-3">
+                {/* Fast Filters (Only in Multiple Mode) */}
+                {expressMode === 'multiple' && (
+                  <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-neutral-400">
+                      <span>Seleccionar grupo de atletas:</span>
+                      <span className="font-bold text-white font-mono">
+                        {selectedAthleteIdsForExpress.length} seleccionados
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAthleteIdsForExpress(users.filter(u => u.role === 'athlete').map(a => a.id))}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold border border-neutral-700"
+                      >
+                        ✓ Seleccionar Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAthleteIdsForExpress([])}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[11px] border border-neutral-700"
+                      >
+                        ✕ Ninguno
+                      </button>
+                      {[5, 15, 20, 30].map(day => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            const groupIds = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth || 15) === day).map(a => a.id);
+                            setSelectedAthleteIdsForExpress(groupIds);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[11px] font-mono border border-neutral-800"
+                        >
+                          Corte Día {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Common Weight Helper Bar */}
+                <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs text-neutral-300 font-medium">Peso Común de la Estación:</span>
+                    <input
+                      type="number"
+                      value={commonBatchWeight}
+                      onChange={(e) => setCommonBatchWeight(Number(e.target.value))}
+                      className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                    />
+                    <span className="text-xs text-neutral-400">kg</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = { ...expressAthleteInputs };
+                      selectedAthleteIdsForExpress.forEach(id => {
+                        updated[id] = {
+                          ...(updated[id] || { reps: 1, status: 'completed', statusReason: '' }),
+                          weightKg: commonBatchWeight,
+                          status: 'completed',
+                        };
+                      });
+                      setExpressAthleteInputs(updated);
+                      setExpressSaveSuccessMsg(`¡${commonBatchWeight} kg aplicado a todos los atletas seleccionados!`);
+                      setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    <span>Copiar a los {selectedAthleteIdsForExpress.length} seleccionados</span>
+                  </button>
+                </div>
+
+                {/* Athlete Rapid Entry Grid */}
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {users
+                    .filter(u => u.role === 'athlete')
+                    .map((ath) => {
+                      const isSelected = selectedAthleteIdsForExpress.includes(ath.id);
+                      if (expressMode === 'multiple' && !isSelected) {
+                        return (
+                          <div
+                            key={ath.id}
+                            onClick={() => setSelectedAthleteIdsForExpress(prev => [...prev, ath.id])}
+                            className="p-2.5 rounded-xl bg-neutral-950/40 border border-neutral-900 flex items-center justify-between gap-2 opacity-60 hover:opacity-100 cursor-pointer transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={false}
+                                onChange={() => {}}
+                                className="w-4 h-4 rounded text-amber-500 bg-neutral-900 border-neutral-700"
+                              />
+                              <span className="text-xs text-neutral-300 font-medium">{ath.name}</span>
+                            </div>
+                            <span className="text-[10px] text-neutral-500 font-mono">Tocar para incluir</span>
+                          </div>
+                        );
+                      }
+
+                      const currentInput = expressAthleteInputs[ath.id] || {
+                        weightKg: 60,
+                        reps: 1,
+                        status: 'completed',
+                        statusReason: ''
+                      };
+
+                      return (
+                        <div
+                          key={ath.id}
+                          className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              {expressMode === 'multiple' && (
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAthleteIdsForExpress(prev => [...prev, ath.id]);
+                                    } else {
+                                      setSelectedAthleteIdsForExpress(prev => prev.filter(id => id !== ath.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded text-amber-500 bg-neutral-900 border-neutral-700 cursor-pointer"
+                                />
+                              )}
+                              <UserAvatar
+                                name={ath.name}
+                                avatarUrl={ath.avatarUrl}
+                                role={ath.role}
+                                sizeClassName="w-7 h-7"
+                              />
+                              <div className="overflow-hidden">
+                                <strong className="text-xs text-white block truncate">{ath.name}</strong>
+                                <span className="text-[10px] text-neutral-400 block font-mono">
+                                  {ath.membership.planName} · Corte Día {ath.membership.billingDayOfMonth || 15}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Status Quick Buttons */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpressAthleteInputs(prev => ({
+                                    ...prev,
+                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 60, reps: 1, statusReason: '' }), status: 'completed' }
+                                  }));
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                  currentInput.status === 'completed'
+                                    ? 'bg-emerald-600 text-white border-emerald-400'
+                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                }`}
+                              >
+                                ✓ Válido
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpressAthleteInputs(prev => ({
+                                    ...prev,
+                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'na', statusReason: 'Ingreso posterior a fecha de pruebas' }
+                                  }));
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                  currentInput.status === 'na'
+                                    ? 'bg-blue-600 text-white border-blue-400'
+                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                }`}
+                              >
+                                NA
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpressAthleteInputs(prev => ({
+                                    ...prev,
+                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'np', statusReason: 'No presentada' }
+                                  }));
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                  currentInput.status === 'np'
+                                    ? 'bg-red-600 text-white border-red-400'
+                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                }`}
+                              >
+                                NP
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Inputs Row */}
+                          {currentInput.status === 'completed' ? (
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-900 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] text-neutral-400">Peso:</span>
+                                <input
+                                  type="number"
+                                  value={currentInput.weightKg}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: val }
+                                    }));
+                                  }}
+                                  className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                                />
+                                <span className="text-neutral-400 text-[11px]">kg</span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] text-neutral-400">Reps:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="50"
+                                  value={currentInput.reps}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 60, status: 'completed', statusReason: '' }), reps: val }
+                                    }));
+                                  }}
+                                  className="w-12 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                                />
+                              </div>
+
+                              <div className="text-[11px] font-mono font-bold text-amber-400">
+                                1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 pt-1 border-t border-neutral-900 text-xs">
+                              <span className="text-[11px] text-blue-400">Motivo:</span>
+                              <input
+                                type="text"
+                                value={currentInput.statusReason}
+                                onChange={(e) => {
+                                  const reason = e.target.value;
+                                  setExpressAthleteInputs(prev => ({
+                                    ...prev,
+                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1, status: currentInput.status }), statusReason: reason }
+                                  }));
+                                }}
+                                placeholder="Ingreso posterior, niño/adulto mayor, etc."
+                                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] text-white"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Batch Action Submit */}
+                <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-3">
+                  <div className="text-xs text-neutral-400">
+                    Atletas a guardar: <strong className="text-white">{selectedAthleteIdsForExpress.length}</strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSaveExpressRecord(selectedAthleteIdsForExpress)}
+                    disabled={selectedAthleteIdsForExpress.length === 0}
+                    className="py-2.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/25 active:scale-95 transition-all"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Guardar Evaluación ({selectedAthleteIdsForExpress.length} Alumnos)</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

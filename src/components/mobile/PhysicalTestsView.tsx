@@ -105,7 +105,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const athleteList = (canEvaluate && allAthletes && allAthletes.length > 0)
     ? allAthletes.filter(a => a.role === 'athlete')
     : [];
-  const currentAthleteIndex = athleteList.findIndex(a => a.id === currentUser.id);
+
+  // Target Athlete for viewing/evaluation:
+  // If currentUser is staff/coach, default to the first real athlete so Leslie/coaches evaluate athletes, not themselves!
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(() => {
+    if (currentUser.role === 'staff' && allAthletes && allAthletes.length > 0) {
+      const firstAthlete = allAthletes.find(a => a.role === 'athlete');
+      if (firstAthlete) return firstAthlete.id;
+    }
+    return currentUser.id;
+  });
+
+  useEffect(() => {
+    if (currentUser.role === 'athlete') {
+      setSelectedAthleteId(currentUser.id);
+    } else if (currentUser.role === 'staff' && athleteList.length > 0) {
+      setSelectedAthleteId(prev => {
+        if (athleteList.some(a => a.id === prev)) return prev;
+        return athleteList[0]?.id || currentUser.id;
+      });
+    }
+  }, [currentUser.id, athleteList.length]);
+
+  const effectiveAthlete = (athleteList.find(a => a.id === selectedAthleteId)) ||
+    (currentUser.role === 'athlete' ? currentUser : (athleteList[0] || currentUser));
+
+  const currentAthleteIndex = athleteList.findIndex(a => a.id === effectiveAthlete.id);
   const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
     ? athleteList[(currentAthleteIndex + 1) % athleteList.length]
     : (athleteList[0] || null);
@@ -117,7 +142,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Express Strength/PR Capture State (Captura Rápida de Fuerza)
   const [showExpressModal, setShowExpressModal] = useState(false);
-  const [expressTargetUserId, setExpressTargetUserId] = useState<string>(currentUser.id);
+  const [expressTargetUserId, setExpressTargetUserId] = useState<string>(effectiveAthlete.id);
   const [expressDate, setExpressDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
   const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
@@ -129,10 +154,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [expressApplyToAllInCycle, setExpressApplyToAllInCycle] = useState<boolean>(false);
   const [expressSuccessMessage, setExpressSuccessMessage] = useState<string | null>(null);
 
-  // Sync express target athlete when currentUser changes
+  // Sync express target athlete when effectiveAthlete changes
   useEffect(() => {
-    setExpressTargetUserId(currentUser.id);
-  }, [currentUser.id]);
+    setExpressTargetUserId(effectiveAthlete.id);
+  }, [effectiveAthlete.id]);
 
   const preloadExpressValues = (athleteId: string, exId: string) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
@@ -162,13 +187,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const handleOpenExpressModal = (preselectedExercise?: 'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows') => {
     const ex = preselectedExercise || expressExerciseId;
     setExpressExerciseId(ex);
-    setExpressTargetUserId(currentUser.id);
+    setExpressTargetUserId(effectiveAthlete.id);
     setExpressDate(new Date().toISOString().slice(0, 10));
     setExpressStatus('completed');
     setExpressReason('');
     setExpressNotes('');
     setExpressApplyToAllInCycle(false);
-    preloadExpressValues(currentUser.id, ex);
+    preloadExpressValues(effectiveAthlete.id, ex);
     setShowExpressModal(true);
   };
 
@@ -181,7 +206,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   }, [canEvaluate, showAddEvalModal, showExpressModal]);
 
   // Evaluaciones del atleta actual ordenadas cronológicamente
-  const userEvals = evaluations.filter(e => e.userId === currentUser.id);
+  const userEvals = evaluations.filter(e => e.userId === effectiveAthlete.id);
   const sortedEvals = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
 
   // Form State for New Evaluation Entry (Staff)
@@ -390,7 +415,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   };
 
   const handleOpenAddModal = () => {
-    loadAthleteBaselineIntoForm(currentUser.id);
+    loadAthleteBaselineIntoForm(effectiveAthlete.id);
     setShowAddEvalModal(true);
   };
 
@@ -502,7 +527,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     ];
 
     return {
-      userId: currentUser.id,
+      userId: effectiveAthlete.id,
       evaluationDate: evalDate,
       coachId: assignedCoachId,
       coachName: evaluatingCoachName,
@@ -523,7 +548,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     onAddEvaluation(buildEvaluationPayload());
 
     if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
-      const savedName = currentUser.name;
+      const savedName = effectiveAthlete.name;
       const targetNext = nextAthlete;
 
       // Advance to next athlete and load their clean baseline
@@ -906,11 +931,81 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         </div>
       </div>
 
+      {/* COACH/STAFF ATHLETE SELECTOR BANNER */}
+      {canEvaluate && athleteList.length > 0 && (
+        <div className="p-3 bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950/40 border border-neutral-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-md animate-fade-in">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-8 h-8 rounded-xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
+              <Dumbbell className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block">
+                Modo Entrenador · Alumno a Evaluar:
+              </span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <select
+                  value={effectiveAthlete.id}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSelectedAthleteId(newId);
+                    const found = athleteList.find(a => a.id === newId);
+                    if (found && onSelectNextAthlete) {
+                      onSelectNextAthlete(found);
+                    }
+                  }}
+                  className="bg-neutral-950 border border-neutral-700 hover:border-red-500/60 rounded-xl px-2.5 py-1 text-xs text-white font-bold outline-none focus:border-red-500 transition-colors cursor-pointer"
+                >
+                  <optgroup label="Alumnos del Gimnasio">
+                    {athleteList.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} · {a.membership.planName}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Mi Perfil Personal (Coach/Dueña)">
+                    <option value={currentUser.id}>
+                      👤 {currentUser.name} (Mis pruebas personales)
+                    </option>
+                  </optgroup>
+                </select>
+
+                {effectiveAthlete.id !== currentUser.id && nextAthlete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAthleteId(nextAthlete.id);
+                      if (onSelectNextAthlete) onSelectNextAthlete(nextAthlete);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-medium border border-neutral-700/80 flex items-center gap-1 transition-all active:scale-95"
+                    title="Pasar al siguiente alumno en la lista"
+                  >
+                    <span>Siguiente</span>
+                    <ArrowRight className="w-3 h-3 text-red-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onBackToDashboard}
+              className="px-2.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              title="Ir al Panel de Staff para evaluar grupos de alumnos en tanda"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Panel de Staff (Evaluar Grupo)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Title */}
       <div className="flex items-center justify-between">
         <div>
           <span className="text-[10px] font-mono text-blue-400 uppercase tracking-wider font-semibold">
-            Atleta: {currentUser.name} · {currentUser.membership.planName}
+            Atleta: {effectiveAthlete.name} · {effectiveAthlete.membership.planName}
           </span>
           <h2 className="text-xl font-bold text-white font-brand flex items-center gap-2">
             <span>Rendimiento & Tests</span>

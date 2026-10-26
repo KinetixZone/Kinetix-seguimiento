@@ -524,6 +524,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onBackToDashboard={handleGoHome}
             onSwitchUser={onSwitchUser}
             consentHistory={consentHistory}
+            onAddEvaluation={onAddEvaluation}
+            onUpdateEvaluation={onUpdateEvaluation}
           />
         )}
 
