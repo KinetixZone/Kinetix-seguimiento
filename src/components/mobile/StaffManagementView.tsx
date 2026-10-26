@@ -241,6 +241,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [commonBatchWeight, setCommonBatchWeight] = useState<number>(60);
   const [commonBatchReps, setCommonBatchReps] = useState<number>(1);
   const [expressSaveSuccessMsg, setExpressSaveSuccessMsg] = useState<string | null>(null);
+  const [expressSearchTerm, setExpressSearchTerm] = useState<string>('');
 
   // Helper to retrieve latest recorded strength data for an athlete in a specific exercise
   const getLatestAthleteExerciseData = (athleteId: string, exId: string) => {
@@ -252,9 +253,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
   const handleOpenExpressForStaff = (initialMode: 'single' | 'multiple' | 'all' = 'single', targetAthleteId?: string) => {
     const athleteList = users.filter(u => u.role === 'athlete');
-    const firstId = targetAthleteId || (athleteList[0]?.id || '');
+    const allCandidates = [activeStaff, ...athleteList];
+    const firstId = targetAthleteId || (athleteList[0]?.id || activeStaff.id);
 
-    setExpressMode(initialMode);
+    setExpressMode(initialMode === 'all' ? 'multiple' : initialMode);
+    setExpressSearchTerm('');
     setExpressDate(new Date().toISOString().slice(0, 10));
     setExpressNotes('');
     setExpressApplyAllCycleSingle(false);
@@ -286,14 +289,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     if (initialMode === 'all') {
       setSelectedAthleteIdsForExpress(athleteList.map(a => a.id));
     } else if (initialMode === 'multiple') {
-      setSelectedAthleteIdsForExpress(targetAthleteId ? [targetAthleteId] : athleteList.slice(0, 5).map(a => a.id));
+      setSelectedAthleteIdsForExpress(targetAthleteId ? [targetAthleteId] : athleteList.map(a => a.id));
     } else {
       setSelectedAthleteIdsForExpress([firstId]);
     }
 
-    // Build inputs map for all athletes
+    // Build inputs map for all candidates
     const inputsMap: Record<string, { weightKg: number; reps: number; status: EvaluationStatus; statusReason: string }> = {};
-    athleteList.forEach(ath => {
+    allCandidates.forEach(ath => {
       const rec = getLatestAthleteExerciseData(ath.id, expressExerciseId);
       if (rec && rec.status === 'completed' && rec.weightKg > 0) {
         inputsMap[ath.id] = { weightKg: rec.weightKg, reps: rec.reps || 1, status: 'completed', statusReason: '' };
@@ -846,19 +849,33 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         {/* Coach Quick Actions for Himself */}
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-800/60">
           <button
-            onClick={() => onOpenBodyCompForUser ? onOpenBodyCompForUser(activeStaff) : onSelectUserToInspect(activeStaff)}
-            className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+            type="button"
+            onClick={() => handleOpenExpressForStaff('single', activeStaff.id)}
+            className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+            title="Registrar una marca de 1RM personal en segundos (Express)"
           >
-            <Scale className="w-3.5 h-3.5 text-blue-400" />
-            <span>Registrar Mi Peso / Grasa</span>
+            <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span>Evaluarme Express ⚡ (1RM)</span>
           </button>
 
           <button
+            type="button"
             onClick={() => onOpenTestEntryForUser(activeStaff)}
-            className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+            className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+            title="Evaluar mi Test Físico Completo (Cooper, Resistencia y 1RM)"
           >
             <Dumbbell className="w-3.5 h-3.5 text-red-400" />
-            <span>Registrar Mi Test Físico</span>
+            <span>Evaluar Mi Test Completo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenBodyCompForUser ? onOpenBodyCompForUser(activeStaff) : onSelectUserToInspect(activeStaff)}
+            className="flex-1 min-w-[140px] py-1.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+            title="Registrar mi peso, porcentaje de grasa y masa muscular"
+          >
+            <Scale className="w-3.5 h-3.5 text-blue-400" />
+            <span>Registrar Mi Peso / Grasa</span>
           </button>
         </div>
       </div>
@@ -2760,11 +2777,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             )}
 
             {/* STEP 1: SELECTOR DE MODO DE EVALUACIÓN (Pregunta del usuario: ¿A todos o solo elegir unos?) */}
+            {/* STEP 1: SELECTOR DE MODO DE EVALUACIÓN */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider block">
                 1. ¿A quiénes deseas evaluar?
               </label>
-              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setExpressMode('single')}
@@ -2775,7 +2793,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>1 Atleta</span>
+                  <span>1 Atleta (o Yo Misma)</span>
                 </button>
 
                 <button
@@ -2784,33 +2802,17 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     setExpressMode('multiple');
                     if (selectedAthleteIdsForExpress.length === 0) {
                       const athList = users.filter(u => u.role === 'athlete');
-                      setSelectedAthleteIdsForExpress(athList.slice(0, 4).map(a => a.id));
+                      setSelectedAthleteIdsForExpress(athList.map(a => a.id));
                     }
                   }}
                   className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                    expressMode === 'multiple'
+                    expressMode === 'multiple' || expressMode === 'all'
                       ? 'bg-amber-500 text-neutral-950 shadow-md font-bold'
                       : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   <Users className="w-3.5 h-3.5" />
-                  <span>Elegir Varios</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpressMode('all');
-                    setSelectedAthleteIdsForExpress(users.filter(u => u.role === 'athlete').map(a => a.id));
-                  }}
-                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                    expressMode === 'all'
-                      ? 'bg-amber-500 text-neutral-950 shadow-md font-bold'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <CheckCheck className="w-3.5 h-3.5" />
-                  <span>Todos ({users.filter(u => u.role === 'athlete').length})</span>
+                  <span>Evaluar Grupo ({selectedAthleteIdsForExpress.length} seleccionados)</span>
                 </button>
               </div>
             </div>
@@ -2936,11 +2938,18 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     }}
                     className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-amber-500"
                   >
-                    {users.filter(u => u.role === 'athlete').map((ath) => (
-                      <option key={ath.id} value={ath.id}>
-                        {ath.name} ({ath.membership.planName}) · Corte Día {ath.membership.billingDayOfMonth || 15}
+                    <optgroup label="⭐ Mi Perfil Personal (Coach / Dueña)">
+                      <option value={activeStaff.id}>
+                        ⭐ {activeStaff.name} (Mi Perfil Personal - Coach)
                       </option>
-                    ))}
+                    </optgroup>
+                    <optgroup label="Alumnos del Gimnasio">
+                      {users.filter(u => u.role === 'athlete').map((ath) => (
+                        <option key={ath.id} value={ath.id}>
+                          {ath.name} ({ath.membership.planName}) · Corte Día {ath.membership.billingDayOfMonth || 15}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 
@@ -3162,289 +3171,401 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             )}
 
             {/* ============================================================== */}
-            {/* MODO 2 Y 3: ELEGIR VARIOS ATLETAS O TODOS */}
+            {/* MODO 2 Y 3: ELEGIR GRUPO DE ATLETAS O TODOS */}
             {/* ============================================================== */}
             {(expressMode === 'multiple' || expressMode === 'all') && (
-              <div className="space-y-3">
-                {/* Fast Filters (Only in Multiple Mode) */}
-                {expressMode === 'multiple' && (
-                  <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-neutral-400">
-                      <span>Seleccionar grupo de atletas:</span>
-                      <span className="font-bold text-white font-mono">
-                        {selectedAthleteIdsForExpress.length} seleccionados
-                      </span>
+              <div className="space-y-4">
+                {/* 1. SELECCIONAR ATLETAS CON BUSCADOR Y CHECKBOXES */}
+                <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      <Users className="w-4 h-4 text-amber-400" />
+                      <span>1. Elige qué atletas están en la estación:</span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAthleteIdsForExpress(users.filter(u => u.role === 'athlete').map(a => a.id))}
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold border border-neutral-700"
-                      >
-                        ✓ Seleccionar Todos
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAthleteIdsForExpress([])}
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[11px] border border-neutral-700"
-                      >
-                        ✕ Ninguno
-                      </button>
-                      {[5, 15, 20, 30].map(day => (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => {
-                            const groupIds = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth || 15) === day).map(a => a.id);
-                            setSelectedAthleteIdsForExpress(groupIds);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[11px] font-mono border border-neutral-800"
-                        >
-                          Corte Día {day}
-                        </button>
-                      ))}
-                    </div>
+                    <span className="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      {selectedAthleteIdsForExpress.length} seleccionados
+                    </span>
                   </div>
-                )}
 
-                {/* Common Weight Helper Bar */}
-                <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Dumbbell className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs text-neutral-300 font-medium">Peso Común de la Estación:</span>
+                  {/* Buscador de alumnos */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <input
-                      type="number"
-                      value={commonBatchWeight}
-                      onChange={(e) => setCommonBatchWeight(Number(e.target.value))}
-                      className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      type="text"
+                      value={expressSearchTerm}
+                      onChange={(e) => setExpressSearchTerm(e.target.value)}
+                      placeholder="Buscar alumno por nombre para incluir o quitar..."
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-amber-500"
                     />
-                    <span className="text-xs text-neutral-400">kg</span>
+                    {expressSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setExpressSearchTerm('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...expressAthleteInputs };
-                      selectedAthleteIdsForExpress.forEach(id => {
-                        updated[id] = {
-                          ...(updated[id] || { reps: 1, status: 'completed', statusReason: '' }),
-                          weightKg: commonBatchWeight,
-                          status: 'completed',
-                        };
-                      });
-                      setExpressAthleteInputs(updated);
-                      setExpressSaveSuccessMsg(`¡${commonBatchWeight} kg aplicado a todos los atletas seleccionados!`);
-                      setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
-                  >
-                    <span>Copiar a los {selectedAthleteIdsForExpress.length} seleccionados</span>
-                  </button>
-                </div>
+                  {/* Filtros rápidos */}
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAthleteIdsForExpress(users.filter(u => u.role === 'athlete').map(a => a.id))}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold border border-neutral-700 transition-all active:scale-95"
+                    >
+                      ✓ Todos los Alumnos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAthleteIdsForExpress([])}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-[11px] border border-neutral-700 transition-all active:scale-95"
+                    >
+                      ✕ Ninguno
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAthleteIdsForExpress(prev => 
+                          prev.includes(activeStaff.id) ? prev.filter(id => id !== activeStaff.id) : [...prev, activeStaff.id]
+                        );
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-95 ${
+                        selectedAthleteIdsForExpress.includes(activeStaff.id)
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                          : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                      }`}
+                    >
+                      ⭐ {selectedAthleteIdsForExpress.includes(activeStaff.id) ? 'Quitarme a mí' : `Incluirme a mí (${activeStaff.name.split(' ')[0]})`}
+                    </button>
+                    {[5, 15, 20, 30].map(day => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => {
+                          const groupIds = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth || 15) === day).map(a => a.id);
+                          setSelectedAthleteIdsForExpress(groupIds);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[11px] font-mono border border-neutral-800 transition-all"
+                      >
+                        Corte {day}
+                      </button>
+                    ))}
+                  </div>
 
-                {/* Athlete Rapid Entry Grid */}
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {users
-                    .filter(u => u.role === 'athlete')
-                    .map((ath) => {
-                      const isSelected = selectedAthleteIdsForExpress.includes(ath.id);
-                      if (expressMode === 'multiple' && !isSelected) {
+                  {/* Lista de Checkboxes interactivos de Atletas */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
+                    {/* Opción Coach Leslie si pasa el filtro */}
+                    {(!expressSearchTerm || activeStaff.name.toLowerCase().includes(expressSearchTerm.toLowerCase())) && (
+                      <div
+                        onClick={() => {
+                          setSelectedAthleteIdsForExpress(prev =>
+                            prev.includes(activeStaff.id) ? prev.filter(id => id !== activeStaff.id) : [...prev, activeStaff.id]
+                          );
+                        }}
+                        className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                          selectedAthleteIdsForExpress.includes(activeStaff.id)
+                            ? 'bg-amber-500/15 border-amber-500/60 text-white shadow-sm ring-1 ring-amber-500/40'
+                            : 'bg-neutral-900/60 border-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <input
+                            type="checkbox"
+                            checked={selectedAthleteIdsForExpress.includes(activeStaff.id)}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded text-amber-500 bg-neutral-950 border-neutral-700 cursor-pointer"
+                          />
+                          <UserAvatar name={activeStaff.name} role="staff" sizeClassName="w-6 h-6" />
+                          <div className="overflow-hidden">
+                            <span className="text-xs font-bold block truncate text-amber-300">⭐ {activeStaff.name}</span>
+                            <span className="text-[10px] text-neutral-400 block font-mono">Coach / Dueña (Mi Perfil)</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          selectedAthleteIdsForExpress.includes(activeStaff.id) ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500'
+                        }`}>
+                          {selectedAthleteIdsForExpress.includes(activeStaff.id) ? '✓ Elegido' : '+ Elegir'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Alumnos filtrados */}
+                    {users
+                      .filter(u => u.role === 'athlete')
+                      .filter(u => !expressSearchTerm || u.name.toLowerCase().includes(expressSearchTerm.toLowerCase()))
+                      .map((ath) => {
+                        const isSelected = selectedAthleteIdsForExpress.includes(ath.id);
                         return (
                           <div
                             key={ath.id}
-                            onClick={() => setSelectedAthleteIdsForExpress(prev => [...prev, ath.id])}
-                            className="p-2.5 rounded-xl bg-neutral-950/40 border border-neutral-900 flex items-center justify-between gap-2 opacity-60 hover:opacity-100 cursor-pointer transition-all"
+                            onClick={() => {
+                              setSelectedAthleteIdsForExpress(prev =>
+                                isSelected ? prev.filter(id => id !== ath.id) : [...prev, ath.id]
+                              );
+                            }}
+                            className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-amber-500/15 border-amber-500/60 text-white shadow-sm ring-1 ring-amber-500/40'
+                                : 'bg-neutral-900/60 border-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-900'
+                            }`}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 overflow-hidden">
                               <input
                                 type="checkbox"
-                                checked={false}
+                                checked={isSelected}
                                 onChange={() => {}}
-                                className="w-4 h-4 rounded text-amber-500 bg-neutral-900 border-neutral-700"
+                                className="w-4 h-4 rounded text-amber-500 bg-neutral-950 border-neutral-700 cursor-pointer"
                               />
-                              <span className="text-xs text-neutral-300 font-medium">{ath.name}</span>
+                              <UserAvatar name={ath.name} avatarUrl={ath.avatarUrl} role="athlete" sizeClassName="w-6 h-6" />
+                              <div className="overflow-hidden">
+                                <span className="text-xs font-bold block truncate text-white">{ath.name}</span>
+                                <span className="text-[10px] text-neutral-400 block font-mono">Corte Día {ath.membership?.billingDayOfMonth || 15}</span>
+                              </div>
                             </div>
-                            <span className="text-[10px] text-neutral-500 font-mono">Tocar para incluir</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              isSelected ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500'
+                            }`}>
+                              {isSelected ? '✓ Elegido' : '+ Elegir'}
+                            </span>
                           </div>
                         );
-                      }
-
-                      const currentInput = expressAthleteInputs[ath.id] || {
-                        weightKg: 60,
-                        reps: 1,
-                        status: 'completed',
-                        statusReason: ''
-                      };
-
-                      return (
-                        <div
-                          key={ath.id}
-                          className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              {expressMode === 'multiple' && (
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedAthleteIdsForExpress(prev => [...prev, ath.id]);
-                                    } else {
-                                      setSelectedAthleteIdsForExpress(prev => prev.filter(id => id !== ath.id));
-                                    }
-                                  }}
-                                  className="w-4 h-4 rounded text-amber-500 bg-neutral-900 border-neutral-700 cursor-pointer"
-                                />
-                              )}
-                              <UserAvatar
-                                name={ath.name}
-                                avatarUrl={ath.avatarUrl}
-                                role={ath.role}
-                                sizeClassName="w-7 h-7"
-                              />
-                              <div className="overflow-hidden">
-                                <strong className="text-xs text-white block truncate">{ath.name}</strong>
-                                <span className="text-[10px] text-neutral-400 block font-mono">
-                                  {ath.membership.planName} · Corte Día {ath.membership.billingDayOfMonth || 15}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Status Quick Buttons */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpressAthleteInputs(prev => ({
-                                    ...prev,
-                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 60, reps: 1, statusReason: '' }), status: 'completed' }
-                                  }));
-                                }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-                                  currentInput.status === 'completed'
-                                    ? 'bg-emerald-600 text-white border-emerald-400'
-                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
-                                }`}
-                              >
-                                ✓ Válido
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpressAthleteInputs(prev => ({
-                                    ...prev,
-                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'na', statusReason: 'Ingreso posterior a fecha de pruebas' }
-                                  }));
-                                }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-                                  currentInput.status === 'na'
-                                    ? 'bg-blue-600 text-white border-blue-400'
-                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
-                                }`}
-                              >
-                                NA
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpressAthleteInputs(prev => ({
-                                    ...prev,
-                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'np', statusReason: 'No presentada' }
-                                  }));
-                                }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-                                  currentInput.status === 'np'
-                                    ? 'bg-red-600 text-white border-red-400'
-                                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
-                                }`}
-                              >
-                                NP
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Inputs Row */}
-                          {currentInput.status === 'completed' ? (
-                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-900 text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] text-neutral-400">Peso:</span>
-                                <input
-                                  type="number"
-                                  value={currentInput.weightKg}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    setExpressAthleteInputs(prev => ({
-                                      ...prev,
-                                      [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: val }
-                                    }));
-                                  }}
-                                  className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                                />
-                                <span className="text-neutral-400 text-[11px]">kg</span>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11px] text-neutral-400">Reps:</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="50"
-                                  value={currentInput.reps}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    setExpressAthleteInputs(prev => ({
-                                      ...prev,
-                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 60, status: 'completed', statusReason: '' }), reps: val }
-                                    }));
-                                  }}
-                                  className="w-12 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                                />
-                              </div>
-
-                              <div className="text-[11px] font-mono font-bold text-amber-400">
-                                1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 pt-1 border-t border-neutral-900 text-xs">
-                              <span className="text-[11px] text-blue-400">Motivo:</span>
-                              <input
-                                type="text"
-                                value={currentInput.statusReason}
-                                onChange={(e) => {
-                                  const reason = e.target.value;
-                                  setExpressAthleteInputs(prev => ({
-                                    ...prev,
-                                    [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1, status: currentInput.status }), statusReason: reason }
-                                  }));
-                                }}
-                                placeholder="Ingreso posterior, niño/adulto mayor, etc."
-                                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                      })}
+                  </div>
                 </div>
+
+                {/* 2. PESO COMÚN DE LA ESTACIÓN (BARRA RÁPIDA) */}
+                {selectedAthleteIdsForExpress.length > 0 && (
+                  <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Dumbbell className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs text-neutral-300 font-medium">Peso en la Barra / Máquina:</span>
+                      <input
+                        type="number"
+                        value={commonBatchWeight}
+                        onChange={(e) => setCommonBatchWeight(Number(e.target.value))}
+                        className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <span className="text-xs text-neutral-400">kg</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = { ...expressAthleteInputs };
+                        selectedAthleteIdsForExpress.forEach(id => {
+                          updated[id] = {
+                            ...(updated[id] || { reps: 1, status: 'completed', statusReason: '' }),
+                            weightKg: commonBatchWeight,
+                            status: 'completed',
+                          };
+                        });
+                        setExpressAthleteInputs(updated);
+                        setExpressSaveSuccessMsg(`¡${commonBatchWeight} kg aplicado a todos los ${selectedAthleteIdsForExpress.length} atletas seleccionados!`);
+                        setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <span>Copiar a los {selectedAthleteIdsForExpress.length} seleccionados</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 3. CARGA DE MARCAS SOLO PARA LOS ATLETAS SELECCIONADOS */}
+                {selectedAthleteIdsForExpress.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-neutral-950/60 border border-dashed border-neutral-800 text-center space-y-2">
+                    <Users className="w-8 h-8 text-neutral-500 mx-auto" />
+                    <span className="text-xs font-semibold text-neutral-300 block">
+                      No has seleccionado atletas para evaluar
+                    </span>
+                    <p className="text-[11px] text-neutral-500 max-w-xs mx-auto">
+                      Toca los nombres o checkboxes de arriba para elegir quiénes están realizando la prueba en esta estación.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {[activeStaff, ...users.filter(u => u.role === 'athlete')]
+                      .filter(u => selectedAthleteIdsForExpress.includes(u.id))
+                      .map((ath) => {
+                        const isCoach = ath.id === activeStaff.id;
+                        const currentInput = expressAthleteInputs[ath.id] || {
+                          weightKg: 60,
+                          reps: 1,
+                          status: 'completed',
+                          statusReason: ''
+                        };
+
+                        return (
+                          <div
+                            key={ath.id}
+                            className={`p-3 rounded-2xl border space-y-2 ${
+                              isCoach 
+                                ? 'bg-gradient-to-r from-neutral-950 to-blue-950/20 border-blue-500/40' 
+                                : 'bg-neutral-950 border-neutral-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAthleteIdsForExpress(prev => prev.filter(id => id !== ath.id))}
+                                  className="w-5 h-5 rounded-md bg-neutral-800 hover:bg-red-900/60 text-neutral-400 hover:text-red-300 flex items-center justify-center text-xs shrink-0"
+                                  title="Quitar de este lote"
+                                >
+                                  ✕
+                                </button>
+                                <UserAvatar
+                                  name={ath.name}
+                                  avatarUrl={ath.avatarUrl}
+                                  role={isCoach ? 'staff' : 'athlete'}
+                                  sizeClassName="w-7 h-7"
+                                />
+                                <div className="overflow-hidden">
+                                  <strong className="text-xs text-white block truncate">
+                                    {isCoach ? `⭐ ${ath.name} (Coach / Dueña)` : ath.name}
+                                  </strong>
+                                  <span className="text-[10px] text-neutral-400 block font-mono">
+                                    {isCoach ? 'Mi Perfil Personal' : `${ath.membership?.planName} · Corte Día ${ath.membership?.billingDayOfMonth || 15}`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Status Quick Buttons */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 60, reps: 1, statusReason: '' }), status: 'completed' }
+                                    }));
+                                  }}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                    currentInput.status === 'completed'
+                                      ? 'bg-emerald-600 text-white border-emerald-400'
+                                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                  }`}
+                                >
+                                  ✓ Válido
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'na', statusReason: 'Ingreso posterior a fecha de pruebas' }
+                                    }));
+                                  }}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                    currentInput.status === 'na'
+                                      ? 'bg-blue-600 text-white border-blue-400'
+                                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                  }`}
+                                >
+                                  NA
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1 }), status: 'np', statusReason: 'No presentada' }
+                                    }));
+                                  }}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                                    currentInput.status === 'np'
+                                      ? 'bg-red-600 text-white border-red-400'
+                                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                  }`}
+                                >
+                                  NP
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Inputs Row */}
+                            {currentInput.status === 'completed' ? (
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-900 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-neutral-400">Peso:</span>
+                                  <input
+                                    type="number"
+                                    value={currentInput.weightKg}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: val }
+                                      }));
+                                    }}
+                                    className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                                  />
+                                  <span className="text-neutral-400 text-[11px]">kg</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-neutral-400">Reps:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    value={currentInput.reps}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { weightKg: 60, status: 'completed', statusReason: '' }), reps: val }
+                                      }));
+                                    }}
+                                    className="w-12 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                                  />
+                                </div>
+
+                                <div className="text-[11px] font-mono font-bold text-amber-400">
+                                  1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 pt-1 border-t border-neutral-900 text-xs">
+                                <span className="text-[11px] text-blue-400">Motivo:</span>
+                                <input
+                                  type="text"
+                                  value={currentInput.statusReason}
+                                  onChange={(e) => {
+                                    const reason = e.target.value;
+                                    setExpressAthleteInputs(prev => ({
+                                      ...prev,
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 0, reps: 1, status: currentInput.status }), statusReason: reason }
+                                    }));
+                                  }}
+                                  placeholder="Ingreso posterior, niño/adulto mayor, etc."
+                                  className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] text-white"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
 
                 {/* Batch Action Submit */}
                 <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-3">
                   <div className="text-xs text-neutral-400">
-                    Atletas a guardar: <strong className="text-white">{selectedAthleteIdsForExpress.length}</strong>
+                    Atletas a guardar: <strong className="text-white font-mono">{selectedAthleteIdsForExpress.length}</strong>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => handleSaveExpressRecord(selectedAthleteIdsForExpress)}
                     disabled={selectedAthleteIdsForExpress.length === 0}
-                    className="py-2.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/25 active:scale-95 transition-all"
+                    className="py-2.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
                   >
                     <Check className="w-4 h-4" />
-                    <span>Guardar Evaluación ({selectedAthleteIdsForExpress.length} Alumnos)</span>
+                    <span>Guardar Evaluación ({selectedAthleteIdsForExpress.length} Atletas)</span>
                   </button>
                 </div>
               </div>

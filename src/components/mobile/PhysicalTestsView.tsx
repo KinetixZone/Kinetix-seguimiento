@@ -42,7 +42,8 @@ import {
   Clock,
   Sparkles,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Users
 } from 'lucide-react';
 
 const parseSecondsFromTimeStr = (str?: string): number => {
@@ -107,28 +108,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     : [];
 
   // Target Athlete for viewing/evaluation:
-  // If currentUser is staff/coach, default to the first real athlete so Leslie/coaches evaluate athletes, not themselves!
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(() => {
-    if (currentUser.role === 'staff' && allAthletes && allAthletes.length > 0) {
-      const firstAthlete = allAthletes.find(a => a.role === 'athlete');
-      if (firstAthlete) return firstAthlete.id;
-    }
-    return currentUser.id;
-  });
+  // Default to currentUser (Leslie) so she views and evaluates her own tests!
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(currentUser.id);
 
   useEffect(() => {
     if (currentUser.role === 'athlete') {
       setSelectedAthleteId(currentUser.id);
-    } else if (currentUser.role === 'staff' && athleteList.length > 0) {
+    } else if (currentUser.role === 'staff') {
       setSelectedAthleteId(prev => {
+        // If current selection is valid (either the coach herself or an existing athlete), keep it!
+        if (prev === currentUser.id) return prev;
         if (athleteList.some(a => a.id === prev)) return prev;
-        return athleteList[0]?.id || currentUser.id;
+        return currentUser.id;
       });
     }
   }, [currentUser.id, athleteList.length]);
 
-  const effectiveAthlete = (athleteList.find(a => a.id === selectedAthleteId)) ||
-    (currentUser.role === 'athlete' ? currentUser : (athleteList[0] || currentUser));
+  const effectiveAthlete = (selectedAthleteId === currentUser.id ? currentUser : null) ||
+    (athleteList.find(a => a.id === selectedAthleteId)) ||
+    currentUser;
 
   const currentAthleteIndex = athleteList.findIndex(a => a.id === effectiveAthlete.id);
   const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
@@ -217,6 +215,35 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [cooperReason, setCooperReason] = useState<string>('');
   const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
+
+  // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera)
+  const [cooperVariant, setCooperVariant] = useState<'standard' | 'laps'>('standard');
+  const [cooperLapLocation, setCooperLapLocation] = useState<'outside' | 'inside'>('outside');
+  const [cooperLapsCount, setCooperLapsCount] = useState<number>(6);
+  const [cooperMetersPerLap, setCooperMetersPerLap] = useState<number>(400);
+
+  const getLevelFromDistance = (meters: number): number => {
+    if (meters >= 3400) return 20;
+    if (meters >= 3300) return 19;
+    if (meters >= 3200) return 18;
+    if (meters >= 3100) return 17;
+    if (meters >= 3000) return 16;
+    if (meters >= 2900) return 15;
+    if (meters >= 2800) return 14;
+    if (meters >= 2700) return 13;
+    if (meters >= 2600) return 12;
+    if (meters >= 2500) return 11;
+    if (meters >= 2400) return 10;
+    if (meters >= 2300) return 9;
+    if (meters >= 2200) return 8;
+    if (meters >= 2100) return 7;
+    if (meters >= 2000) return 6;
+    if (meters >= 1900) return 5;
+    if (meters >= 1800) return 4;
+    if (meters >= 1700) return 3;
+    if (meters >= 1600) return 2;
+    return 1;
+  };
   
   // Test de Resistencia (Por tiempo) (Supports completed, NA, NP)
   const [enduranceStatus, setEnduranceStatus] = useState<EvaluationStatus>('completed');
@@ -328,6 +355,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setCooperReason(latest.cooperTest.statusReason || '');
       setSelectedCooperLevel(latest.cooperTest.levelNumber || 5);
       setOptionalDistance(latest.cooperTest.distanceMeters || 2200);
+      setCooperVariant(latest.cooperTest.variant || 'standard');
+      setCooperLapLocation(latest.cooperTest.lapLocation || 'outside');
+      setCooperLapsCount(latest.cooperTest.lapsCount || 6);
+      setCooperMetersPerLap(latest.cooperTest.metersPerLap || (latest.cooperTest.lapLocation === 'inside' ? 180 : 400));
 
       // Endurance Test state
       const endStatus = latest.enduranceTest?.status || 
@@ -439,22 +470,37 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
     const isCooperDone = cooperStatus === 'completed';
     const isEnduranceDone = enduranceStatus === 'completed';
+    const effectiveCooperDistance = isCooperDone
+      ? (cooperVariant === 'laps' ? cooperLapsCount * cooperMetersPerLap : optionalDistance)
+      : 0;
 
     const cooperTestObj: CooperTestRecord = {
       level: isCooperDone ? levelInfo.levelName : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
       levelNumber: isCooperDone ? selectedCooperLevel : 0,
       description: isCooperDone 
-        ? levelInfo.description 
+        ? (cooperVariant === 'laps'
+            ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera (circuito exterior)' : 'adentro (circuito box)'} (${cooperMetersPerLap}m c/u = ${effectiveCooperDistance.toLocaleString()}m). ${levelInfo.description}`
+            : levelInfo.description)
         : (cooperStatus === 'na' 
             ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' 
             : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
       targetZoneRecommendation: isCooperDone ? levelInfo.coachingRecommendation : 'Acondicionamiento físico adaptado.',
-      distanceMeters: isCooperDone ? optionalDistance : 0,
+      distanceMeters: effectiveCooperDistance,
       estimatedVo2Max: isCooperDone ? Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)) : 0,
       rating: isCooperDone ? (selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular') : undefined,
-      notes: cooperReason ? `${cooperStatus.toUpperCase()}: ${cooperReason}` : (isCooperDone ? `Nivel oficial: ${levelInfo.badgeLabel}` : `Estado: ${cooperStatus.toUpperCase()}`),
+      notes: cooperReason 
+        ? `${cooperStatus.toUpperCase()}: ${cooperReason}` 
+        : (isCooperDone 
+            ? (cooperVariant === 'laps'
+                ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} = ${effectiveCooperDistance}m (${levelInfo.badgeLabel})`
+                : `Test Cooper Normal: ${levelInfo.badgeLabel} (${optionalDistance}m)`)
+            : `Estado: ${cooperStatus.toUpperCase()}`),
       status: cooperStatus,
       statusReason: cooperReason,
+      variant: cooperVariant,
+      lapLocation: cooperVariant === 'laps' ? cooperLapLocation : undefined,
+      lapsCount: cooperVariant === 'laps' ? cooperLapsCount : undefined,
+      metersPerLap: cooperVariant === 'laps' ? cooperMetersPerLap : undefined,
     };
 
     const enduranceTestObj: EnduranceTimeTestRecord = {
@@ -908,7 +954,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 title="Registrar una marca de fuerza (Peso Muerto, Sentadilla, etc.) en segundos"
               >
                 <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-                <span>Express ⚡</span>
+                <span>{effectiveAthlete.id === currentUser.id ? 'Evaluarme Express ⚡' : 'Express ⚡'}</span>
               </button>
 
               <button
@@ -917,8 +963,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">Evaluar Completo</span>
-                <span className="sm:hidden">Evaluar</span>
+                <span>{effectiveAthlete.id === currentUser.id ? 'Evaluar Mi Test' : 'Evaluar Completo'}</span>
               </button>
             </div>
           ) : (
@@ -931,17 +976,35 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         </div>
       </div>
 
-      {/* COACH/STAFF ATHLETE SELECTOR BANNER */}
-      {canEvaluate && athleteList.length > 0 && (
-        <div className="p-3 bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950/40 border border-neutral-800 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-md animate-fade-in">
+      {/* COACH/STAFF PERSONAL PROGRESS & ATHLETE SELECTION BANNER */}
+      {canEvaluate && (
+        <div className={`p-3 rounded-2xl border flex flex-wrap items-center justify-between gap-3 shadow-md animate-fade-in ${
+          effectiveAthlete.id === currentUser.id
+            ? 'bg-gradient-to-r from-neutral-900 via-neutral-900 to-blue-950/40 border-blue-500/30'
+            : 'bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950/40 border-red-500/30'
+        }`}>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="w-8 h-8 rounded-xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
-              <Dumbbell className="w-4 h-4" />
+            <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${
+              effectiveAthlete.id === currentUser.id
+                ? 'bg-blue-600/20 border-blue-500/40 text-blue-400'
+                : 'bg-red-600/20 border-red-500/40 text-red-400'
+            }`}>
+              {effectiveAthlete.id === currentUser.id ? (
+                <ShieldCheck className="w-4 h-4" />
+              ) : (
+                <Dumbbell className="w-4 h-4" />
+              )}
             </div>
+
             <div>
-              <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider block">
-                Modo Entrenador · Alumno a Evaluar:
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${
+                effectiveAthlete.id === currentUser.id ? 'text-blue-400' : 'text-neutral-400'
+              }`}>
+                {effectiveAthlete.id === currentUser.id 
+                  ? '⭐ Mis Pruebas Personales (Dueña / Coach)' 
+                  : 'Modo Entrenador · Alumno a Evaluar:'}
               </span>
+
               <div className="flex items-center gap-2 mt-0.5">
                 <select
                   value={effectiveAthlete.id}
@@ -953,21 +1016,34 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       onSelectNextAthlete(found);
                     }
                   }}
-                  className="bg-neutral-950 border border-neutral-700 hover:border-red-500/60 rounded-xl px-2.5 py-1 text-xs text-white font-bold outline-none focus:border-red-500 transition-colors cursor-pointer"
+                  className="bg-neutral-950 border border-neutral-700 hover:border-amber-500/60 rounded-xl px-2.5 py-1 text-xs text-white font-bold outline-none focus:border-amber-500 transition-colors cursor-pointer"
                 >
-                  <optgroup label="Alumnos del Gimnasio">
-                    {athleteList.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} · {a.membership.planName}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Mi Perfil Personal (Coach/Dueña)">
+                  <optgroup label="⭐ Mi Perfil Personal (Coach / Dueña)">
                     <option value={currentUser.id}>
-                      👤 {currentUser.name} (Mis pruebas personales)
+                      ⭐ {currentUser.name} (Mis marcas personales)
                     </option>
                   </optgroup>
+                  {athleteList.length > 0 && (
+                    <optgroup label="Alumnos del Gimnasio">
+                      {athleteList.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} · {a.membership.planName}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
+
+                {effectiveAthlete.id !== currentUser.id && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAthleteId(currentUser.id)}
+                    className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-blue-300 text-[11px] font-semibold border border-neutral-700 transition-all active:scale-95"
+                    title="Volver a ver y evaluar mis propias pruebas"
+                  >
+                    <span>👤 Volver a Mí</span>
+                  </button>
+                )}
 
                 {effectiveAthlete.id !== currentUser.id && nextAthlete && (
                   <button
@@ -991,11 +1067,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <button
               type="button"
               onClick={onBackToDashboard}
-              className="px-2.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
               title="Ir al Panel de Staff para evaluar grupos de alumnos en tanda"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Panel de Staff (Evaluar Grupo)</span>
+              <Users className="w-3.5 h-3.5" />
+              <span>Evaluar Alumnos (Ir a Panel Staff) ➔</span>
             </button>
           </div>
         </div>
@@ -1531,6 +1607,24 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-red-400">
                   <Flame className="w-3.5 h-3.5 text-red-500" />
                   <span>{latestEval.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Excelente / Élite Kinetix'}</span>
+                </div>
+
+                {/* Badge de Modalidad: Normal vs Cooper 2 por Vueltas */}
+                <div className="flex items-center justify-center">
+                  {latestEval.cooperTest.lapsCount ? (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30 font-semibold">
+                      <span>🔄 Test Cooper 2:</span>
+                      <strong>{latestEval.cooperTest.lapsCount} vueltas {latestEval.cooperTest.lapLocation === 'outside' ? 'afuera (calle/manzana)' : 'adentro (box)'}</strong>
+                      <span className="text-neutral-400 font-mono">({latestEval.cooperTest.distanceMeters || (latestEval.cooperTest.lapsCount * (latestEval.cooperTest.metersPerLap || 400))}m)</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/30">
+                      <span>🏃 Test Cooper Normal (12 min)</span>
+                      {latestEval.cooperTest.distanceMeters ? (
+                        <span className="text-neutral-400 font-mono">· {latestEval.cooperTest.distanceMeters}m</span>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2319,33 +2413,236 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                 {cooperStatus === 'completed' ? (
                   <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-neutral-400">Escala de Nivel:</span>
-                      <span className="text-[11px] text-blue-400 font-mono font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">
-                        Nivel {selectedCooperLevel} de 20
-                      </span>
+                    {/* SELECTOR ENTRE TEST COOPER NORMAL Y TEST COOPER 2 (POR VUELTAS) */}
+                    <div className="p-1 rounded-xl bg-neutral-900 border border-neutral-800 grid grid-cols-2 gap-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setCooperVariant('standard')}
+                        className={`py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          cooperVariant === 'standard'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        <span>🏃 Test Cooper Normal</span>
+                        <span className="text-[10px] font-normal opacity-75">(Metros / Niveles)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCooperVariant('laps');
+                          const dist = cooperLapsCount * cooperMetersPerLap;
+                          setSelectedCooperLevel(getLevelFromDistance(dist));
+                          setOptionalDistance(dist);
+                        }}
+                        className={`py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          cooperVariant === 'laps'
+                            ? 'bg-amber-500 text-neutral-950 font-extrabold shadow-sm'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        <span>🔄 Test Cooper 2</span>
+                        <span className="text-[10px] font-bold opacity-85">(Por Vueltas)</span>
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-10 gap-1">
-                      {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
-                        const isSelected = selectedCooperLevel === lvl;
-                        return (
-                          <button
-                            type="button"
-                            key={lvl}
-                            onClick={() => setSelectedCooperLevel(lvl)}
-                            className={`py-1.5 rounded-lg border flex flex-col items-center justify-center transition-all ${
-                              isSelected
-                                ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-md shadow-blue-500/30 scale-105'
-                                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-                            }`}
-                            title={`Nivel ${lvl}`}
-                          >
-                            <span className="text-xs font-bold">{lvl}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {cooperVariant === 'laps' ? (
+                      /* CONFIGURADOR DEL TEST COOPER 2 (POR VUELTAS ADENTRO O AFUERA) */
+                      <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-amber-950/30 border border-amber-500/40 space-y-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-amber-300 flex items-center gap-1">
+                            <span>🔄 Test Cooper 2 · Circuito por Vueltas</span>
+                          </span>
+                          <span className="text-[10px] text-neutral-400">
+                            12 minutos en circuito
+                          </span>
+                        </div>
+
+                        {/* Ubicación: Afuera o Adentro */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-neutral-300 font-medium block">
+                            ¿Dónde corren las vueltas?
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCooperLapLocation('outside');
+                                setCooperMetersPerLap(400);
+                                const dist = cooperLapsCount * 400;
+                                setOptionalDistance(dist);
+                                setSelectedCooperLevel(getLevelFromDistance(dist));
+                              }}
+                              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                cooperLapLocation === 'outside'
+                                  ? 'bg-emerald-600 border-emerald-400 text-white shadow-md'
+                                  : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              <span>🌳 Afuera</span>
+                              <span className="text-[10px] font-normal opacity-80">(Calle / Manzana / 400m)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCooperLapLocation('inside');
+                                setCooperMetersPerLap(180);
+                                const dist = cooperLapsCount * 180;
+                                setOptionalDistance(dist);
+                                setSelectedCooperLevel(getLevelFromDistance(dist));
+                              }}
+                              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                cooperLapLocation === 'inside'
+                                  ? 'bg-blue-600 border-blue-400 text-white shadow-md'
+                                  : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              <span>🏢 Adentro</span>
+                              <span className="text-[10px] font-normal opacity-80">(Circuito interior Box)</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Contador de Vueltas y Metros por Vuelta */}
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Número de Vueltas */}
+                          <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1.5 text-center">
+                            <span className="text-[10px] text-neutral-400 font-semibold block uppercase">
+                              Vueltas Completadas
+                            </span>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const n = Math.max(1, cooperLapsCount - 1);
+                                  setCooperLapsCount(n);
+                                  const dist = n * cooperMetersPerLap;
+                                  setOptionalDistance(dist);
+                                  setSelectedCooperLevel(getLevelFromDistance(dist));
+                                }}
+                                className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm"
+                              >
+                                -
+                              </button>
+                              <span className="text-xl font-extrabold text-amber-400 font-mono w-12 text-center">
+                                {cooperLapsCount}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const n = cooperLapsCount + 1;
+                                  setCooperLapsCount(n);
+                                  const dist = n * cooperMetersPerLap;
+                                  setOptionalDistance(dist);
+                                  setSelectedCooperLevel(getLevelFromDistance(dist));
+                                }}
+                                className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-neutral-500 font-mono block">vueltas</span>
+                          </div>
+
+                          {/* Metros por Vuelta */}
+                          <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1.5 text-center">
+                            <span className="text-[10px] text-neutral-400 font-semibold block uppercase">
+                              Metros por Vuelta
+                            </span>
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min="10"
+                                max="2000"
+                                step="10"
+                                value={cooperMetersPerLap}
+                                onChange={(e) => {
+                                  const m = Number(e.target.value) || 0;
+                                  setCooperMetersPerLap(m);
+                                  const dist = cooperLapsCount * m;
+                                  setOptionalDistance(dist);
+                                  setSelectedCooperLevel(getLevelFromDistance(dist));
+                                }}
+                                className="w-20 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-center font-bold text-sm text-white font-mono outline-none focus:border-amber-500"
+                              />
+                              <span className="text-xs text-neutral-400 font-mono">m</span>
+                            </div>
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                              {[150, 180, 200, 350, 400].map((quickM) => (
+                                <button
+                                  key={quickM}
+                                  type="button"
+                                  onClick={() => {
+                                    setCooperMetersPerLap(quickM);
+                                    const dist = cooperLapsCount * quickM;
+                                    setOptionalDistance(dist);
+                                    setSelectedCooperLevel(getLevelFromDistance(dist));
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                                    cooperMetersPerLap === quickM ? 'bg-amber-500 text-black' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                                  }`}
+                                >
+                                  {quickM}m
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resultado Total en Vivo: Vueltas x Metros = Total */}
+                        <div className="p-2.5 rounded-xl bg-neutral-950 border border-amber-500/30 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-[10px] text-neutral-400 block">Distancia Total Calculada:</span>
+                            <span className="font-extrabold text-amber-400 font-mono text-base">
+                              {(cooperLapsCount * cooperMetersPerLap).toLocaleString()} metros
+                            </span>
+                            <span className="text-[10px] text-neutral-400 block font-mono">
+                              ({cooperLapsCount} vueltas {cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} × {cooperMetersPerLap}m)
+                            </span>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-[10px] text-neutral-400 block">Nivel Cooper Equivalente:</span>
+                            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/30 inline-block font-mono">
+                              NIVEL {selectedCooperLevel} de 20
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* TEST COOPER NORMAL: SELECTOR DE 20 NIVELES */
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-neutral-400">Escala Oficial de Nivel (1 al 20):</span>
+                          <span className="text-[11px] text-blue-400 font-mono font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-800/60">
+                            Nivel {selectedCooperLevel} de 20
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-10 gap-1">
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
+                            const isSelected = selectedCooperLevel === lvl;
+                            return (
+                              <button
+                                type="button"
+                                key={lvl}
+                                onClick={() => setSelectedCooperLevel(lvl)}
+                                className={`py-1.5 rounded-lg border flex flex-col items-center justify-center transition-all ${
+                                  isSelected
+                                    ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-md shadow-blue-500/30 scale-105'
+                                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                                }`}
+                                title={`Nivel ${lvl}`}
+                              >
+                                <span className="text-xs font-bold">{lvl}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
 
                     <div className="text-[11px] text-neutral-300 bg-neutral-900/80 p-3 rounded-xl border border-neutral-800/80 space-y-1">
                       <div className="flex items-center justify-between text-xs">
@@ -3368,18 +3665,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       const newId = e.target.value;
                       setExpressTargetUserId(newId);
                       preloadExpressValues(newId, expressExerciseId);
-                      const targetObj = athleteList.find(a => a.id === newId);
+                      const targetObj = athleteList.find(a => a.id === newId) || (newId === currentUser.id ? currentUser : null);
                       if (targetObj && onSelectNextAthlete) {
                         onSelectNextAthlete(targetObj);
                       }
                     }}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:border-amber-500 outline-none"
                   >
-                    {athleteList.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({a.membership.planName})
+                    <optgroup label="⭐ Mi Perfil Personal (Coach / Dueña)">
+                      <option value={currentUser.id}>
+                        ⭐ {currentUser.name} (Mis marcas personales)
                       </option>
-                    ))}
+                    </optgroup>
+                    <optgroup label="Alumnos del Gimnasio">
+                      {athleteList.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.membership.planName})
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 ) : (
                   <div className="px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white text-xs font-semibold">

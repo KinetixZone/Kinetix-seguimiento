@@ -79,6 +79,9 @@ export type CooperRating = 'Muy Malo' | 'Malo' | 'Regular' | 'Bueno' | 'Excelent
 
 export type EvaluationStatus = 'completed' | 'na' | 'np';
 
+export type CooperTestVariant = 'standard' | 'laps'; // Test Cooper normal vs Test Cooper 2 (por vueltas)
+export type CooperLapLocation = 'outside' | 'inside'; // Circuito afuera o adentro
+
 export interface CooperTestRecord {
   level: string; // e.g., 'Nivel 1 (Adaptación Inicial)' to 'Nivel 20 (Ultra Élite Kinetix)' o 'NA (No Aplica)'
   levelNumber: number; // 1 to 20 (or 0 if NA/NP)
@@ -90,6 +93,10 @@ export interface CooperTestRecord {
   notes?: string;
   status?: EvaluationStatus; // 'completed' | 'na' | 'np'
   statusReason?: string; // Motivo: Adulto mayor, Niños, Lesión, Enfermedad
+  variant?: CooperTestVariant; // 'standard' (Test Cooper Normal) o 'laps' (Test Cooper 2 por vueltas)
+  lapLocation?: CooperLapLocation; // 'outside' (Afuera) o 'inside' (Adentro)
+  lapsCount?: number; // Número de vueltas completadas
+  metersPerLap?: number; // Metros que mide cada vuelta (ej. 400m afuera o 180m adentro)
 }
 
 export type BrandTheme = 'blue' | 'red';
