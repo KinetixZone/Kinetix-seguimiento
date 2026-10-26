@@ -115,12 +115,68 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
 
+  // Express Strength/PR Capture State (Captura Rápida de Fuerza)
+  const [showExpressModal, setShowExpressModal] = useState(false);
+  const [expressTargetUserId, setExpressTargetUserId] = useState<string>(currentUser.id);
+  const [expressDate, setExpressDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
+  const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
+  const [expressStatus, setExpressStatus] = useState<EvaluationStatus>('completed');
+  const [expressReason, setExpressReason] = useState<string>('');
+  const [expressWeight, setExpressWeight] = useState<number>(60);
+  const [expressReps, setExpressReps] = useState<number>(1);
+  const [expressNotes, setExpressNotes] = useState<string>('');
+  const [expressSuccessMessage, setExpressSuccessMessage] = useState<string | null>(null);
+
+  // Sync express target athlete when currentUser changes
+  useEffect(() => {
+    setExpressTargetUserId(currentUser.id);
+  }, [currentUser.id]);
+
+  const preloadExpressValues = (athleteId: string, exId: string) => {
+    const athleteEvals = evaluations.filter(e => e.userId === athleteId);
+    const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const latest = sorted[sorted.length - 1];
+    const rec = latest?.strengthRecords?.find(s => s.exerciseId === exId);
+
+    if (rec && rec.status !== 'na' && rec.status !== 'np' && rec.weightKg > 0) {
+      setExpressWeight(rec.weightKg);
+      setExpressReps(rec.reps || 1);
+      if (rec.exerciseType) setExpressRowType(rec.exerciseType);
+      setExpressStatus('completed');
+      setExpressReason('');
+    } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+      setExpressStatus(rec.status);
+      setExpressReason(rec.statusReason || '');
+      setExpressWeight(exId === 'deadlift' ? 60 : exId === 'squats' ? 50 : 40);
+      setExpressReps(1);
+    } else {
+      setExpressStatus('completed');
+      setExpressReason('');
+      setExpressWeight(exId === 'deadlift' ? 60 : exId === 'squats' ? 50 : exId === 'hip_thrust' ? 50 : 35);
+      setExpressReps(1);
+    }
+  };
+
+  const handleOpenExpressModal = (preselectedExercise?: 'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows') => {
+    const ex = preselectedExercise || expressExerciseId;
+    setExpressExerciseId(ex);
+    setExpressTargetUserId(currentUser.id);
+    setExpressDate(new Date().toISOString().slice(0, 10));
+    setExpressStatus('completed');
+    setExpressReason('');
+    setExpressNotes('');
+    preloadExpressValues(currentUser.id, ex);
+    setShowExpressModal(true);
+  };
+
   // Guard against non-staff ever having the evaluation modal open
   useEffect(() => {
-    if (!canEvaluate && showAddEvalModal) {
+    if (!canEvaluate && (showAddEvalModal || showExpressModal)) {
       setShowAddEvalModal(false);
+      setShowExpressModal(false);
     }
-  }, [canEvaluate, showAddEvalModal]);
+  }, [canEvaluate, showAddEvalModal, showExpressModal]);
 
   // Evaluaciones del atleta actual ordenadas cronológicamente
   const userEvals = evaluations.filter(e => e.userId === currentUser.id);
@@ -400,6 +456,129 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     }
   };
 
+  const handleSaveExpress = (andNext: boolean = false) => {
+    const targetId = expressTargetUserId || currentUser.id;
+    const targetUser = athleteList.find(a => a.id === targetId) || currentUser;
+
+    const exerciseNameMap: Record<string, string> = {
+      squats: 'Sentadillas',
+      deadlift: 'Peso Muerto',
+      hip_thrust: 'Hip Thrust',
+      horizontal_press: 'Press Horizontal',
+      pullups_or_rows: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+    };
+
+    const calculated1RM = expressStatus === 'completed' ? calculate1RM(expressWeight, expressReps) : 0;
+
+    const newRec: StrengthMaxRecord = {
+      exerciseId: expressExerciseId,
+      exerciseName: exerciseNameMap[expressExerciseId] || 'Fuerza',
+      exerciseType: expressExerciseId === 'pullups_or_rows' ? expressRowType : undefined,
+      weightKg: expressStatus === 'completed' ? expressWeight : 0,
+      reps: expressStatus === 'completed' ? expressReps : 0,
+      estimated1RMKg: calculated1RM,
+      weightUnit: 'kg',
+      status: expressStatus,
+      statusReason: expressReason || undefined,
+      notes: expressNotes 
+        ? expressNotes 
+        : (expressStatus === 'na' ? 'NA: Exento (Adulto mayor / Infantil)' : expressStatus === 'np' ? 'NP: No Presentada' : undefined),
+    };
+
+    const existingEval = evaluations.find(e => e.userId === targetId && e.evaluationDate === expressDate);
+
+    if (existingEval && onUpdateEvaluation) {
+      // Merge into existing evaluation
+      const updatedRecords = (existingEval.strengthRecords || []).filter(s => s.exerciseId !== expressExerciseId);
+      updatedRecords.push(newRec);
+      onUpdateEvaluation(existingEval.id, {
+        strengthRecords: updatedRecords,
+        generalCoachNotes: expressNotes 
+          ? `${existingEval.generalCoachNotes ? existingEval.generalCoachNotes + ' | ' : ''}Marca Express: ${newRec.exerciseName} ${newRec.weightKg}kg`
+          : existingEval.generalCoachNotes
+      });
+    } else {
+      // Create new evaluation
+      const userPastEvals = evaluations.filter(e => e.userId === targetId);
+      const sortedPast = [...userPastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+      const latestPast = sortedPast[sortedPast.length - 1] || null;
+
+      const baseExercises: ('squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows')[] = [
+        'squats', 'deadlift', 'hip_thrust', 'horizontal_press', 'pullups_or_rows'
+      ];
+
+      const baseStrength: StrengthMaxRecord[] = baseExercises.map(exId => {
+        if (exId === expressExerciseId) return newRec;
+        const existing = latestPast?.strengthRecords?.find(s => s.exerciseId === exId);
+        if (existing) return existing;
+        return {
+          exerciseId: exId,
+          exerciseName: exerciseNameMap[exId] || exId,
+          weightKg: 40,
+          reps: 1,
+          estimated1RMKg: 40,
+          weightUnit: 'kg',
+          status: 'completed' as EvaluationStatus,
+        };
+      });
+
+      const assignedCoachId = evaluatingCoachName.includes('Leslie') 
+        ? 'user-staff-leslie' 
+        : evaluatingCoachName.includes('Gus') 
+        ? 'user-staff-gus' 
+        : 'user-staff-01';
+
+      const newPayload: Omit<PhysicalEvaluationRecord, 'id'> = {
+        userId: targetId,
+        evaluationDate: expressDate,
+        coachId: assignedCoachId,
+        coachName: evaluatingCoachName,
+        cooperTest: latestPast?.cooperTest || {
+          level: 'Nivel 5',
+          levelNumber: 5,
+          description: 'Capacidad aeróbica estándar.',
+          targetZoneRecommendation: 'Zona 2 y 3',
+          distanceMeters: 2000,
+          estimatedVo2Max: 48,
+          status: 'completed',
+        },
+        enduranceTest: latestPast?.enduranceTest || {
+          name: 'Evaluación de Resistencia Funcional',
+          result: '07:00 min',
+          timeSeconds: 420,
+          scoreScoreLevel: 'Intermedio',
+          status: 'completed',
+        },
+        strengthRecords: baseStrength,
+        generalCoachNotes: expressNotes ? `Marca rápida: ${expressNotes}` : 'Captura express de fuerza en clase.',
+      };
+
+      onAddEvaluation(newPayload);
+    }
+
+    const savedMsg = `¡${newRec.exerciseName} guardado para ${targetUser.name.split(' ')[0]}! (${expressStatus === 'completed' ? `${expressWeight}kg x ${expressReps} (${calculated1RM}kg 1RM)` : expressStatus.toUpperCase()})`;
+
+    if (andNext && athleteList.length > 0 && onSelectNextAthlete) {
+      const currentIdx = athleteList.findIndex(a => a.id === targetId);
+      const nextIdx = currentIdx !== -1 ? (currentIdx + 1) % athleteList.length : 0;
+      const nextAthleteObj = athleteList[nextIdx];
+
+      if (nextAthleteObj) {
+        onSelectNextAthlete(nextAthleteObj);
+        setExpressTargetUserId(nextAthleteObj.id);
+        preloadExpressValues(nextAthleteObj.id, expressExerciseId);
+        setExpressSuccessMessage(`${savedMsg} → Siguiente en clase: ${nextAthleteObj.name}`);
+        setTimeout(() => setExpressSuccessMessage(null), 3500);
+        return;
+      }
+    }
+
+    // Finished or single athlete
+    setShowExpressModal(false);
+    setNextAthleteToast(savedMsg);
+    setTimeout(() => setNextAthleteToast(null), 4000);
+  };
+
   // Quick preset exercises for endurance
   const ENDURANCE_PRESETS = [
     'Evaluación de Resistencia Funcional',
@@ -431,6 +610,14 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   return (
     <div className="space-y-4 pb-20 px-3 sm:px-4 pt-2">
+      {/* Floating toast notification for staff actions */}
+      {nextAthleteToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-neutral-900/95 border border-amber-500/60 text-white text-xs font-medium shadow-2xl flex items-center gap-2 max-w-[90vw] animate-bounce">
+          <Zap className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
+          <span className="truncate">{nextAthleteToast}</span>
+        </div>
+      )}
+
       {/* UNIVERSAL TOP NAVIGATION BAR: Breadcrumb and Back Action */}
       <div className="flex items-center justify-between bg-neutral-900/90 border border-neutral-800 p-2.5 rounded-2xl text-xs backdrop-blur-md sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-2">
@@ -469,13 +656,27 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           {/* Evaluation Action Button - Only Coach / Dueño */}
           {canEvaluate ? (
-            <button
-              onClick={handleOpenAddModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Evaluar Atleta (Staff)</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleOpenExpressModal()}
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+                title="Registrar una marca de fuerza (Peso Muerto, Sentadilla, etc.) en segundos"
+              >
+                <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                <span>Express ⚡</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md shadow-red-500/25 active:scale-95 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span className="hidden sm:inline">Evaluar Completo</span>
+                <span className="sm:hidden">Evaluar</span>
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-400">
               <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
@@ -1248,6 +1449,36 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'strength' && latestEval && (
         <div className="space-y-4">
+          {/* Quick Express Banner for Coaches */}
+          {canEvaluate && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-neutral-900 to-amber-950/20 border border-amber-500/30 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 fill-amber-400" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>Captura Express de Fuerza / PR</span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      Rápido
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-neutral-400">
+                    Registra marcas directas (ej. Peso Muerto) en 5 segundos sin llenar todo el test.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenExpressModal()}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/30 active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Registrar</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
               5 Ejercicios de Fuerza Kinetix
@@ -1291,11 +1522,23 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           {rec.statusReason || (isNA ? 'Ejercicio exento por edad, condición física o prescripción médica.' : 'Prueba pospuesta o no realizada en esta sesión.')}
                         </span>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        isNA ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        {isNA ? '🚫 NA (No Aplica)' : '⚠️ NP (No Presentada)'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          isNA ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {isNA ? '🚫 NA' : '⚠️ NP'}
+                        </span>
+                        {canEvaluate && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenExpressModal(rec.exerciseId as any)}
+                            className="p-1 rounded-lg bg-neutral-800 hover:bg-amber-500/20 text-neutral-400 hover:text-amber-400 border border-neutral-700 transition-colors"
+                            title={`Registrar marca de ${rec.exerciseName}`}
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1326,11 +1569,23 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </span>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-[10px] text-neutral-400 uppercase">1RM Calculado</span>
-                      <div className="text-base font-extrabold text-white font-mono tracking-tight">
-                        {display1RM} <span className="text-[11px] font-normal text-neutral-400">{weightUnit}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <span className="text-[10px] text-neutral-400 uppercase">1RM Calculado</span>
+                        <div className="text-base font-extrabold text-white font-mono tracking-tight">
+                          {display1RM} <span className="text-[11px] font-normal text-neutral-400">{weightUnit}</span>
+                        </div>
                       </div>
+                      {canEvaluate && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenExpressModal(rec.exerciseId as any)}
+                          className="p-1.5 rounded-xl bg-neutral-800 hover:bg-amber-500/20 text-neutral-400 hover:text-amber-400 border border-neutral-700 active:scale-95 transition-all"
+                          title={`Actualizar marca de ${rec.exerciseName}`}
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2570,6 +2825,369 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               >
                 Sí, Eliminar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: REGISTRO EXPRESS DE FUERZA / PR (PILAR KINETIX) */}
+      {/* ========================================================================= */}
+      {showExpressModal && canEvaluate && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-neutral-900 border border-amber-500/30 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shadow-inner">
+                  <Zap className="w-5 h-5 fill-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-brand flex items-center gap-1.5">
+                    <span>Captura Express de Fuerza</span>
+                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      Rápido
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Registra marcas y calcula 1RM sin llenar todo el expediente
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExpressModal(false)}
+                className="w-8 h-8 rounded-full bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* In-Modal Flash Message when advancing through athletes */}
+            {expressSuccessMessage && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-medium flex items-center gap-2 animate-fade-in">
+                <Check className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{expressSuccessMessage}</span>
+              </div>
+            )}
+
+            {/* Athlete & Date row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Athlete Selector */}
+              <div>
+                <label className="text-[11px] font-bold text-neutral-300 block mb-1">
+                  Atleta a Evaluar:
+                </label>
+                {athleteList.length > 0 ? (
+                  <select
+                    value={expressTargetUserId}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setExpressTargetUserId(newId);
+                      preloadExpressValues(newId, expressExerciseId);
+                      const targetObj = athleteList.find(a => a.id === newId);
+                      if (targetObj && onSelectNextAthlete) {
+                        onSelectNextAthlete(targetObj);
+                      }
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:border-amber-500 outline-none"
+                  >
+                    {athleteList.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.membership.planName})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white text-xs font-semibold">
+                    {currentUser.name}
+                  </div>
+                )}
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className="text-[11px] font-bold text-neutral-300 block mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Fecha de la Marca:</span>
+                </label>
+                <input
+                  type="date"
+                  value={expressDate}
+                  onChange={(e) => setExpressDate(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-amber-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Exercise Selector (5 Buttons) */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-neutral-300 block">
+                Selecciona el Ejercicio:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { id: 'deadlift', name: 'Peso Muerto', icon: '🏋️‍♂️' },
+                  { id: 'squats', name: 'Sentadilla', icon: '🦵' },
+                  { id: 'hip_thrust', name: 'Hip Thrust', icon: '🍑' },
+                  { id: 'horizontal_press', name: 'Press Pecho', icon: '🛡️' },
+                  { id: 'pullups_or_rows', name: 'Remo / Dominada', icon: '🚣' },
+                ].map((item) => {
+                  const isSelected = expressExerciseId === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setExpressExerciseId(item.id as any);
+                        preloadExpressValues(expressTargetUserId, item.id);
+                      }}
+                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all active:scale-95 ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm ring-1 ring-amber-500'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+                      }`}
+                    >
+                      <span className="text-base">{item.icon}</span>
+                      <span className="text-xs font-bold truncate">{item.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sub-toggle for Remo vs Dominadas if selected */}
+              {expressExerciseId === 'pullups_or_rows' && (
+                <div className="flex items-center gap-2 p-1.5 rounded-xl bg-neutral-950 border border-neutral-800 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpressRowType('remo')}
+                    className={`flex-1 py-1 text-xs rounded-lg font-medium transition-colors ${
+                      expressRowType === 'remo' ? 'bg-amber-500 text-neutral-950 font-bold' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Remo con Barra
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpressRowType('dominadas')}
+                    className={`flex-1 py-1 text-xs rounded-lg font-medium transition-colors ${
+                      expressRowType === 'dominadas' ? 'bg-amber-500 text-neutral-950 font-bold' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Dominadas (Pull-ups)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Status Toggle: Realizada / NA / NP */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-neutral-300 block">
+                Estado del Ejercicio:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExpressStatus('completed')}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                    expressStatus === 'completed'
+                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                  }`}
+                >
+                  ✅ Realizada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpressStatus('na')}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                    expressStatus === 'na'
+                      ? 'bg-neutral-800 border-neutral-600 text-white'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                  }`}
+                >
+                  🚫 NA (No Aplica)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpressStatus('np')}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all ${
+                    expressStatus === 'np'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                  }`}
+                >
+                  ⚠️ NP (No Presentada)
+                </button>
+              </div>
+
+              {expressStatus !== 'completed' && (
+                <input
+                  type="text"
+                  placeholder={expressStatus === 'na' ? 'Motivo: Adulto mayor, niño, prescripción...' : 'Motivo: Lesión de hombro, pospuesto...'}
+                  value={expressReason}
+                  onChange={(e) => setExpressReason(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs mt-1 outline-none focus:border-amber-500"
+                />
+              )}
+            </div>
+
+            {/* If Completed: Inputs for Weight & Reps + 1RM Banner */}
+            {expressStatus === 'completed' && (
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                {/* Weight Input with Stepper Buttons */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-neutral-300">
+                      Peso Levantado (kg):
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      ≈ {kgToLbs(expressWeight)} lbs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setExpressWeight(Math.max(5, expressWeight - 10))}
+                      className="px-2.5 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-bold active:scale-95"
+                    >
+                      -10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpressWeight(Math.max(5, expressWeight - 2.5))}
+                      className="px-2.5 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-bold active:scale-95"
+                    >
+                      -2.5
+                    </button>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={expressWeight}
+                      onChange={(e) => setExpressWeight(Number(e.target.value))}
+                      className="flex-1 bg-neutral-900 border border-amber-500/40 rounded-xl py-2 px-3 text-center text-white font-mono font-bold text-base outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExpressWeight(expressWeight + 2.5)}
+                      className="px-2.5 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-bold active:scale-95"
+                    >
+                      +2.5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpressWeight(expressWeight + 10)}
+                      className="px-2.5 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-bold active:scale-95"
+                    >
+                      +10
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reps selector buttons */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-neutral-300">
+                      Repeticiones Logradas:
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-bold">
+                      {expressReps} {expressReps === 1 ? 'repetición (1RM Directo)' : 'repeticiones'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setExpressReps(num)}
+                        className={`w-9 h-9 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 transition-all ${
+                          expressReps === num
+                            ? 'bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30'
+                            : 'bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Live 1RM Calculation & Training Percentages */}
+                {(() => {
+                  const est1RM = calculate1RM(expressWeight, expressReps);
+                  const p90 = Math.round(est1RM * 0.9);
+                  const p80 = Math.round(est1RM * 0.8);
+                  const p70 = Math.round(est1RM * 0.7);
+
+                  return (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-neutral-900 to-amber-500/5 border border-amber-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                          <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span>1RM Oficial Estimado (Fórmula Brzycki)</span>
+                        </span>
+                        <span className="text-xl font-extrabold text-white font-mono tracking-tight">
+                          {est1RM} <span className="text-xs font-normal text-neutral-400">kg ({kgToLbs(est1RM)} lbs)</span>
+                        </span>
+                      </div>
+
+                      {/* Training percentages row */}
+                      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-neutral-800/80 text-center">
+                        <div className="bg-neutral-900/90 p-1.5 rounded-lg border border-neutral-800">
+                          <span className="text-[9px] text-neutral-400 block">90% Fuerza</span>
+                          <span className="text-xs font-bold text-red-400 font-mono">{p90} kg</span>
+                        </div>
+                        <div className="bg-neutral-900/90 p-1.5 rounded-lg border border-neutral-800">
+                          <span className="text-[9px] text-neutral-400 block">80% Hipertrofia</span>
+                          <span className="text-xs font-bold text-amber-400 font-mono">{p80} kg</span>
+                        </div>
+                        <div className="bg-neutral-900/90 p-1.5 rounded-lg border border-neutral-800">
+                          <span className="text-[9px] text-neutral-400 block">70% Resistencia</span>
+                          <span className="text-xs font-bold text-emerald-400 font-mono">{p70} kg</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Optional Notes */}
+            <div>
+              <label className="text-[11px] font-medium text-neutral-400 block mb-1">
+                Nota rápida (Opcional):
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. Con cinturón, nuevo PR personal, mejoró técnica..."
+                value={expressNotes}
+                onChange={(e) => setExpressNotes(e.target.value)}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleSaveExpress(false)}
+                className="w-full sm:flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+              >
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>Guardar Marca</span>
+              </button>
+
+              {athleteList.length > 1 && onSelectNextAthlete && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveExpress(true)}
+                  className="w-full sm:flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 active:scale-95"
+                >
+                  <Zap className="w-4 h-4 fill-neutral-950" />
+                  <span>Guardar y Siguiente Atleta ⚡</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
