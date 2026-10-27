@@ -226,7 +226,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [expressMode, setExpressMode] = useState<'single' | 'multiple' | 'all'>('single');
   const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
   const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
-  const [expressDate, setExpressDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [expressDate, setExpressDate] = useState<string>(() => localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10));
   const [expressTargetSingleId, setExpressTargetSingleId] = useState<string>('');
   const [expressSingleWeight, setExpressSingleWeight] = useState<number>(60);
   const [expressSingleReps, setExpressSingleReps] = useState<number>(1);
@@ -243,6 +243,31 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [showCommonWeightBar, setShowCommonWeightBar] = useState<boolean>(false);
   const [expressSaveSuccessMsg, setExpressSaveSuccessMsg] = useState<string | null>(null);
   const [expressSearchTerm, setExpressSearchTerm] = useState<string>('');
+
+  // GLOBAL GYM-WIDE EVALUATION SCHEDULE (Fecha oficial para todos)
+  const [globalEvalDate, setGlobalEvalDate] = useState<string>(() => {
+    return localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10);
+  });
+  const [globalDateNotifiedSuccess, setGlobalDateNotifiedSuccess] = useState<boolean>(false);
+
+  // QUICK WEIGHT CORRECTION / EDIT MODAL STATE (Por si el coach se equivocó en un peso)
+  const [athleteToEditWeights, setAthleteToEditWeights] = useState<UserProfile | null>(null);
+  const [quickWeights, setQuickWeights] = useState<{
+    squats: { weightKg: number; status: EvaluationStatus; reason: string };
+    deadlift: { weightKg: number; status: EvaluationStatus; reason: string };
+    hip_thrust: { weightKg: number; status: EvaluationStatus; reason: string };
+    horizontal_press: { weightKg: number; status: EvaluationStatus; reason: string };
+    pullups_or_rows: { weightKg: number; type: 'remo' | 'dominadas'; status: EvaluationStatus; reason: string };
+  }>({
+    squats: { weightKg: 60, status: 'completed', reason: '' },
+    deadlift: { weightKg: 80, status: 'completed', reason: '' },
+    hip_thrust: { weightKg: 70, status: 'completed', reason: '' },
+    horizontal_press: { weightKg: 50, status: 'completed', reason: '' },
+    pullups_or_rows: { weightKg: 50, type: 'remo', status: 'completed', reason: '' },
+  });
+  const [quickEditEvalDate, setQuickEditEvalDate] = useState<string>(() => localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10));
+  const [quickEditExistingEvalId, setQuickEditExistingEvalId] = useState<string | null>(null);
+  const [quickEditSuccess, setQuickEditSuccess] = useState<boolean>(false);
 
   // Helper to determine evaluation status and recency for an athlete
   const getAthleteEvaluationStatus = (athleteId: string) => {
@@ -348,7 +373,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
     setExpressMode(initialMode === 'all' ? 'multiple' : initialMode);
     setExpressSearchTerm('');
-    setExpressDate(new Date().toISOString().slice(0, 10));
+    setExpressDate(globalEvalDate || new Date().toISOString().slice(0, 10));
     setExpressNotes('');
     setExpressApplyAllCycleSingle(false);
     setExpressSaveSuccessMsg(null);
@@ -675,6 +700,201 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const nextMonth = currentDay >= day ? now.getMonth() + 1 : now.getMonth();
     const d = new Date(now.getFullYear(), nextMonth, day);
     return d.toISOString().slice(0, 10);
+  };
+
+  // Global evaluation date handlers
+  const handleUpdateGlobalEvalDate = (newDate: string) => {
+    setGlobalEvalDate(newDate);
+    localStorage.setItem('kinetix_global_eval_date', newDate);
+    setExpressDate(newDate);
+  };
+
+  const handleBroadcastGlobalDate = () => {
+    if (!onSendBatchNotification) return;
+    const athletes = users.filter(u => u.role === 'athlete');
+    if (athletes.length === 0) return;
+
+    let dateStr = globalEvalDate;
+    try {
+      const [year, month, day] = globalEvalDate.split('-').map(Number);
+      const dateObj = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
+      dateStr = dateObj.toLocaleDateString('es-MX', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch {
+      dateStr = globalEvalDate;
+    }
+
+    onSendBatchNotification(
+      '📅 Ciclo Oficial de Pruebas Físicas Kinetix',
+      `¡Atención atletas Kinetix! La fecha programada para el ciclo oficial de evaluaciones de fuerza y resistencia es el próximo ${dateStr}. ¡Prepárense para superar sus récords personales (PRs)!`,
+      athletes.map(a => a.id)
+    );
+
+    setGlobalDateNotifiedSuccess(true);
+    setTimeout(() => setGlobalDateNotifiedSuccess(false), 4500);
+  };
+
+  // Quick weight correction handlers
+  const handleOpenQuickEditWeights = (targetUser: UserProfile) => {
+    const userEvals = evaluations.filter(e => e.userId === targetUser.id);
+    const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
+    const latest = sorted[0];
+
+    const defaultWeights = {
+      squats: { weightKg: targetUser.gender === 'female' ? 45 : 60, status: 'completed' as EvaluationStatus, reason: '' },
+      deadlift: { weightKg: targetUser.gender === 'female' ? 60 : 80, status: 'completed' as EvaluationStatus, reason: '' },
+      hip_thrust: { weightKg: targetUser.gender === 'female' ? 65 : 70, status: 'completed' as EvaluationStatus, reason: '' },
+      horizontal_press: { weightKg: targetUser.gender === 'female' ? 30 : 50, status: 'completed' as EvaluationStatus, reason: '' },
+      pullups_or_rows: { weightKg: targetUser.gender === 'female' ? 35 : 50, type: 'remo' as 'remo' | 'dominadas', status: 'completed' as EvaluationStatus, reason: '' },
+    };
+
+    if (latest) {
+      setQuickEditExistingEvalId(latest.id);
+      setQuickEditEvalDate(latest.evaluationDate);
+      const recs = latest.strengthRecords || [];
+      const sq = recs.find(r => r.exerciseId === 'squats');
+      const dl = recs.find(r => r.exerciseId === 'deadlift');
+      const ht = recs.find(r => r.exerciseId === 'hip_thrust');
+      const hp = recs.find(r => r.exerciseId === 'horizontal_press');
+      const rw = recs.find(r => r.exerciseId === 'pullups_or_rows');
+
+      setQuickWeights({
+        squats: {
+          weightKg: sq && sq.status === 'completed' && sq.weightKg > 0 ? sq.weightKg : defaultWeights.squats.weightKg,
+          status: sq?.status || 'completed',
+          reason: sq?.statusReason || '',
+        },
+        deadlift: {
+          weightKg: dl && dl.status === 'completed' && dl.weightKg > 0 ? dl.weightKg : defaultWeights.deadlift.weightKg,
+          status: dl?.status || 'completed',
+          reason: dl?.statusReason || '',
+        },
+        hip_thrust: {
+          weightKg: ht && ht.status === 'completed' && ht.weightKg > 0 ? ht.weightKg : defaultWeights.hip_thrust.weightKg,
+          status: ht?.status || 'completed',
+          reason: ht?.statusReason || '',
+        },
+        horizontal_press: {
+          weightKg: hp && hp.status === 'completed' && hp.weightKg > 0 ? hp.weightKg : defaultWeights.horizontal_press.weightKg,
+          status: hp?.status || 'completed',
+          reason: hp?.statusReason || '',
+        },
+        pullups_or_rows: {
+          weightKg: rw && rw.status === 'completed' && rw.weightKg > 0 ? rw.weightKg : defaultWeights.pullups_or_rows.weightKg,
+          type: (rw?.exerciseType === 'dominadas' ? 'dominadas' : 'remo'),
+          status: rw?.status || 'completed',
+          reason: rw?.statusReason || '',
+        },
+      });
+    } else {
+      setQuickEditExistingEvalId(null);
+      setQuickEditEvalDate(globalEvalDate || new Date().toISOString().slice(0, 10));
+      setQuickWeights(defaultWeights);
+    }
+
+    setAthleteToEditWeights(targetUser);
+    setQuickEditSuccess(false);
+  };
+
+  const handleSaveQuickEditWeights = () => {
+    if (!athleteToEditWeights) return;
+
+    const strengthRecords: StrengthMaxRecord[] = [
+      {
+        exerciseId: 'squats',
+        exerciseName: 'Sentadillas',
+        weightKg: quickWeights.squats.status === 'completed' ? quickWeights.squats.weightKg : 0,
+        reps: quickWeights.squats.status === 'completed' ? 1 : 0,
+        estimated1RMKg: quickWeights.squats.status === 'completed' ? quickWeights.squats.weightKg : 0,
+        weightUnit: 'kg',
+        status: quickWeights.squats.status,
+        statusReason: quickWeights.squats.reason || undefined,
+      },
+      {
+        exerciseId: 'deadlift',
+        exerciseName: 'Peso Muerto',
+        weightKg: quickWeights.deadlift.status === 'completed' ? quickWeights.deadlift.weightKg : 0,
+        reps: quickWeights.deadlift.status === 'completed' ? 1 : 0,
+        estimated1RMKg: quickWeights.deadlift.status === 'completed' ? quickWeights.deadlift.weightKg : 0,
+        weightUnit: 'kg',
+        status: quickWeights.deadlift.status,
+        statusReason: quickWeights.deadlift.reason || undefined,
+      },
+      {
+        exerciseId: 'hip_thrust',
+        exerciseName: 'Hip Thrust',
+        weightKg: quickWeights.hip_thrust.status === 'completed' ? quickWeights.hip_thrust.weightKg : 0,
+        reps: quickWeights.hip_thrust.status === 'completed' ? 1 : 0,
+        estimated1RMKg: quickWeights.hip_thrust.status === 'completed' ? quickWeights.hip_thrust.weightKg : 0,
+        weightUnit: 'kg',
+        status: quickWeights.hip_thrust.status,
+        statusReason: quickWeights.hip_thrust.reason || undefined,
+      },
+      {
+        exerciseId: 'horizontal_press',
+        exerciseName: 'Press Horizontal',
+        weightKg: quickWeights.horizontal_press.status === 'completed' ? quickWeights.horizontal_press.weightKg : 0,
+        reps: quickWeights.horizontal_press.status === 'completed' ? 1 : 0,
+        estimated1RMKg: quickWeights.horizontal_press.status === 'completed' ? quickWeights.horizontal_press.weightKg : 0,
+        weightUnit: 'kg',
+        status: quickWeights.horizontal_press.status,
+        statusReason: quickWeights.horizontal_press.reason || undefined,
+      },
+      {
+        exerciseId: 'pullups_or_rows',
+        exerciseName: quickWeights.pullups_or_rows.type === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+        exerciseType: quickWeights.pullups_or_rows.type,
+        weightKg: quickWeights.pullups_or_rows.status === 'completed' ? quickWeights.pullups_or_rows.weightKg : 0,
+        reps: quickWeights.pullups_or_rows.status === 'completed' ? 1 : 0,
+        estimated1RMKg: quickWeights.pullups_or_rows.status === 'completed' ? quickWeights.pullups_or_rows.weightKg : 0,
+        weightUnit: 'kg',
+        status: quickWeights.pullups_or_rows.status,
+        statusReason: quickWeights.pullups_or_rows.reason || undefined,
+      },
+    ];
+
+    if (quickEditExistingEvalId && onUpdateEvaluation) {
+      onUpdateEvaluation(quickEditExistingEvalId, {
+        evaluationDate: quickEditEvalDate,
+        strengthRecords,
+        generalCoachNotes: 'Pesos corregidos/actualizados por el Coach en Panel Staff.',
+      });
+    } else if (onAddEvaluation) {
+      onAddEvaluation({
+        userId: athleteToEditWeights.id,
+        evaluationDate: quickEditEvalDate,
+        coachId: activeStaff.id,
+        coachName: activeStaff.name,
+        cooperTest: {
+          level: 'Nivel 3 - En Progreso',
+          levelNumber: 3,
+          distanceMeters: 2000,
+          estimatedVo2Max: 38,
+          targetZoneRecommendation: 'Zona 2 y Acondicionamiento funcional',
+          description: 'Evaluación registrada en Kinetix Staff.',
+          status: 'completed',
+        },
+        enduranceTest: {
+          name: 'Resistencia Funcional',
+          result: '03:00 min',
+          timeSeconds: 180,
+          scoreScoreLevel: 'Intermedio',
+          status: 'completed',
+        },
+        strengthRecords,
+        generalCoachNotes: 'Pesos registrados/corregidos por el Coach en Panel Staff.',
+      });
+    }
+
+    setQuickEditSuccess(true);
+    setTimeout(() => {
+      setQuickEditSuccess(false);
+      setAthleteToEditWeights(null);
+    }, 1200);
   };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -1064,6 +1284,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => handleOpenQuickEditWeights(staff)}
+                      className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-neutral-900 transition-colors"
+                      title="Corregir o registrar mis propios pesos de fuerza (1RM)"
+                    >
+                      <Dumbbell className="w-3 h-3 text-emerald-400" />
+                      <span>Mis Pesos (1RM)</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         setSelectedAthleteForPayment(staff);
                         setModalTab('security');
@@ -1244,6 +1474,59 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span>El número de cada código representa el <strong>día de corte mensual</strong> de pago (Día 5, 15, 20 o 30). Usa el botón amarillo ⚡ para ver quién vence esta semana.</span>
         </div>
+      </div>
+
+      {/* PROGRAMACIÓN OFICIAL: FECHA GLOBAL DE EVALUACIÓN PARA TODOS */}
+      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-blue-950/40 border border-blue-500/40 space-y-3 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+              <Calendar className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <strong className="text-white text-xs sm:text-sm font-brand">Ciclo Oficial de Pruebas Físicas (Fecha Global)</strong>
+                <span className="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.2 rounded-full font-bold">
+                  Fecha Oficial 📅
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Define la fecha oficial del ciclo de testeo para todo el gimnasio. Se aplicará automáticamente a todas las evaluaciones Express y grupales.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-1.5 bg-neutral-950 px-2.5 py-1.5 rounded-xl border border-neutral-700">
+              <span className="text-[11px] text-neutral-400 font-medium">Fecha:</span>
+              <input
+                type="date"
+                value={globalEvalDate}
+                onChange={(e) => handleUpdateGlobalEvalDate(e.target.value)}
+                className="bg-transparent text-white font-mono text-xs font-bold outline-none cursor-pointer"
+              />
+            </div>
+
+            {onSendBatchNotification && (
+              <button
+                type="button"
+                onClick={handleBroadcastGlobalDate}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                title="Enviar aviso a la bandeja de todos los atletas registrados sobre la fecha oficial de pruebas"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>📢 Notificar a Todos</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {globalDateNotifiedSuccess && (
+          <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2 animate-fadeIn">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>¡Notificación enviada a todos los alumnos sobre la fecha oficial programada ({globalEvalDate})!</span>
+          </div>
+        )}
       </div>
 
       {/* BANNER COACH: EVALUACIÓN EXPRESS DE PRUEBAS & FUERZA */}
@@ -1603,6 +1886,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   >
                     <Zap className="w-3 h-3 fill-amber-400 text-amber-400" />
                     <span>Express</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenQuickEditWeights(athlete)}
+                    className="px-2 py-1 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/35 text-blue-300 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+                    title="Corregir o editar pesos de fuerza (1RM) si hubo un error en la captura"
+                  >
+                    <Pencil className="w-3 h-3 text-blue-400" />
+                    <span>Corregir Pesos</span>
                   </button>
 
                   <button
@@ -3753,6 +4046,693 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CORREGIR O EDITAR PESOS DE FUERZA (1RM) (POR SI HUBO ERROR) */}
+      {/* ========================================================================= */}
+      {athleteToEditWeights && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white font-brand flex items-center gap-2">
+                    <span>Corregir Pesos de Fuerza (1RM)</span>
+                    {quickEditExistingEvalId ? (
+                      <span className="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded font-bold">
+                        Modificando Registro
+                      </span>
+                    ) : (
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
+                        Nueva Evaluación
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Atleta: <strong className="text-white">{athleteToEditWeights.name}</strong> ({athleteToEditWeights.gender === 'female' ? 'Mujer' : 'Hombre'})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAthleteToEditWeights(null)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Fecha de la Evaluación */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-neutral-300 block">
+                  Fecha de la Evaluación a Corregir:
+                </label>
+                <span className="text-[10px] text-neutral-400">
+                  Puedes corregir la fecha si se registró en un día incorrecto.
+                </span>
+              </div>
+              <input
+                type="date"
+                value={quickEditEvalDate}
+                onChange={(e) => setQuickEditEvalDate(e.target.value)}
+                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono font-bold outline-none focus:border-blue-500"
+              />
+            </div>
+
+            {/* Lista de los 5 Ejercicios de Fuerza */}
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block px-1">
+                Ejercicios de Fuerza (1 Repetición Máxima = 1RM)
+              </span>
+
+              {/* 1. Sentadillas */}
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🏋️</span>
+                    <strong className="text-xs text-white">Sentadillas</strong>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(['completed', 'na', 'np'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, status: st }
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          quickWeights.squats.status === st
+                            ? st === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'na'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'bg-red-700 text-white'
+                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {quickWeights.squats.status === 'completed' ? (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 2.5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -2.5
+                      </button>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quickWeights.squats.weightKg}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, weightKg: val }
+                          }));
+                        }}
+                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, weightKg: prev.squats.weightKg + 2.5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +2.5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, weightKg: prev.squats.weightKg + 5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +5
+                      </button>
+                      <span className="text-neutral-400 text-xs">kg</span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-amber-400">
+                      1RM: {quickWeights.squats.weightKg} kg
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickWeights.squats.reason}
+                    onChange={(e) => {
+                      const reason = e.target.value;
+                      setQuickWeights(prev => ({
+                        ...prev,
+                        squats: { ...prev.squats, reason }
+                      }));
+                    }}
+                    placeholder="Motivo (ej. Lesión de rodilla, ingreso posterior)..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                  />
+                )}
+              </div>
+
+              {/* 2. Peso Muerto */}
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚡</span>
+                    <strong className="text-xs text-white">Peso Muerto</strong>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(['completed', 'na', 'np'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, status: st }
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          quickWeights.deadlift.status === st
+                            ? st === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'na'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'bg-red-700 text-white'
+                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {quickWeights.deadlift.status === 'completed' ? (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 2.5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -2.5
+                      </button>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quickWeights.deadlift.weightKg}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, weightKg: val }
+                          }));
+                        }}
+                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 2.5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +2.5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +5
+                      </button>
+                      <span className="text-neutral-400 text-xs">kg</span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-amber-400">
+                      1RM: {quickWeights.deadlift.weightKg} kg
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickWeights.deadlift.reason}
+                    onChange={(e) => {
+                      const reason = e.target.value;
+                      setQuickWeights(prev => ({
+                        ...prev,
+                        deadlift: { ...prev.deadlift, reason }
+                      }));
+                    }}
+                    placeholder="Motivo (ej. Dolor lumbar, ingreso posterior)..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                  />
+                )}
+              </div>
+
+              {/* 3. Hip Thrust */}
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🍑</span>
+                    <strong className="text-xs text-white">Hip Thrust</strong>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(['completed', 'na', 'np'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, status: st }
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          quickWeights.hip_thrust.status === st
+                            ? st === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'na'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'bg-red-700 text-white'
+                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {quickWeights.hip_thrust.status === 'completed' ? (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 2.5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -2.5
+                      </button>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quickWeights.hip_thrust.weightKg}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, weightKg: val }
+                          }));
+                        }}
+                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 2.5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +2.5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +5
+                      </button>
+                      <span className="text-neutral-400 text-xs">kg</span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-amber-400">
+                      1RM: {quickWeights.hip_thrust.weightKg} kg
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickWeights.hip_thrust.reason}
+                    onChange={(e) => {
+                      const reason = e.target.value;
+                      setQuickWeights(prev => ({
+                        ...prev,
+                        hip_thrust: { ...prev.hip_thrust, reason }
+                      }));
+                    }}
+                    placeholder="Motivo (ej. Sin banco disponible, molestia)..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                  />
+                )}
+              </div>
+
+              {/* 4. Press Horizontal */}
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🥋</span>
+                    <strong className="text-xs text-white">Press Horizontal (Pecho / Banca)</strong>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(['completed', 'na', 'np'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, status: st }
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          quickWeights.horizontal_press.status === st
+                            ? st === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'na'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'bg-red-700 text-white'
+                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {quickWeights.horizontal_press.status === 'completed' ? (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 2.5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -2.5
+                      </button>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quickWeights.horizontal_press.weightKg}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, weightKg: val }
+                          }));
+                        }}
+                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 2.5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +2.5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +5
+                      </button>
+                      <span className="text-neutral-400 text-xs">kg</span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-amber-400">
+                      1RM: {quickWeights.horizontal_press.weightKg} kg
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickWeights.horizontal_press.reason}
+                    onChange={(e) => {
+                      const reason = e.target.value;
+                      setQuickWeights(prev => ({
+                        ...prev,
+                        horizontal_press: { ...prev.horizontal_press, reason }
+                      }));
+                    }}
+                    placeholder="Motivo (ej. Molestia en hombro, nuevo ingreso)..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                  />
+                )}
+              </div>
+
+              {/* 5. Remo con Barra / Dominadas */}
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🚣</span>
+                    <strong className="text-xs text-white">
+                      {quickWeights.pullups_or_rows.type === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)'}
+                    </strong>
+                    <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, type: 'remo' }
+                        }))}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                          quickWeights.pullups_or_rows.type === 'remo'
+                            ? 'bg-amber-500 text-neutral-950'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        Remo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, type: 'dominadas' }
+                        }))}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                          quickWeights.pullups_or_rows.type === 'dominadas'
+                            ? 'bg-amber-500 text-neutral-950'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        Dominadas
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 self-end sm:self-auto">
+                    {(['completed', 'na', 'np'] as const).map(st => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, status: st }
+                        }))}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                          quickWeights.pullups_or_rows.status === st
+                            ? st === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'na'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'bg-red-700 text-white'
+                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {quickWeights.pullups_or_rows.status === 'completed' ? (
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 2.5) }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        -2.5
+                      </button>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quickWeights.pullups_or_rows.weightKg}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: val }
+                          }));
+                        }}
+                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 2.5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +2.5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 5 }
+                        }))}
+                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                      >
+                        +5
+                      </button>
+                      <span className="text-neutral-400 text-xs">kg</span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-amber-400">
+                      1RM: {quickWeights.pullups_or_rows.weightKg} kg
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickWeights.pullups_or_rows.reason}
+                    onChange={(e) => {
+                      const reason = e.target.value;
+                      setQuickWeights(prev => ({
+                        ...prev,
+                        pullups_or_rows: { ...prev.pullups_or_rows, reason }
+                      }));
+                    }}
+                    placeholder="Motivo (ej. Lesión de codo, ingreso posterior)..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Mensaje de Éxito */}
+            {quickEditSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-800 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>¡Pesos corregidos y guardados exitosamente para {athleteToEditWeights.name}!</span>
+              </div>
+            )}
+
+            {/* Botones de Acción */}
+            <div className="pt-2 border-t border-neutral-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setAthleteToEditWeights(null)}
+                className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickEditWeights}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/25 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Guardar Corrección de Pesos</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

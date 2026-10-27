@@ -406,7 +406,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         setRowExerciseType(rw.exerciseType || (rw.exerciseName.toLowerCase().includes('dominad') ? 'dominadas' : 'remo'));
       } else {
         setRowWeight(30);
-        setRowReps(10);
+        setRowReps(1);
         setRowExerciseType('remo');
       }
       setCoachNotes(''); // Never leak notes from previous athlete
@@ -3560,6 +3560,364 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 )}
               </div>
 
+              {/* SECCIÓN 3: CORREGIR O EDITAR PESOS DE FUERZA (1RM) */}
+              <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Dumbbell className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold text-white text-xs">Pesos de Fuerza 1RM (Corregir marcas)</span>
+                  </div>
+                  <span className="text-[10px] text-amber-400/90 font-mono">1RM Directo (1 rep)</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {/* 1. Sentadillas */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">🦵 Sentadillas</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-bold ${squatStatus === 'completed' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          ✓ Válido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('na')}
+                          className={`px-2 py-0.5 rounded font-bold ${squatStatus === 'na' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSquatStatus('np')}
+                          className={`px-2 py-0.5 rounded font-bold ${squatStatus === 'np' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {squatStatus === 'completed' ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSquatWeight(prev => Math.max(0, prev - 2.5))}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            -2.5
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            value={squatWeight}
+                            onChange={(e) => setSquatWeight(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-neutral-950 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-bold text-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSquatWeight(prev => prev + 2.5)}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            +2.5
+                          </button>
+                          <span className="text-[11px] text-neutral-400">kg</span>
+                        </div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold">
+                          1RM: {calculate1RM(squatWeight, squatReps || 1)} kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={squatReason}
+                        onChange={(e) => setSquatReason(e.target.value)}
+                        placeholder="Motivo NA o NP..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* 2. Peso Muerto */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">🏋️ Peso Muerto</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-bold ${deadliftStatus === 'completed' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          ✓ Válido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('na')}
+                          className={`px-2 py-0.5 rounded font-bold ${deadliftStatus === 'na' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeadliftStatus('np')}
+                          className={`px-2 py-0.5 rounded font-bold ${deadliftStatus === 'np' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {deadliftStatus === 'completed' ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDeadliftWeight(prev => Math.max(0, prev - 2.5))}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            -2.5
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            value={deadliftWeight}
+                            onChange={(e) => setDeadliftWeight(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-neutral-950 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-bold text-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setDeadliftWeight(prev => prev + 2.5)}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            +2.5
+                          </button>
+                          <span className="text-[11px] text-neutral-400">kg</span>
+                        </div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold">
+                          1RM: {calculate1RM(deadliftWeight, deadliftReps || 1)} kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={deadliftReason}
+                        onChange={(e) => setDeadliftReason(e.target.value)}
+                        placeholder="Motivo NA o NP..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* 3. Hip Thrust */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">🍑 Hip Thrust</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-bold ${hipThrustStatus === 'completed' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          ✓ Válido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('na')}
+                          className={`px-2 py-0.5 rounded font-bold ${hipThrustStatus === 'na' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHipThrustStatus('np')}
+                          className={`px-2 py-0.5 rounded font-bold ${hipThrustStatus === 'np' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {hipThrustStatus === 'completed' ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setHipThrustWeight(prev => Math.max(0, prev - 2.5))}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            -2.5
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            value={hipThrustWeight}
+                            onChange={(e) => setHipThrustWeight(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-neutral-950 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-bold text-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setHipThrustWeight(prev => prev + 2.5)}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            +2.5
+                          </button>
+                          <span className="text-[11px] text-neutral-400">kg</span>
+                        </div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold">
+                          1RM: {calculate1RM(hipThrustWeight, hipThrustReps || 1)} kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={hipThrustReason}
+                        onChange={(e) => setHipThrustReason(e.target.value)}
+                        placeholder="Motivo NA o NP..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* 4. Press Horizontal */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">🏋️‍♂️ Press Horizontal</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-bold ${pressStatus === 'completed' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          ✓ Válido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('na')}
+                          className={`px-2 py-0.5 rounded font-bold ${pressStatus === 'na' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPressStatus('np')}
+                          className={`px-2 py-0.5 rounded font-bold ${pressStatus === 'np' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {pressStatus === 'completed' ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPressWeight(prev => Math.max(0, prev - 2.5))}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            -2.5
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            value={pressWeight}
+                            onChange={(e) => setPressWeight(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-neutral-950 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-bold text-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPressWeight(prev => prev + 2.5)}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            +2.5
+                          </button>
+                          <span className="text-[11px] text-neutral-400">kg</span>
+                        </div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold">
+                          1RM: {calculate1RM(pressWeight, pressReps || 1)} kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={pressReason}
+                        onChange={(e) => setPressReason(e.target.value)}
+                        placeholder="Motivo NA o NP..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* 5. Remo con Barra / Dominadas */}
+                  <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white">💪 {rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas'}</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setRowStatus('completed')}
+                          className={`px-2 py-0.5 rounded font-bold ${rowStatus === 'completed' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          ✓ Válido
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRowStatus('na')}
+                          className={`px-2 py-0.5 rounded font-bold ${rowStatus === 'na' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRowStatus('np')}
+                          className={`px-2 py-0.5 rounded font-bold ${rowStatus === 'np' ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                        >
+                          NP
+                        </button>
+                      </div>
+                    </div>
+                    {rowStatus === 'completed' ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setRowWeight(prev => Math.max(0, prev - 2.5))}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            -2.5
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            value={rowWeight}
+                            onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-neutral-950 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-bold text-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setRowWeight(prev => prev + 2.5)}
+                            className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-bold font-mono"
+                          >
+                            +2.5
+                          </button>
+                          <span className="text-[11px] text-neutral-400">kg</span>
+                        </div>
+                        <span className="text-[11px] text-amber-400 font-mono font-bold">
+                          1RM: {calculate1RM(rowWeight, rowReps || 1)} kg
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={rowReason}
+                        onChange={(e) => setRowReason(e.target.value)}
+                        placeholder="Motivo NA o NP..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-neutral-300 font-medium block mb-1">Notas del Coach</label>
                 <textarea
@@ -3596,7 +3954,59 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           statusReason: cooperReason || 'Ingreso posterior a fecha de pruebas',
                           notes: `NA: ${cooperReason || 'Ingreso posterior a fecha de pruebas'}`,
                         }))
-                      : editingEval.strengthRecords;
+                      : [
+                          {
+                            exerciseId: 'squats',
+                            exerciseName: 'Sentadillas',
+                            weightKg: squatStatus === 'completed' ? squatWeight : 0,
+                            reps: squatStatus === 'completed' ? (squatReps || 1) : 0,
+                            estimated1RMKg: squatStatus === 'completed' ? calculate1RM(squatWeight, squatReps || 1) : 0,
+                            weightUnit: 'kg',
+                            status: squatStatus,
+                            statusReason: squatReason,
+                          },
+                          {
+                            exerciseId: 'deadlift',
+                            exerciseName: 'Peso Muerto',
+                            weightKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
+                            reps: deadliftStatus === 'completed' ? (deadliftReps || 1) : 0,
+                            estimated1RMKg: deadliftStatus === 'completed' ? calculate1RM(deadliftWeight, deadliftReps || 1) : 0,
+                            weightUnit: 'kg',
+                            status: deadliftStatus,
+                            statusReason: deadliftReason,
+                          },
+                          {
+                            exerciseId: 'hip_thrust',
+                            exerciseName: 'Hip Thrust',
+                            weightKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
+                            reps: hipThrustStatus === 'completed' ? (hipThrustReps || 1) : 0,
+                            estimated1RMKg: hipThrustStatus === 'completed' ? calculate1RM(hipThrustWeight, hipThrustReps || 1) : 0,
+                            weightUnit: 'kg',
+                            status: hipThrustStatus,
+                            statusReason: hipThrustReason,
+                          },
+                          {
+                            exerciseId: 'horizontal_press',
+                            exerciseName: 'Press Horizontal',
+                            weightKg: pressStatus === 'completed' ? pressWeight : 0,
+                            reps: pressStatus === 'completed' ? (pressReps || 1) : 0,
+                            estimated1RMKg: pressStatus === 'completed' ? calculate1RM(pressWeight, pressReps || 1) : 0,
+                            weightUnit: 'kg',
+                            status: pressStatus,
+                            statusReason: pressReason,
+                          },
+                          {
+                            exerciseId: 'pullups_or_rows',
+                            exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+                            exerciseType: rowExerciseType,
+                            weightKg: rowStatus === 'completed' ? rowWeight : 0,
+                            reps: rowStatus === 'completed' ? (rowReps || 1) : 0,
+                            estimated1RMKg: rowStatus === 'completed' ? calculate1RM(rowWeight, rowReps || 1) : 0,
+                            weightUnit: 'kg',
+                            status: rowStatus,
+                            statusReason: rowReason,
+                          },
+                        ];
 
                     onUpdateEvaluation(editingEval.id, {
                       evaluationDate: evalDate,
@@ -3616,6 +4026,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         name: enduranceExerciseName,
                         result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
                         timeSeconds: isEnduranceDone ? (enduranceMinutes * 60 + enduranceSeconds) : 0,
+                        difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
                       },
                       strengthRecords: updatedStrengthRecords,
                       generalCoachNotes: coachNotes,
