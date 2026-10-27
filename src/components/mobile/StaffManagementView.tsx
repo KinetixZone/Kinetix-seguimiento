@@ -240,8 +240,43 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [expressAthleteInputs, setExpressAthleteInputs] = useState<Record<string, { weightKg: number; reps: number; status: EvaluationStatus; statusReason: string }>>({});
   const [commonBatchWeight, setCommonBatchWeight] = useState<number>(60);
   const [commonBatchReps, setCommonBatchReps] = useState<number>(1);
+  const [showCommonWeightBar, setShowCommonWeightBar] = useState<boolean>(false);
   const [expressSaveSuccessMsg, setExpressSaveSuccessMsg] = useState<string | null>(null);
   const [expressSearchTerm, setExpressSearchTerm] = useState<string>('');
+
+  // Helper to determine evaluation status and recency for an athlete
+  const getAthleteEvaluationStatus = (athleteId: string) => {
+    const userEvals = evaluations.filter(e => e.userId === athleteId);
+    if (userEvals.length === 0) {
+      return {
+        hasEvaluations: false,
+        lastDateStr: 'Sin evaluación previa',
+        diffDays: 9999,
+        isEvaluatedThisCycle: false,
+        badgeText: '⏳ Pendiente',
+        badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+      };
+    }
+    const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
+    const latest = sorted[0];
+    const evalDate = new Date(latest.evaluationDate);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - evalDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const isToday = diffDays === 0;
+    const isThisMonth = evalDate.getMonth() === now.getMonth() && evalDate.getFullYear() === now.getFullYear();
+    const isEvaluatedThisCycle = isToday || isThisMonth || diffDays <= 30;
+
+    return {
+      hasEvaluations: true,
+      latestEval: latest,
+      lastDateStr: latest.evaluationDate,
+      diffDays,
+      isEvaluatedThisCycle,
+      badgeText: isToday ? '✅ Evaluado hoy' : isEvaluatedThisCycle ? `✅ Evaluado (${latest.evaluationDate.slice(5)})` : `⏳ Pendiente (${latest.evaluationDate.slice(5)})`,
+      badgeColor: isEvaluatedThisCycle ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    };
+  };
 
   // Helper to retrieve latest recorded strength data for an athlete in a specific exercise
   const getLatestAthleteExerciseData = (athleteId: string, exId: string) => {
@@ -249,6 +284,61 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const sorted = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
     const latest = sorted[sorted.length - 1];
     return latest?.strengthRecords?.find(s => s.exerciseId === exId);
+  };
+
+  // Update inputs whenever exercise changes so every athlete card reflects their individual previous mark
+  const updateInputsForExercise = (newExId: 'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows') => {
+    setExpressExerciseId(newExId);
+    const athleteList = users.filter(u => u.role === 'athlete');
+    const allCandidates = [activeStaff, ...athleteList];
+
+    if (expressTargetSingleId) {
+      const rec = getLatestAthleteExerciseData(expressTargetSingleId, newExId);
+      if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+        setExpressSingleWeight(rec.weightKg);
+        setExpressSingleReps(rec.reps || 1);
+        setExpressSingleStatus('completed');
+      } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+        setExpressSingleStatus(rec.status);
+        setExpressSingleReason(rec.statusReason || '');
+        setExpressSingleWeight(newExId === 'deadlift' ? 60 : newExId === 'squats' ? 50 : 40);
+        setExpressSingleReps(1);
+      } else {
+        setExpressSingleWeight(newExId === 'deadlift' ? 60 : newExId === 'squats' ? 50 : newExId === 'hip_thrust' ? 50 : 35);
+        setExpressSingleReps(1);
+        setExpressSingleStatus('completed');
+      }
+    }
+
+    setExpressAthleteInputs(prev => {
+      const updated = { ...prev };
+      allCandidates.forEach(ath => {
+        const rec = getLatestAthleteExerciseData(ath.id, newExId);
+        if (rec && rec.status === 'completed' && rec.weightKg > 0) {
+          updated[ath.id] = {
+            weightKg: rec.weightKg,
+            reps: rec.reps || 1,
+            status: 'completed',
+            statusReason: '',
+          };
+        } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+          updated[ath.id] = {
+            weightKg: newExId === 'deadlift' ? 60 : 50,
+            reps: 1,
+            status: rec.status,
+            statusReason: rec.statusReason || '',
+          };
+        } else {
+          updated[ath.id] = {
+            weightKg: newExId === 'deadlift' ? 60 : newExId === 'squats' ? 50 : newExId === 'hip_thrust' ? 50 : 35,
+            reps: 1,
+            status: 'completed',
+            statusReason: '',
+          };
+        }
+      });
+      return updated;
+    });
   };
 
   const handleOpenExpressForStaff = (initialMode: 'single' | 'multiple' | 'all' = 'single', targetAthleteId?: string) => {
@@ -263,6 +353,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     setExpressApplyAllCycleSingle(false);
     setExpressSaveSuccessMsg(null);
     setExpressTargetSingleId(firstId);
+    setShowCommonWeightBar(false);
 
     // Default values for single mode
     if (firstId) {
@@ -294,7 +385,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setSelectedAthleteIdsForExpress([firstId]);
     }
 
-    // Build inputs map for all candidates
+    // Build inputs map for all candidates using each athlete's individualized past record
     const inputsMap: Record<string, { weightKg: number; reps: number; status: EvaluationStatus; statusReason: string }> = {};
     allCandidates.forEach(ath => {
       const rec = getLatestAthleteExerciseData(ath.id, expressExerciseId);
@@ -303,7 +394,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
         inputsMap[ath.id] = { weightKg: 50, reps: 1, status: rec.status, statusReason: rec.statusReason || '' };
       } else {
-        inputsMap[ath.id] = { weightKg: expressExerciseId === 'deadlift' ? 60 : 50, reps: 1, status: 'completed', statusReason: '' };
+        inputsMap[ath.id] = { weightKg: expressExerciseId === 'deadlift' ? 60 : expressExerciseId === 'squats' ? 50 : expressExerciseId === 'hip_thrust' ? 50 : 35, reps: 1, status: 'completed', statusReason: '' };
       }
     });
     setExpressAthleteInputs(inputsMap);
@@ -2835,16 +2926,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <button
                       key={ex.id}
                       type="button"
-                      onClick={() => {
-                        setExpressExerciseId(ex.id as any);
-                        if (expressTargetSingleId) {
-                          const rec = getLatestAthleteExerciseData(expressTargetSingleId, ex.id);
-                          if (rec && rec.status === 'completed' && rec.weightKg > 0) {
-                            setExpressSingleWeight(rec.weightKg);
-                            setExpressSingleReps(rec.reps || 1);
-                          }
-                        }
-                      }}
+                      onClick={() => updateInputsForExercise(ex.id as any)}
                       className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
                         isSelected
                           ? 'bg-red-600 text-white border-red-500 shadow-md font-bold ring-2 ring-red-500/40'
@@ -3256,40 +3338,52 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                   {/* Lista de Checkboxes interactivos de Atletas */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
-                    {/* Opción Coach Leslie si pasa el filtro */}
-                    {(!expressSearchTerm || activeStaff.name.toLowerCase().includes(expressSearchTerm.toLowerCase())) && (
-                      <div
-                        onClick={() => {
-                          setSelectedAthleteIdsForExpress(prev =>
-                            prev.includes(activeStaff.id) ? prev.filter(id => id !== activeStaff.id) : [...prev, activeStaff.id]
-                          );
-                        }}
-                        className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
-                          selectedAthleteIdsForExpress.includes(activeStaff.id)
-                            ? 'bg-amber-500/15 border-amber-500/60 text-white shadow-sm ring-1 ring-amber-500/40'
-                            : 'bg-neutral-900/60 border-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <input
-                            type="checkbox"
-                            checked={selectedAthleteIdsForExpress.includes(activeStaff.id)}
-                            onChange={() => {}}
-                            className="w-4 h-4 rounded text-amber-500 bg-neutral-950 border-neutral-700 cursor-pointer"
-                          />
-                          <UserAvatar name={activeStaff.name} role="staff" sizeClassName="w-6 h-6" />
-                          <div className="overflow-hidden">
-                            <span className="text-xs font-bold block truncate text-amber-300">⭐ {activeStaff.name}</span>
-                            <span className="text-[10px] text-neutral-400 block font-mono">Coach / Dueña (Mi Perfil)</span>
+                    {/* Opción Coach Leslie (Incluirme a mí) */}
+                    {(!expressSearchTerm || activeStaff.name.toLowerCase().includes(expressSearchTerm.toLowerCase())) && (() => {
+                      const isCoachSel = selectedAthleteIdsForExpress.includes(activeStaff.id);
+                      const coachStatus = getAthleteEvaluationStatus(activeStaff.id);
+                      const coachPrevRec = getLatestAthleteExerciseData(activeStaff.id, expressExerciseId);
+                      return (
+                          <div
+                            onClick={() => {
+                              setSelectedAthleteIdsForExpress(prev =>
+                                prev.includes(activeStaff.id) ? prev.filter(id => id !== activeStaff.id) : [...prev, activeStaff.id]
+                              );
+                            }}
+                            className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                              isCoachSel
+                                ? 'bg-amber-500/15 border-amber-500/60 text-white shadow-sm ring-1 ring-amber-500/40'
+                                : 'bg-neutral-900/60 border-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <input
+                                type="checkbox"
+                                checked={isCoachSel}
+                                onChange={() => {}}
+                                className="w-4 h-4 rounded text-amber-500 bg-neutral-950 border-neutral-700 cursor-pointer"
+                              />
+                              <UserAvatar name={activeStaff.name} role="staff" sizeClassName="w-6 h-6" />
+                              <div className="overflow-hidden">
+                                <span className="text-xs font-bold block truncate text-amber-300">⭐ {activeStaff.name} (Mi Perfil)</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-[9px] px-1.5 py-0.2 rounded border font-semibold ${coachStatus.badgeColor}`}>
+                                    {coachStatus.badgeText}
+                                  </span>
+                                  <span className="text-[10px] text-neutral-400 font-mono">
+                                    {coachPrevRec ? `Marca previa: ${coachPrevRec.weightKg} kg` : 'Sin marca previa'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              isCoachSel ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500'
+                            }`}>
+                              {isCoachSel ? '✓ Elegido' : '+ Elegir'}
+                            </span>
                           </div>
-                        </div>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          selectedAthleteIdsForExpress.includes(activeStaff.id) ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500'
-                        }`}>
-                          {selectedAthleteIdsForExpress.includes(activeStaff.id) ? '✓ Elegido' : '+ Elegir'}
-                        </span>
-                      </div>
-                    )}
+                        );
+                      })()}
 
                     {/* Alumnos filtrados */}
                     {users
@@ -3297,6 +3391,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       .filter(u => !expressSearchTerm || u.name.toLowerCase().includes(expressSearchTerm.toLowerCase()))
                       .map((ath) => {
                         const isSelected = selectedAthleteIdsForExpress.includes(ath.id);
+                        const statusInfo = getAthleteEvaluationStatus(ath.id);
+                        const prevEx = getLatestAthleteExerciseData(ath.id, expressExerciseId);
                         return (
                           <div
                             key={ath.id}
@@ -3321,7 +3417,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               <UserAvatar name={ath.name} avatarUrl={ath.avatarUrl} role="athlete" sizeClassName="w-6 h-6" />
                               <div className="overflow-hidden">
                                 <span className="text-xs font-bold block truncate text-white">{ath.name}</span>
-                                <span className="text-[10px] text-neutral-400 block font-mono">Corte Día {ath.membership?.billingDayOfMonth || 15}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-[9px] px-1.5 py-0.2 rounded border font-semibold ${statusInfo.badgeColor}`}>
+                                    {statusInfo.badgeText}
+                                  </span>
+                                  <span className="text-[10px] text-neutral-400 font-mono">
+                                    {prevEx ? `Marca previa: ${prevEx.weightKg} kg` : 'Sin marca previa'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -3335,44 +3438,63 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </div>
                 </div>
 
-                {/* 2. PESO COMÚN DE LA ESTACIÓN (BARRA RÁPIDA) */}
+                {/* 2. PESOS INDIVIDUALES POR ATLETA (Herramienta opcional para peso común si se desea) */}
                 {selectedAthleteIdsForExpress.length > 0 && (
-                  <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Dumbbell className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs text-neutral-300 font-medium">Peso en la Barra / Máquina:</span>
-                      <input
-                        type="number"
-                        value={commonBatchWeight}
-                        onChange={(e) => setCommonBatchWeight(Number(e.target.value))}
-                        className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <span className="text-xs text-neutral-400">kg</span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs px-1">
+                      <div className="flex items-center gap-1.5 text-neutral-300">
+                        <Dumbbell className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[11px] font-medium text-amber-200/90">
+                          Cada alumno tiene su peso individual según su fuerza y marca previa.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCommonWeightBar(!showCommonWeightBar)}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 font-medium underline shrink-0"
+                      >
+                        {showCommonWeightBar ? 'Ocultar ajuste común' : 'Herramienta peso común (Opcional)'}
+                      </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = { ...expressAthleteInputs };
-                        selectedAthleteIdsForExpress.forEach(id => {
-                          updated[id] = {
-                            ...(updated[id] || { reps: 1, status: 'completed', statusReason: '' }),
-                            weightKg: commonBatchWeight,
-                            status: 'completed',
-                          };
-                        });
-                        setExpressAthleteInputs(updated);
-                        setExpressSaveSuccessMsg(`¡${commonBatchWeight} kg aplicado a todos los ${selectedAthleteIdsForExpress.length} atletas seleccionados!`);
-                        setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
-                    >
-                      <span>Copiar a los {selectedAthleteIdsForExpress.length} seleccionados</span>
-                    </button>
+                    {showCommonWeightBar && (
+                      <div className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-wrap items-center justify-between gap-2 animate-fade-in">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-neutral-300 font-medium">Copiar peso común a la barra:</span>
+                          <input
+                            type="number"
+                            value={commonBatchWeight}
+                            onChange={(e) => setCommonBatchWeight(Number(e.target.value))}
+                            className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                          />
+                          <span className="text-xs text-neutral-400">kg</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...expressAthleteInputs };
+                            selectedAthleteIdsForExpress.forEach(id => {
+                              updated[id] = {
+                                ...(updated[id] || { reps: 1, status: 'completed', statusReason: '' }),
+                                weightKg: commonBatchWeight,
+                                status: 'completed',
+                              };
+                            });
+                            setExpressAthleteInputs(updated);
+                            setExpressSaveSuccessMsg(`¡${commonBatchWeight} kg aplicado a los ${selectedAthleteIdsForExpress.length} seleccionados!`);
+                            setTimeout(() => setExpressSaveSuccessMsg(null), 2500);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
+                        >
+                          <span>Aplicar {commonBatchWeight}kg a todos</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* 3. CARGA DE MARCAS SOLO PARA LOS ATLETAS SELECCIONADOS */}
+                {/* 3. CARGA DE MARCAS INDIVIDUALES POR ATLETA */}
                 {selectedAthleteIdsForExpress.length === 0 ? (
                   <div className="p-6 rounded-2xl bg-neutral-950/60 border border-dashed border-neutral-800 text-center space-y-2">
                     <Users className="w-8 h-8 text-neutral-500 mx-auto" />
@@ -3384,13 +3506,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {[activeStaff, ...users.filter(u => u.role === 'athlete')]
                       .filter(u => selectedAthleteIdsForExpress.includes(u.id))
                       .map((ath) => {
                         const isCoach = ath.id === activeStaff.id;
+                        const statusInfo = getAthleteEvaluationStatus(ath.id);
+                        const prevEx = getLatestAthleteExerciseData(ath.id, expressExerciseId);
+                        const fallbackWeight = prevEx && prevEx.status === 'completed' && prevEx.weightKg > 0
+                          ? prevEx.weightKg
+                          : (expressExerciseId === 'deadlift' ? 60 : expressExerciseId === 'squats' ? 50 : expressExerciseId === 'hip_thrust' ? 50 : 35);
+                        
                         const currentInput = expressAthleteInputs[ath.id] || {
-                          weightKg: 60,
+                          weightKg: fallbackWeight,
                           reps: 1,
                           status: 'completed',
                           statusReason: ''
@@ -3422,11 +3550,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                   sizeClassName="w-7 h-7"
                                 />
                                 <div className="overflow-hidden">
-                                  <strong className="text-xs text-white block truncate">
-                                    {isCoach ? `⭐ ${ath.name} (Coach / Dueña)` : ath.name}
-                                  </strong>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <strong className="text-xs text-white block truncate">
+                                      {isCoach ? `⭐ ${ath.name} (Coach / Dueña)` : ath.name}
+                                    </strong>
+                                    <span className={`text-[9px] px-1.5 py-0.2 rounded border font-semibold ${statusInfo.badgeColor}`}>
+                                      {statusInfo.badgeText}
+                                    </span>
+                                  </div>
                                   <span className="text-[10px] text-neutral-400 block font-mono">
-                                    {isCoach ? 'Mi Perfil Personal' : `${ath.membership?.planName} · Corte Día ${ath.membership?.billingDayOfMonth || 15}`}
+                                    {prevEx ? (
+                                      <span>Anterior: <strong className="text-amber-300">{prevEx.weightKg} kg</strong> (1RM: {prevEx.estimated1RMKg} kg)</span>
+                                    ) : (
+                                      <span className="text-neutral-500">Sin marca previa en {expressExerciseId}</span>
+                                    )}
                                   </span>
                                 </div>
                               </div>
@@ -3438,7 +3575,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                   onClick={() => {
                                     setExpressAthleteInputs(prev => ({
                                       ...prev,
-                                      [ath.id]: { ...(prev[ath.id] || { weightKg: 60, reps: 1, statusReason: '' }), status: 'completed' }
+                                      [ath.id]: { ...(prev[ath.id] || { weightKg: fallbackWeight, reps: 1, statusReason: '' }), status: 'completed' }
                                     }));
                                   }}
                                   className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
@@ -3486,13 +3623,44 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               </div>
                             </div>
 
-                            {/* Inputs Row */}
+                            {/* Inputs Row with individual weights and quick steppers */}
                             {currentInput.status === 'completed' ? (
-                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-900 text-xs">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-900 text-xs flex-wrap">
+                                <div className="flex items-center gap-1.5">
                                   <span className="text-[11px] text-neutral-400">Peso:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = currentInput.weightKg || 0;
+                                      const next = Math.max(0, cur - 5);
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: next }
+                                      }));
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[10px] font-mono border border-neutral-800 active:scale-95 transition-all"
+                                    title="-5 kg"
+                                  >
+                                    -5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = currentInput.weightKg || 0;
+                                      const next = Math.max(0, cur - 2.5);
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: next }
+                                      }));
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[10px] font-mono border border-neutral-800 active:scale-95 transition-all"
+                                    title="-2.5 kg"
+                                  >
+                                    -2.5
+                                  </button>
                                   <input
                                     type="number"
+                                    step="any"
                                     value={currentInput.weightKg}
                                     onChange={(e) => {
                                       const val = Number(e.target.value);
@@ -3501,31 +3669,46 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                         [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: val }
                                       }));
                                     }}
-                                    className="w-16 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                                    className="w-16 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-1.5 py-1 text-xs text-white font-mono text-center font-bold"
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = currentInput.weightKg || 0;
+                                      const next = cur + 2.5;
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: next }
+                                      }));
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[10px] font-mono border border-neutral-800 active:scale-95 transition-all"
+                                    title="+2.5 kg"
+                                  >
+                                    +2.5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = currentInput.weightKg || 0;
+                                      const next = cur + 5;
+                                      setExpressAthleteInputs(prev => ({
+                                        ...prev,
+                                        [ath.id]: { ...(prev[ath.id] || { reps: 1, status: 'completed', statusReason: '' }), weightKg: next }
+                                      }));
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[10px] font-mono border border-neutral-800 active:scale-95 transition-all"
+                                    title="+5 kg"
+                                  >
+                                    +5
+                                  </button>
                                   <span className="text-neutral-400 text-[11px]">kg</span>
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[11px] text-neutral-400">Reps:</span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="50"
-                                    value={currentInput.reps}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value);
-                                      setExpressAthleteInputs(prev => ({
-                                        ...prev,
-                                        [ath.id]: { ...(prev[ath.id] || { weightKg: 60, status: 'completed', statusReason: '' }), reps: val }
-                                      }));
-                                    }}
-                                    className="w-12 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                                  />
-                                </div>
-
-                                <div className="text-[11px] font-mono font-bold text-amber-400">
-                                  1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
+                                  <span className="text-[10px] text-neutral-500 font-mono">(1 rep máx)</span>
+                                  <div className="text-[11px] font-mono font-bold text-amber-400">
+                                    1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
+                                  </div>
                                 </div>
                               </div>
                             ) : (

@@ -119,6 +119,7 @@ export interface EnduranceTimeTestRecord {
   result: string; // e.g., "7:14 min" o "NA" / "NP"
   timeSeconds?: number;
   scoreScoreLevel?: 'Básico' | 'Intermedio' | 'Avanzado' | 'Élite' | 'Exento';
+  difficultyLevel?: 'Principiante' | 'Intermedio' | 'Avanzado';
   notes?: string;
   status?: EvaluationStatus; // 'completed' | 'na' | 'np'
   statusReason?: string;

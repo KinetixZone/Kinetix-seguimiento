@@ -252,6 +252,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [enduranceMinutes, setEnduranceMinutes] = useState<number>(7);
   const [enduranceSeconds, setEnduranceSeconds] = useState<number>(14);
   const [enduranceScoreLevel, setEnduranceScoreLevel] = useState<'Básico' | 'Intermedio' | 'Avanzado' | 'Élite'>('Avanzado');
+  const [enduranceDifficulty, setEnduranceDifficulty] = useState<'Principiante' | 'Intermedio' | 'Avanzado'>('Intermedio');
 
   // 5 Key Strength Exercises (Each can be completed, NA - niños/adultos mayores, NP - no presentada/enfermedad)
   const [squatStatus, setSquatStatus] = useState<EvaluationStatus>('completed');
@@ -279,7 +280,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [rowReason, setRowReason] = useState<string>('');
   const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
   const [rowWeight, setRowWeight] = useState<number>(75);
-  const [rowReps, setRowReps] = useState<number>(12);
+  const [rowReps, setRowReps] = useState<number>(1);
   const [coachNotes, setCoachNotes] = useState<string>('');
 
   // NA Presets for fast selection
@@ -508,7 +509,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
       timeSeconds: isEnduranceDone ? totalSec : 0,
       scoreScoreLevel: isEnduranceDone ? enduranceScoreLevel : 'Exento',
-      notes: enduranceReason ? `${enduranceStatus.toUpperCase()}: ${enduranceReason}` : (isEnduranceDone ? `Reto completado en ${formattedResult}.` : `Estado: ${enduranceStatus.toUpperCase()}`),
+      difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
+      notes: enduranceReason ? `${enduranceStatus.toUpperCase()}: ${enduranceReason}` : (isEnduranceDone ? `Reto nivel ${enduranceDifficulty} completado en ${formattedResult}.` : `Estado: ${enduranceStatus.toUpperCase()}`),
       status: enduranceStatus,
       statusReason: enduranceReason,
     };
@@ -1776,9 +1778,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   {latestEval.enduranceTest.result}
                 </div>
 
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-white">
-                  <Activity className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Reto: <strong className="text-blue-300">{latestEval.enduranceTest.name}</strong></span>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-white">
+                    <Activity className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Reto: <strong className="text-blue-300">{latestEval.enduranceTest.name}</strong></span>
+                  </div>
+
+                  {(latestEval.enduranceTest.difficultyLevel || latestEval.enduranceTest.scoreScoreLevel) && (
+                    <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                      (latestEval.enduranceTest.difficultyLevel === 'Avanzado' || latestEval.enduranceTest.scoreScoreLevel === 'Avanzado')
+                        ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                        : (latestEval.enduranceTest.difficultyLevel === 'Principiante' || latestEval.enduranceTest.scoreScoreLevel === 'Básico')
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}>
+                      <span>
+                        {(latestEval.enduranceTest.difficultyLevel === 'Avanzado' || latestEval.enduranceTest.scoreScoreLevel === 'Avanzado') ? '🔥' : (latestEval.enduranceTest.difficultyLevel === 'Principiante' || latestEval.enduranceTest.scoreScoreLevel === 'Básico') ? '🌱' : '⚡'} Nivel: {latestEval.enduranceTest.difficultyLevel || latestEval.enduranceTest.scoreScoreLevel}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2512,33 +2530,45 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             <span className="text-[10px] text-neutral-400 font-semibold block uppercase">
                               Vueltas Completadas
                             </span>
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const n = Math.max(1, cooperLapsCount - 1);
+                                  const n = Math.max(0, Number((cooperLapsCount - 1).toFixed(1)));
                                   setCooperLapsCount(n);
-                                  const dist = n * cooperMetersPerLap;
+                                  const dist = Math.round(n * cooperMetersPerLap);
                                   setOptionalDistance(dist);
                                   setSelectedCooperLevel(getLevelFromDistance(dist));
                                 }}
-                                className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm"
+                                className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm shrink-0 flex items-center justify-center active:scale-95 transition-all"
                               >
                                 -
                               </button>
-                              <span className="text-xl font-extrabold text-amber-400 font-mono w-12 text-center">
-                                {cooperLapsCount}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const n = cooperLapsCount + 1;
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="100"
+                                value={cooperLapsCount}
+                                onChange={(e) => {
+                                  const n = Math.max(0, parseFloat(e.target.value) || 0);
                                   setCooperLapsCount(n);
-                                  const dist = n * cooperMetersPerLap;
+                                  const dist = Math.round(n * cooperMetersPerLap);
                                   setOptionalDistance(dist);
                                   setSelectedCooperLevel(getLevelFromDistance(dist));
                                 }}
-                                className="w-7 h-7 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm"
+                                className="w-16 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg py-1 text-center font-mono font-extrabold text-amber-400 text-base outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const n = Number((cooperLapsCount + 1).toFixed(1));
+                                  setCooperLapsCount(n);
+                                  const dist = Math.round(n * cooperMetersPerLap);
+                                  setOptionalDistance(dist);
+                                  setSelectedCooperLevel(getLevelFromDistance(dist));
+                                }}
+                                className="w-8 h-8 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm shrink-0 flex items-center justify-center active:scale-95 transition-all"
                               >
                                 +
                               </button>
@@ -2797,8 +2827,40 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </div>
                     </div>
 
+                    {/* NIVEL DEL RETO (ELEGIDO POR EL COACH) */}
+                    <div>
+                      <label className="text-neutral-300 font-medium block mb-1.5 flex items-center justify-between text-xs">
+                        <span>Nivel del Reto (Elegido por el Coach):</span>
+                        <span className="text-[10px] text-amber-400 font-mono font-semibold">Criterio Coach</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['Principiante', 'Intermedio', 'Avanzado'] as const).map((lvl) => {
+                          const isSel = enduranceDifficulty === lvl;
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              onClick={() => setEnduranceDifficulty(lvl)}
+                              className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all text-center flex flex-col items-center gap-0.5 ${
+                                isSel
+                                  ? lvl === 'Principiante'
+                                    ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500 ring-2 ring-emerald-500/40 shadow-sm'
+                                    : lvl === 'Intermedio'
+                                    ? 'bg-amber-600/30 text-amber-300 border-amber-500 ring-2 ring-amber-500/40 shadow-sm'
+                                    : 'bg-red-600/30 text-red-300 border-red-500 ring-2 ring-red-500/40 shadow-sm'
+                                  : 'bg-neutral-900/80 text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-700'
+                              }`}
+                            >
+                              <span>{lvl === 'Principiante' ? '🌱' : lvl === 'Intermedio' ? '⚡' : '🔥'}</span>
+                              <span>{lvl}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="text-[10px] text-neutral-400 bg-neutral-900/60 p-2 rounded-xl">
-                      * Este tiempo se guardará como <strong>{enduranceMinutes.toString().padStart(2, '0')}:{enduranceSeconds.toString().padStart(2, '0')} min</strong> y se comparará automáticamente con el test anterior.
+                      * Este tiempo se guardará como <strong>{enduranceMinutes.toString().padStart(2, '0')}:{enduranceSeconds.toString().padStart(2, '0')} min</strong> con nivel <strong>{enduranceDifficulty}</strong> y se comparará automáticamente con el test anterior.
                     </div>
                   </>
                 ) : enduranceStatus === 'na' ? (
