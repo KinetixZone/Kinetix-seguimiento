@@ -268,6 +268,26 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [quickEditEvalDate, setQuickEditEvalDate] = useState<string>(() => localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10));
   const [quickEditExistingEvalId, setQuickEditExistingEvalId] = useState<string | null>(null);
   const [quickEditSuccess, setQuickEditSuccess] = useState<boolean>(false);
+  const [quickEditTab, setQuickEditTab] = useState<'aerobic' | 'strength'>('aerobic');
+
+  // Full evaluation: Resistencia state
+  const [quickEnduranceStatus, setQuickEnduranceStatus] = useState<EvaluationStatus>('completed');
+  const [quickEnduranceReason, setQuickEnduranceReason] = useState<string>('');
+  const [quickEnduranceMinutes, setQuickEnduranceMinutes] = useState<number>(3);
+  const [quickEnduranceSeconds, setQuickEnduranceSeconds] = useState<number>(0);
+  const [quickEnduranceDifficulty, setQuickEnduranceDifficulty] = useState<'Principiante' | 'Intermedio' | 'Avanzado'>('Intermedio');
+
+  // Full evaluation: Cooper state
+  const [quickCooperStatus, setQuickCooperStatus] = useState<EvaluationStatus>('completed');
+  const [quickCooperReason, setQuickCooperReason] = useState<string>('');
+  const [quickCooperMode, setQuickCooperMode] = useState<'normal' | 'laps'>('normal');
+  const [quickCooperLaps, setQuickCooperLaps] = useState<number>(5.5);
+  const [quickCooperTrackType, setQuickCooperTrackType] = useState<'afuera' | 'adentro'>('afuera');
+  const [quickCooperLevel, setQuickCooperLevel] = useState<number>(3);
+  const [quickCooperDistance, setQuickCooperDistance] = useState<number>(2000);
+
+  // Full evaluation: Coach notes
+  const [quickCoachNotes, setQuickCoachNotes] = useState<string>('');
 
   // Helper to determine evaluation status and recency for an athlete
   const getAthleteEvaluationStatus = (athleteId: string) => {
@@ -738,7 +758,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     setTimeout(() => setGlobalDateNotifiedSuccess(false), 4500);
   };
 
-  // Quick weight correction handlers
+  // Quick full evaluation correction / edit handlers
   const handleOpenQuickEditWeights = (targetUser: UserProfile) => {
     const userEvals = evaluations.filter(e => e.userId === targetUser.id);
     const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
@@ -755,6 +775,34 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     if (latest) {
       setQuickEditExistingEvalId(latest.id);
       setQuickEditEvalDate(latest.evaluationDate);
+      
+      // Resistencia
+      const endRec = latest.enduranceTest;
+      setQuickEnduranceStatus(endRec?.status || 'completed');
+      setQuickEnduranceReason(endRec?.statusReason || '');
+      setQuickEnduranceDifficulty(endRec?.difficultyLevel || 'Intermedio');
+      const totalSec = typeof endRec?.timeSeconds === 'number' ? endRec.timeSeconds : 180;
+      setQuickEnduranceMinutes(Math.floor(totalSec / 60));
+      setQuickEnduranceSeconds(totalSec % 60);
+
+      // Cooper
+      const coopRec = latest.cooperTest;
+      setQuickCooperStatus(coopRec?.status || 'completed');
+      setQuickCooperReason(coopRec?.statusReason || '');
+      setQuickCooperLevel(coopRec?.levelNumber || 3);
+      setQuickCooperDistance(coopRec?.distanceMeters || 2000);
+      const isLaps = coopRec?.notes?.includes('vueltas') || false;
+      setQuickCooperMode(isLaps ? 'laps' : 'normal');
+      if (isLaps) {
+        const matchLaps = coopRec?.notes?.match(/([\d.]+)\s*vueltas/);
+        setQuickCooperLaps(matchLaps ? parseFloat(matchLaps[1]) : 5.5);
+        setQuickCooperTrackType(coopRec?.notes?.includes('adentro') || coopRec?.notes?.includes('Caminadora') ? 'adentro' : 'afuera');
+      }
+
+      // Notas
+      setQuickCoachNotes(latest.generalCoachNotes || '');
+
+      // Fuerza
       const recs = latest.strengthRecords || [];
       const sq = recs.find(r => r.exerciseId === 'squats');
       const dl = recs.find(r => r.exerciseId === 'deadlift');
@@ -793,9 +841,23 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     } else {
       setQuickEditExistingEvalId(null);
       setQuickEditEvalDate(globalEvalDate || new Date().toISOString().slice(0, 10));
+      setQuickEnduranceStatus('completed');
+      setQuickEnduranceReason('');
+      setQuickEnduranceMinutes(3);
+      setQuickEnduranceSeconds(0);
+      setQuickEnduranceDifficulty('Intermedio');
+      setQuickCooperStatus('completed');
+      setQuickCooperReason('');
+      setQuickCooperMode('normal');
+      setQuickCooperLevel(3);
+      setQuickCooperDistance(2000);
+      setQuickCooperLaps(5.5);
+      setQuickCooperTrackType('afuera');
+      setQuickCoachNotes('');
       setQuickWeights(defaultWeights);
     }
 
+    setQuickEditTab('aerobic');
     setAthleteToEditWeights(targetUser);
     setQuickEditSuccess(false);
   };
@@ -857,11 +919,44 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       },
     ];
 
+    const totalEnduranceSec = quickEnduranceMinutes * 60 + quickEnduranceSeconds;
+    const formattedEndurance = `${quickEnduranceMinutes.toString().padStart(2, '0')}:${quickEnduranceSeconds.toString().padStart(2, '0')} min`;
+
+    const calcCooperDistance = quickCooperMode === 'laps' 
+      ? Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))
+      : quickCooperDistance;
+
+    const enduranceTestRecord: EnduranceTimeTestRecord = {
+      name: 'Resistencia Funcional',
+      result: quickEnduranceStatus === 'completed' ? formattedEndurance : (quickEnduranceStatus === 'na' ? 'NA' : 'NP'),
+      timeSeconds: quickEnduranceStatus === 'completed' ? totalEnduranceSec : 0,
+      scoreScoreLevel: quickEnduranceDifficulty === 'Avanzado' ? 'Avanzado' : quickEnduranceDifficulty === 'Principiante' ? 'Básico' : 'Intermedio',
+      difficultyLevel: quickEnduranceStatus === 'completed' ? quickEnduranceDifficulty : undefined,
+      status: quickEnduranceStatus,
+      statusReason: quickEnduranceReason || undefined,
+    };
+
+    const cooperTestRecord: CooperTestRecord = {
+      level: quickCooperStatus === 'completed' ? `Nivel ${quickCooperLevel}` : (quickCooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+      levelNumber: quickCooperStatus === 'completed' ? quickCooperLevel : 0,
+      distanceMeters: quickCooperStatus === 'completed' ? calcCooperDistance : 0,
+      estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((calcCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
+      targetZoneRecommendation: 'Zona 2 y Acondicionamiento funcional',
+      description: 'Evaluación de capacidad aeróbica oficial Kinetix.',
+      status: quickCooperStatus,
+      statusReason: quickCooperReason || undefined,
+      notes: quickCooperStatus === 'completed' && quickCooperMode === 'laps' 
+        ? `Cooper 2: ${quickCooperLaps} vueltas (${quickCooperTrackType === 'afuera' ? 'Afuera / Pista 400m' : 'Adentro / Caminadora 250m'})` 
+        : undefined,
+    };
+
     if (quickEditExistingEvalId && onUpdateEvaluation) {
       onUpdateEvaluation(quickEditExistingEvalId, {
         evaluationDate: quickEditEvalDate,
+        enduranceTest: enduranceTestRecord,
+        cooperTest: cooperTestRecord,
         strengthRecords,
-        generalCoachNotes: 'Pesos corregidos/actualizados por el Coach en Panel Staff.',
+        generalCoachNotes: quickCoachNotes || 'Evaluación actualizada por el Coach.',
       });
     } else if (onAddEvaluation) {
       onAddEvaluation({
@@ -869,24 +964,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         evaluationDate: quickEditEvalDate,
         coachId: activeStaff.id,
         coachName: activeStaff.name,
-        cooperTest: {
-          level: 'Nivel 3 - En Progreso',
-          levelNumber: 3,
-          distanceMeters: 2000,
-          estimatedVo2Max: 38,
-          targetZoneRecommendation: 'Zona 2 y Acondicionamiento funcional',
-          description: 'Evaluación registrada en Kinetix Staff.',
-          status: 'completed',
-        },
-        enduranceTest: {
-          name: 'Resistencia Funcional',
-          result: '03:00 min',
-          timeSeconds: 180,
-          scoreScoreLevel: 'Intermedio',
-          status: 'completed',
-        },
+        cooperTest: cooperTestRecord,
+        enduranceTest: enduranceTestRecord,
         strengthRecords,
-        generalCoachNotes: 'Pesos registrados/corregidos por el Coach en Panel Staff.',
+        generalCoachNotes: quickCoachNotes || 'Evaluación registrada por el Coach.',
       });
     }
 
@@ -1286,10 +1367,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       type="button"
                       onClick={() => handleOpenQuickEditWeights(staff)}
                       className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-neutral-900 transition-colors"
-                      title="Corregir o registrar mis propios pesos de fuerza (1RM)"
+                      title="Editar o registrar mi evaluación completa: fecha, tiempos y pesos"
                     >
                       <Dumbbell className="w-3 h-3 text-emerald-400" />
-                      <span>Mis Pesos (1RM)</span>
+                      <span>Mi Evaluación</span>
                     </button>
 
                     <button
@@ -1892,10 +1973,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     type="button"
                     onClick={() => handleOpenQuickEditWeights(athlete)}
                     className="px-2 py-1 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/35 text-blue-300 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm active:scale-95"
-                    title="Corregir o editar pesos de fuerza (1RM) si hubo un error en la captura"
+                    title="Editar o corregir evaluación completa: fecha, tiempos, Cooper y pesos"
                   >
                     <Pencil className="w-3 h-3 text-blue-400" />
-                    <span>Corregir Pesos</span>
+                    <span>Editar Eval</span>
                   </button>
 
                   <button
@@ -4051,20 +4132,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CORREGIR O EDITAR PESOS DE FUERZA (1RM) (POR SI HUBO ERROR) */}
+      {/* MODAL: EDITAR Y CORREGIR EVALUACIÓN COMPLETA (FECHA, TIEMPO, COOPER, PESOS) */}
       {/* ========================================================================= */}
       {athleteToEditWeights && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
                   <Pencil className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white font-brand flex items-center gap-2">
-                    <span>Corregir Pesos de Fuerza (1RM)</span>
+                    <span>Editar y Corregir Evaluación</span>
                     {quickEditExistingEvalId ? (
                       <span className="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded font-bold">
                         Modificando Registro
@@ -4089,649 +4170,953 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </button>
             </div>
 
-            {/* Fecha de la Evaluación */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 gap-3">
-              <div>
-                <label className="text-[11px] font-bold text-neutral-300 block">
-                  Fecha de la Evaluación a Corregir:
-                </label>
-                <span className="text-[10px] text-neutral-400">
-                  Puedes corregir la fecha si se registró en un día incorrecto.
-                </span>
+            {/* Fecha de la Evaluación (Compact Bar) */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-neutral-300">
+                <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="font-semibold">Fecha de Evaluación:</span>
               </div>
               <input
                 type="date"
                 value={quickEditEvalDate}
                 onChange={(e) => setQuickEditEvalDate(e.target.value)}
-                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono font-bold outline-none focus:border-blue-500"
+                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold outline-none focus:border-blue-500 cursor-pointer"
               />
             </div>
 
-            {/* Lista de los 5 Ejercicios de Fuerza */}
-            <div className="space-y-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block px-1">
-                Ejercicios de Fuerza (1 Repetición Máxima = 1RM)
-              </span>
-
-              {/* 1. Sentadillas */}
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🏋️</span>
-                    <strong className="text-xs text-white">Sentadillas</strong>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {(['completed', 'na', 'np'] as const).map(st => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          squats: { ...prev.squats, status: st }
-                        }))}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          quickWeights.squats.status === st
-                            ? st === 'completed'
-                              ? 'bg-emerald-600 text-white'
-                              : st === 'na'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-red-700 text-white'
-                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {quickWeights.squats.status === 'completed' ? (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 2.5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -2.5
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quickWeights.squats.weightKg}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setQuickWeights(prev => ({
-                            ...prev,
-                            squats: { ...prev.squats, weightKg: val }
-                          }));
-                        }}
-                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          squats: { ...prev.squats, weightKg: prev.squats.weightKg + 2.5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +2.5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          squats: { ...prev.squats, weightKg: prev.squats.weightKg + 5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +5
-                      </button>
-                      <span className="text-neutral-400 text-xs">kg</span>
-                    </div>
-
-                    <div className="text-xs font-mono font-bold text-amber-400">
-                      1RM: {quickWeights.squats.weightKg} kg
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickWeights.squats.reason}
-                    onChange={(e) => {
-                      const reason = e.target.value;
-                      setQuickWeights(prev => ({
-                        ...prev,
-                        squats: { ...prev.squats, reason }
-                      }));
-                    }}
-                    placeholder="Motivo (ej. Lesión de rodilla, ingreso posterior)..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
-                  />
-                )}
-              </div>
-
-              {/* 2. Peso Muerto */}
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">⚡</span>
-                    <strong className="text-xs text-white">Peso Muerto</strong>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {(['completed', 'na', 'np'] as const).map(st => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          deadlift: { ...prev.deadlift, status: st }
-                        }))}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          quickWeights.deadlift.status === st
-                            ? st === 'completed'
-                              ? 'bg-emerald-600 text-white'
-                              : st === 'na'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-red-700 text-white'
-                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {quickWeights.deadlift.status === 'completed' ? (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 2.5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -2.5
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quickWeights.deadlift.weightKg}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setQuickWeights(prev => ({
-                            ...prev,
-                            deadlift: { ...prev.deadlift, weightKg: val }
-                          }));
-                        }}
-                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 2.5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +2.5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +5
-                      </button>
-                      <span className="text-neutral-400 text-xs">kg</span>
-                    </div>
-
-                    <div className="text-xs font-mono font-bold text-amber-400">
-                      1RM: {quickWeights.deadlift.weightKg} kg
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickWeights.deadlift.reason}
-                    onChange={(e) => {
-                      const reason = e.target.value;
-                      setQuickWeights(prev => ({
-                        ...prev,
-                        deadlift: { ...prev.deadlift, reason }
-                      }));
-                    }}
-                    placeholder="Motivo (ej. Dolor lumbar, ingreso posterior)..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
-                  />
-                )}
-              </div>
-
-              {/* 3. Hip Thrust */}
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🍑</span>
-                    <strong className="text-xs text-white">Hip Thrust</strong>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {(['completed', 'na', 'np'] as const).map(st => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          hip_thrust: { ...prev.hip_thrust, status: st }
-                        }))}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          quickWeights.hip_thrust.status === st
-                            ? st === 'completed'
-                              ? 'bg-emerald-600 text-white'
-                              : st === 'na'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-red-700 text-white'
-                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {quickWeights.hip_thrust.status === 'completed' ? (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 2.5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -2.5
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quickWeights.hip_thrust.weightKg}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setQuickWeights(prev => ({
-                            ...prev,
-                            hip_thrust: { ...prev.hip_thrust, weightKg: val }
-                          }));
-                        }}
-                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 2.5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +2.5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +5
-                      </button>
-                      <span className="text-neutral-400 text-xs">kg</span>
-                    </div>
-
-                    <div className="text-xs font-mono font-bold text-amber-400">
-                      1RM: {quickWeights.hip_thrust.weightKg} kg
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickWeights.hip_thrust.reason}
-                    onChange={(e) => {
-                      const reason = e.target.value;
-                      setQuickWeights(prev => ({
-                        ...prev,
-                        hip_thrust: { ...prev.hip_thrust, reason }
-                      }));
-                    }}
-                    placeholder="Motivo (ej. Sin banco disponible, molestia)..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
-                  />
-                )}
-              </div>
-
-              {/* 4. Press Horizontal */}
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🥋</span>
-                    <strong className="text-xs text-white">Press Horizontal (Pecho / Banca)</strong>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {(['completed', 'na', 'np'] as const).map(st => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          horizontal_press: { ...prev.horizontal_press, status: st }
-                        }))}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          quickWeights.horizontal_press.status === st
-                            ? st === 'completed'
-                              ? 'bg-emerald-600 text-white'
-                              : st === 'na'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-red-700 text-white'
-                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {quickWeights.horizontal_press.status === 'completed' ? (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 2.5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -2.5
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quickWeights.horizontal_press.weightKg}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setQuickWeights(prev => ({
-                            ...prev,
-                            horizontal_press: { ...prev.horizontal_press, weightKg: val }
-                          }));
-                        }}
-                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 2.5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +2.5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +5
-                      </button>
-                      <span className="text-neutral-400 text-xs">kg</span>
-                    </div>
-
-                    <div className="text-xs font-mono font-bold text-amber-400">
-                      1RM: {quickWeights.horizontal_press.weightKg} kg
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickWeights.horizontal_press.reason}
-                    onChange={(e) => {
-                      const reason = e.target.value;
-                      setQuickWeights(prev => ({
-                        ...prev,
-                        horizontal_press: { ...prev.horizontal_press, reason }
-                      }));
-                    }}
-                    placeholder="Motivo (ej. Molestia en hombro, nuevo ingreso)..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
-                  />
-                )}
-              </div>
-
-              {/* 5. Remo con Barra / Dominadas */}
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2.5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🚣</span>
-                    <strong className="text-xs text-white">
-                      {quickWeights.pullups_or_rows.type === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)'}
-                    </strong>
-                    <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, type: 'remo' }
-                        }))}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                          quickWeights.pullups_or_rows.type === 'remo'
-                            ? 'bg-amber-500 text-neutral-950'
-                            : 'text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        Remo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, type: 'dominadas' }
-                        }))}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                          quickWeights.pullups_or_rows.type === 'dominadas'
-                            ? 'bg-amber-500 text-neutral-950'
-                            : 'text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        Dominadas
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 self-end sm:self-auto">
-                    {(['completed', 'na', 'np'] as const).map(st => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, status: st }
-                        }))}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                          quickWeights.pullups_or_rows.status === st
-                            ? st === 'completed'
-                              ? 'bg-emerald-600 text-white'
-                              : st === 'na'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-red-700 text-white'
-                            : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {quickWeights.pullups_or_rows.status === 'completed' ? (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 2.5) }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        -2.5
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quickWeights.pullups_or_rows.weightKg}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setQuickWeights(prev => ({
-                            ...prev,
-                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: val }
-                          }));
-                        }}
-                        className="w-20 bg-neutral-900 border border-neutral-700 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 2.5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +2.5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickWeights(prev => ({
-                          ...prev,
-                          pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 5 }
-                        }))}
-                        className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
-                      >
-                        +5
-                      </button>
-                      <span className="text-neutral-400 text-xs">kg</span>
-                    </div>
-
-                    <div className="text-xs font-mono font-bold text-amber-400">
-                      1RM: {quickWeights.pullups_or_rows.weightKg} kg
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickWeights.pullups_or_rows.reason}
-                    onChange={(e) => {
-                      const reason = e.target.value;
-                      setQuickWeights(prev => ({
-                        ...prev,
-                        pullups_or_rows: { ...prev.pullups_or_rows, reason }
-                      }));
-                    }}
-                    placeholder="Motivo (ej. Lesión de codo, ingreso posterior)..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
-                  />
-                )}
-              </div>
+            {/* Compact Tabs Switcher */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setQuickEditTab('aerobic')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  quickEditTab === 'aerobic'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>1. Tiempos & Cooper</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickEditTab('strength')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  quickEditTab === 'strength'
+                    ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Dumbbell className="w-3.5 h-3.5" />
+                <span>2. Fuerza 1RM (5 Ejercicios)</span>
+              </button>
             </div>
+
+            {/* TAB 1: RESISTENCIA, COOPER & NOTAS */}
+            {quickEditTab === 'aerobic' && (
+              <div className="space-y-3 animate-fadeIn">
+                {/* 1. Resistencia Funcional (Tiempo) */}
+                <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⏱️</span>
+                      <strong className="text-xs text-white">Resistencia Funcional (Tiempo)</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickEnduranceStatus(st)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickEnduranceStatus === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickEnduranceStatus === 'completed' ? (
+                    <div className="space-y-2.5 pt-1 border-t border-neutral-800/60">
+                      {/* Minutos y Segundos Steppers */}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] text-neutral-400">Tiempo Logrado:</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 bg-neutral-900 px-2 py-1 rounded-lg border border-neutral-700">
+                            <input
+                              type="number"
+                              min="0"
+                              max="60"
+                              value={quickEnduranceMinutes}
+                              onChange={(e) => setQuickEnduranceMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="w-10 bg-transparent text-center font-mono font-bold text-white text-xs outline-none"
+                            />
+                            <span className="text-[10px] text-neutral-400">min</span>
+                          </div>
+                          <span className="text-white font-bold font-mono">:</span>
+                          <div className="flex items-center gap-1 bg-neutral-900 px-2 py-1 rounded-lg border border-neutral-700">
+                            <input
+                              type="number"
+                              min="0"
+                              max="59"
+                              value={quickEnduranceSeconds}
+                              onChange={(e) => setQuickEnduranceSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                              className="w-10 bg-transparent text-center font-mono font-bold text-white text-xs outline-none"
+                            />
+                            <span className="text-[10px] text-neutral-400">seg</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Coach Difficulty Selector */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-neutral-400 font-medium block">
+                          Nivel de Dificultad (Elige el Coach):
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['Principiante', 'Intermedio', 'Avanzado'] as const).map(lvl => (
+                            <button
+                              key={lvl}
+                              type="button"
+                              onClick={() => setQuickEnduranceDifficulty(lvl)}
+                              className={`py-1 text-[11px] font-bold rounded-lg border transition-all ${
+                                quickEnduranceDifficulty === lvl
+                                  ? lvl === 'Avanzado'
+                                    ? 'bg-red-500/20 border-red-500 text-red-300'
+                                    : lvl === 'Intermedio'
+                                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                    : 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                                  : 'bg-neutral-900 border-neutral-800 text-neutral-400'
+                              }`}
+                            >
+                              {lvl === 'Principiante' ? '🟢 Principiante' : lvl === 'Intermedio' ? '🟡 Intermedio' : '🔴 Avanzado'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickEnduranceReason}
+                      onChange={(e) => setQuickEnduranceReason(e.target.value)}
+                      placeholder="Motivo (ej. Molestia muscular, nuevo ingreso)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 2. Test de Cooper (12 Minutos) */}
+                <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🏃</span>
+                      <strong className="text-xs text-white">Test de Cooper (12 Minutos)</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickCooperStatus(st)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickCooperStatus === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickCooperStatus === 'completed' ? (
+                    <div className="space-y-2 pt-1 border-t border-neutral-800/60">
+                      {/* Toggle Cooper Normal vs Cooper 2 (Vueltas) */}
+                      <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
+                        <button
+                          type="button"
+                          onClick={() => setQuickCooperMode('normal')}
+                          className={`flex-1 py-1 text-[11px] font-bold rounded transition-colors ${
+                            quickCooperMode === 'normal'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Cooper Normal (Metros / Nivel)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickCooperMode('laps')}
+                          className={`flex-1 py-1 text-[11px] font-bold rounded transition-colors ${
+                            quickCooperMode === 'laps'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Cooper 2 (Por Vueltas)
+                        </button>
+                      </div>
+
+                      {quickCooperMode === 'laps' ? (
+                        <div className="space-y-2 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800">
+                          {/* Afuera vs Adentro */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-neutral-300">Pista / Circuito:</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setQuickCooperTrackType('afuera')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  quickCooperTrackType === 'afuera' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                                }`}
+                              >
+                                🌳 Afuera (400m)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setQuickCooperTrackType('adentro')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  quickCooperTrackType === 'adentro' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                                }`}
+                              >
+                                🏢 Adentro (250m)
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Contador de Vueltas con Stepper y Teclado */}
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] text-neutral-300">Vueltas completadas:</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setQuickCooperLaps(prev => Math.max(0, prev - 0.5))}
+                                className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
+                              >
+                                -0.5
+                              </button>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                value={quickCooperLaps}
+                                onChange={(e) => setQuickCooperLaps(Math.max(0, parseFloat(e.target.value) || 0))}
+                                className="w-16 bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-center font-mono font-bold text-white text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setQuickCooperLaps(prev => prev + 0.5)}
+                                className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
+                              >
+                                +0.5
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-right text-blue-400 font-mono">
+                            Distancia estimada: ~{Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))} metros
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-neutral-400">Nivel de Cooper (1 al 20):</span>
+                            <span className="text-blue-400 font-mono font-bold">Nivel {quickCooperLevel} (~{quickCooperDistance}m)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="1"
+                              max="20"
+                              value={quickCooperLevel}
+                              onChange={(e) => {
+                                const lvl = parseInt(e.target.value);
+                                setQuickCooperLevel(lvl);
+                                setQuickCooperDistance(1600 + lvl * 100);
+                              }}
+                              className="w-full accent-blue-500 cursor-pointer"
+                            />
+                            <input
+                              type="number"
+                              step="50"
+                              value={quickCooperDistance}
+                              onChange={(e) => setQuickCooperDistance(parseInt(e.target.value) || 0)}
+                              className="w-20 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono text-center"
+                            />
+                            <span className="text-[11px] text-neutral-400">m</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickCooperReason}
+                      onChange={(e) => setQuickCooperReason(e.target.value)}
+                      placeholder="Motivo (ej. Adulto mayor, lesión de rodilla)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 3. Notas del Coach */}
+                <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-1.5">
+                  <span className="text-[11px] font-bold text-neutral-300 block">
+                    Observaciones y Notas del Coach:
+                  </span>
+                  <textarea
+                    rows={2}
+                    value={quickCoachNotes}
+                    onChange={(e) => setQuickCoachNotes(e.target.value)}
+                    placeholder="Escribe recomendaciones, ajustes de técnica o notas para el atleta..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 text-xs text-white outline-none resize-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: FUERZA 1RM (5 EJERCICIOS) */}
+            {quickEditTab === 'strength' && (
+              <div className="space-y-3 animate-fadeIn">
+                {/* 1. Sentadillas */}
+                <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🏋️</span>
+                      <strong className="text-xs text-white">Sentadillas</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, status: st }
+                          }))}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickWeights.squats.status === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickWeights.squats.status === 'completed' ? (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, weightKg: Math.max(0, prev.squats.weightKg - 2.5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -2.5
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={quickWeights.squats.weightKg}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setQuickWeights(prev => ({
+                              ...prev,
+                              squats: { ...prev.squats, weightKg: val }
+                            }));
+                          }}
+                          className="w-20 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, weightKg: prev.squats.weightKg + 2.5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +2.5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            squats: { ...prev.squats, weightKg: prev.squats.weightKg + 5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +5
+                        </button>
+                        <span className="text-neutral-400 text-xs">kg</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-amber-400">
+                        1RM: {quickWeights.squats.weightKg} kg
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickWeights.squats.reason}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setQuickWeights(prev => ({
+                          ...prev,
+                          squats: { ...prev.squats, reason }
+                        }));
+                      }}
+                      placeholder="Motivo (ej. Lesión de rodilla, ingreso posterior)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 2. Peso Muerto */}
+                <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚡</span>
+                      <strong className="text-xs text-white">Peso Muerto</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, status: st }
+                          }))}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickWeights.deadlift.status === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickWeights.deadlift.status === 'completed' ? (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, weightKg: Math.max(0, prev.deadlift.weightKg - 2.5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -2.5
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={quickWeights.deadlift.weightKg}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setQuickWeights(prev => ({
+                              ...prev,
+                              deadlift: { ...prev.deadlift, weightKg: val }
+                            }));
+                          }}
+                          className="w-20 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 2.5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +2.5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            deadlift: { ...prev.deadlift, weightKg: prev.deadlift.weightKg + 5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +5
+                        </button>
+                        <span className="text-neutral-400 text-xs">kg</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-amber-400">
+                        1RM: {quickWeights.deadlift.weightKg} kg
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickWeights.deadlift.reason}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setQuickWeights(prev => ({
+                          ...prev,
+                          deadlift: { ...prev.deadlift, reason }
+                        }));
+                      }}
+                      placeholder="Motivo (ej. Dolor lumbar, ingreso posterior)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 3. Hip Thrust */}
+                <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🍑</span>
+                      <strong className="text-xs text-white">Hip Thrust</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, status: st }
+                          }))}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickWeights.hip_thrust.status === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickWeights.hip_thrust.status === 'completed' ? (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, weightKg: Math.max(0, prev.hip_thrust.weightKg - 2.5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -2.5
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={quickWeights.hip_thrust.weightKg}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setQuickWeights(prev => ({
+                              ...prev,
+                              hip_thrust: { ...prev.hip_thrust, weightKg: val }
+                            }));
+                          }}
+                          className="w-20 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 2.5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +2.5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            hip_thrust: { ...prev.hip_thrust, weightKg: prev.hip_thrust.weightKg + 5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +5
+                        </button>
+                        <span className="text-neutral-400 text-xs">kg</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-amber-400">
+                        1RM: {quickWeights.hip_thrust.weightKg} kg
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickWeights.hip_thrust.reason}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setQuickWeights(prev => ({
+                          ...prev,
+                          hip_thrust: { ...prev.hip_thrust, reason }
+                        }));
+                      }}
+                      placeholder="Motivo (ej. Sin banco disponible, molestia)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 4. Press Horizontal */}
+                <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🥋</span>
+                      <strong className="text-xs text-white">Press Horizontal (Pecho / Banca)</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, status: st }
+                          }))}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickWeights.horizontal_press.status === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickWeights.horizontal_press.status === 'completed' ? (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, weightKg: Math.max(0, prev.horizontal_press.weightKg - 2.5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -2.5
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={quickWeights.horizontal_press.weightKg}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setQuickWeights(prev => ({
+                              ...prev,
+                              horizontal_press: { ...prev.horizontal_press, weightKg: val }
+                            }));
+                          }}
+                          className="w-20 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 2.5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +2.5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            horizontal_press: { ...prev.horizontal_press, weightKg: prev.horizontal_press.weightKg + 5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +5
+                        </button>
+                        <span className="text-neutral-400 text-xs">kg</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-amber-400">
+                        1RM: {quickWeights.horizontal_press.weightKg} kg
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickWeights.horizontal_press.reason}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setQuickWeights(prev => ({
+                          ...prev,
+                          horizontal_press: { ...prev.horizontal_press, reason }
+                        }));
+                      }}
+                      placeholder="Motivo (ej. Molestia en hombro, nuevo ingreso)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* 5. Remo con Barra / Dominadas */}
+                <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🚣</span>
+                      <strong className="text-xs text-white">
+                        {quickWeights.pullups_or_rows.type === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)'}
+                      </strong>
+                      <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, type: 'remo' }
+                          }))}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                            quickWeights.pullups_or_rows.type === 'remo'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Remo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, type: 'dominadas' }
+                          }))}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                            quickWeights.pullups_or_rows.type === 'dominadas'
+                              ? 'bg-amber-500 text-neutral-950'
+                              : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          Dominadas
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 self-end sm:self-auto">
+                      {(['completed', 'na', 'np'] as const).map(st => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, status: st }
+                          }))}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                            quickWeights.pullups_or_rows.status === st
+                              ? st === 'completed'
+                                ? 'bg-emerald-600 text-white'
+                                : st === 'na'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-red-700 text-white'
+                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {st === 'completed' ? 'Realizada' : st === 'na' ? 'NA' : 'NP'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quickWeights.pullups_or_rows.status === 'completed' ? (
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: Math.max(0, prev.pullups_or_rows.weightKg - 2.5) }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          -2.5
+                        </button>
+                        <input
+                          type="number"
+                          step="any"
+                          value={quickWeights.pullups_or_rows.weightKg}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setQuickWeights(prev => ({
+                              ...prev,
+                              pullups_or_rows: { ...prev.pullups_or_rows, weightKg: val }
+                            }));
+                          }}
+                          className="w-20 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-white font-mono text-center font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 2.5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +2.5
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickWeights(prev => ({
+                            ...prev,
+                            pullups_or_rows: { ...prev.pullups_or_rows, weightKg: prev.pullups_or_rows.weightKg + 5 }
+                          }))}
+                          className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 active:scale-95 transition-all"
+                        >
+                          +5
+                        </button>
+                        <span className="text-neutral-400 text-xs">kg</span>
+                      </div>
+
+                      <div className="text-xs font-mono font-bold text-amber-400">
+                        1RM: {quickWeights.pullups_or_rows.weightKg} kg
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={quickWeights.pullups_or_rows.reason}
+                      onChange={(e) => {
+                        const reason = e.target.value;
+                        setQuickWeights(prev => ({
+                          ...prev,
+                          pullups_or_rows: { ...prev.pullups_or_rows, reason }
+                        }));
+                      }}
+                      placeholder="Motivo (ej. Lesión de codo, ingreso posterior)..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Mensaje de Éxito */}
             {quickEditSuccess && (
               <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-800 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>¡Pesos corregidos y guardados exitosamente para {athleteToEditWeights.name}!</span>
+                <span>¡Evaluación corregida y guardada exitosamente para {athleteToEditWeights.name}!</span>
               </div>
             )}
 
             {/* Botones de Acción */}
-            <div className="pt-2 border-t border-neutral-800 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setAthleteToEditWeights(null)}
-                className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveQuickEditWeights}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/25 active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                <span>Guardar Corrección de Pesos</span>
-              </button>
+            <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-2.5">
+              <span className="text-[10px] text-neutral-400">
+                Pestaña: <strong className="text-neutral-200">{quickEditTab === 'aerobic' ? '1. Tiempos & Cooper' : '2. Fuerza 1RM'}</strong>
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAthleteToEditWeights(null)}
+                  className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveQuickEditWeights}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/25 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Guardar Toda la Evaluación</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
