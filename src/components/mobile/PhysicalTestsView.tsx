@@ -359,7 +359,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setCooperVariant(latest.cooperTest.variant || 'standard');
       setCooperLapLocation(latest.cooperTest.lapLocation || 'outside');
       setCooperLapsCount(latest.cooperTest.lapsCount || 6);
-      setCooperMetersPerLap(latest.cooperTest.metersPerLap || (latest.cooperTest.lapLocation === 'inside' ? 180 : 400));
+      setCooperMetersPerLap(latest.cooperTest.metersPerLap || (latest.cooperTest.lapLocation === 'inside' ? 250 : 400));
 
       // Endurance Test state
       const endStatus = latest.enduranceTest?.status || 
@@ -1232,117 +1232,281 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             );
           })()}
 
-          {/* TARJETA COMPARATIVA 1: TEST DE COOPER */}
-          <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Heart className="w-4 h-4 text-red-500" />
-                <span>1. Test de Cooper (12 Minutos)</span>
-              </span>
-              {latestEval.cooperTest.status === 'na' ? (
-                <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
-                  🚫 No Aplica (NA)
-                </span>
-              ) : latestEval.cooperTest.status === 'np' ? (
-                <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                  ⚠️ No Presentada (NP)
-                </span>
-              ) : prevEval ? (
-                <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>+1 Nivel Superado</span>
-                </span>
-              ) : (
-                <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/30">
-                  Nivel Inicial
-                </span>
-              )}
-            </div>
+          {/* TARJETA COMPARATIVA 1: TEST DE COOPER (NORMAL vs COOPER 2) */}
+          {(() => {
+            const isLatestCooper2 = latestEval.cooperTest.variant === 'laps' ||
+              (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
+              latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+              latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+              latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
 
-            {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
-              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-[10px] font-bold uppercase text-neutral-400">
-                    {latestEval.cooperTest.status === 'na' ? 'Prueba No Aplicable' : 'Prueba No Presentada'}
+            const isPrevCooper2 = prevEval ? (
+              prevEval.cooperTest.variant === 'laps' ||
+              (typeof prevEval.cooperTest.lapsCount === 'number' && prevEval.cooperTest.lapsCount > 0) ||
+              prevEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+              prevEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+              prevEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+            ) : false;
+
+            const isSameCircuit = isLatestCooper2 && isPrevCooper2 && 
+              (latestEval.cooperTest.lapLocation || 'outside') === (prevEval?.cooperTest.lapLocation || 'outside');
+
+            // True calculations without dummy fallbacks
+            const latestMetersPerLap = latestEval.cooperTest.metersPerLap || (latestEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+            const latestDist = latestEval.cooperTest.distanceMeters || 
+              (isLatestCooper2 ? Math.round((latestEval.cooperTest.lapsCount || 0) * latestMetersPerLap) : 0);
+
+            const prevMetersPerLap = prevEval ? (prevEval.cooperTest.metersPerLap || (prevEval.cooperTest.lapLocation === 'inside' ? 250 : 400)) : 400;
+            const prevDist = prevEval ? (prevEval.cooperTest.distanceMeters || 
+              (isPrevCooper2 ? Math.round((prevEval.cooperTest.lapsCount || 0) * prevMetersPerLap) : 0)) : null;
+
+            const distDelta = prevDist !== null ? latestDist - prevDist : null;
+            const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestEval.cooperTest.lapsCount === 'number' && typeof prevEval?.cooperTest.lapsCount === 'number')
+              ? Math.round((latestEval.cooperTest.lapsCount - prevEval.cooperTest.lapsCount) * 10) / 10
+              : null;
+            const levelDelta = (!isLatestCooper2 && !isPrevCooper2 && prevEval)
+              ? (latestEval.cooperTest.levelNumber || 0) - (prevEval.cooperTest.levelNumber || 0)
+              : null;
+
+            return (
+              <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Heart className="w-4 h-4 text-red-500" />
+                    <span>{isLatestCooper2 ? '1. Test de Cooper 2 (Por Vueltas)' : '1. Test de Cooper (12 Minutos)'}</span>
                   </span>
-                  <p className="text-xs text-neutral-300 mt-0.5">
-                    {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na' ? 'Adaptación por perfil de edad o condición médica.' : 'Sin registro en esta sesión.')}
-                  </p>
+
+                  {latestEval.cooperTest.status === 'na' ? (
+                    <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
+                      🚫 No Aplica (NA)
+                    </span>
+                  ) : latestEval.cooperTest.status === 'np' ? (
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      ⚠️ No Presentada (NP)
+                    </span>
+                  ) : isLatestCooper2 ? (
+                    isPrevCooper2 ? (
+                      isSameCircuit ? (
+                        lapsDelta !== null && lapsDelta > 0 ? (
+                          <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            <span>+{lapsDelta} vueltas superadas</span>
+                          </span>
+                        ) : lapsDelta !== null && lapsDelta === 0 ? (
+                          <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                            Mismas vueltas sostenidas
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                            {lapsDelta} vueltas vs anterior
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
+                          Pista distinta · Solo visualización
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                        🔄 Modalidad Cooper 2
+                      </span>
+                    )
+                  ) : (
+                    // Cooper Normal (Escala 1 al 20)
+                    !isPrevCooper2 && prevEval && levelDelta !== null ? (
+                      levelDelta > 0 ? (
+                        <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          <span>+{levelDelta} Nivel{levelDelta > 1 ? 'es' : ''} Superado{levelDelta > 1 ? 's' : ''}</span>
+                        </span>
+                      ) : levelDelta === 0 ? (
+                        <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                          Nivel sostenido
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                          {levelDelta} Niveles
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/30">
+                        {prevEval ? 'Escala 1 al 20' : 'Nivel Inicial'}
+                      </span>
+                    )
+                  )}
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                  latestEval.cooperTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                }`}>
-                  {latestEval.cooperTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
-                </span>
+
+                {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
+                  <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-neutral-400">
+                        {latestEval.cooperTest.status === 'na' ? 'Prueba No Aplicable' : 'Prueba No Presentada'}
+                      </span>
+                      <p className="text-xs text-neutral-300 mt-0.5">
+                        {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na' ? 'Adaptación por perfil de edad o condición médica.' : 'Sin registro en esta sesión.')}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                      latestEval.cooperTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {latestEval.cooperTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {/* CAJA ANTERIOR */}
+                      <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
+                        <span className="text-[10px] text-neutral-400 block font-medium">
+                          En el anterior sacaste ({prevEval ? prevEval.evaluationDate : 'Base inicial'}):
+                        </span>
+                        {prevEval ? (
+                          isPrevCooper2 ? (
+                            <>
+                              <div className="text-2xl font-extrabold text-neutral-300 font-brand">
+                                {prevEval.cooperTest.lapsCount || '—'} VUELTAS
+                              </div>
+                              <div className="text-[10px] text-neutral-400 font-mono">
+                                ~{prevDist}m ({prevEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} {prevMetersPerLap}m/v)
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-2xl font-extrabold text-neutral-300 font-brand">
+                                NIVEL {prevEval.cooperTest.levelNumber || '—'}
+                              </div>
+                              <div className="text-[10px] text-neutral-400 font-mono">
+                                {prevEval.cooperTest.distanceMeters ? `${prevEval.cooperTest.distanceMeters} m recorridos` : 'Escala 1 al 20'}
+                              </div>
+                            </>
+                          )
+                        ) : (
+                          <>
+                            <div className="text-lg font-bold text-neutral-500 font-brand">
+                              Sin Test Previo
+                            </div>
+                            <div className="text-[10px] text-neutral-500 font-mono">
+                              Línea base inicial
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* CAJA ACTUAL */}
+                      <div className={`p-3 rounded-xl border space-y-1 ${
+                        isLatestCooper2 ? 'bg-amber-950/30 border-amber-800/50' : 'bg-blue-950/40 border-blue-800/60'
+                      }`}>
+                        <span className={`text-[10px] block font-semibold ${isLatestCooper2 ? 'text-amber-400' : 'text-blue-400'}`}>
+                          Ahora sacaste ({latestEval.evaluationDate}):
+                        </span>
+
+                        {isLatestCooper2 ? (
+                          <>
+                            <div className="text-2xl font-extrabold text-amber-300 font-brand">
+                              {latestEval.cooperTest.lapsCount || '—'} VUELTAS
+                            </div>
+                            <div className="text-[10px] text-neutral-300 font-mono flex flex-col gap-0.5">
+                              <span className="font-semibold text-emerald-400">
+                                ~{latestDist}m totales
+                                {distDelta !== null && isPrevCooper2 && isSameCircuit && (
+                                  <span className="ml-1 text-[10px]">
+                                    {distDelta > 0 ? `(+${distDelta}m)` : distDelta < 0 ? `(${distDelta}m)` : '(igual)'}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[9px] text-neutral-400">
+                                {latestEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} ({latestMetersPerLap}m/v)
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-extrabold text-blue-300 font-brand">
+                              NIVEL {latestEval.cooperTest.levelNumber || 1}
+                            </div>
+                            <div className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
+                              <span>{latestDist > 0 ? `${latestDist}m` : 'Cooper 12 min'}</span>
+                              {distDelta !== null && !isPrevCooper2 && distDelta !== 0 && (
+                                <span className={distDelta > 0 ? 'text-emerald-300' : 'text-amber-300'}>
+                                  ({distDelta > 0 ? `+${distDelta}m` : `${distDelta}m`})
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Explicación de comparabilidad técnica */}
+                    {prevEval && isLatestCooper2 !== isPrevCooper2 && (
+                      <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 flex items-start gap-1.5 leading-snug">
+                        <span className="text-amber-400 font-bold shrink-0">ℹ️ Nota técnica:</span>
+                        <span>
+                          {isLatestCooper2 
+                            ? `El test anterior fue en Escala Cooper Tradicional (Niveles 1-20) y el actual en Cooper 2 por Vueltas. Se muestran ambas marcas para seguimiento sin comparativa directa.`
+                            : `El test anterior fue en Cooper 2 por Vueltas y el actual en Escala Cooper Tradicional (Nivel ${latestEval.cooperTest.levelNumber}).`
+                          }
+                        </span>
+                      </div>
+                    )}
+
+                    {prevEval && isLatestCooper2 && isPrevCooper2 && !isSameCircuit && (
+                      <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 flex items-start gap-1.5 leading-snug">
+                        <span className="text-amber-400 font-bold shrink-0">ℹ️ Nota técnica:</span>
+                        <span>
+                          Circuito de pista distinto ({prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'}). Por trazado y dimensiones, se visualizan ambas marcas pero no se comparan directamente.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Barra Visual: ÚNICAMENTE cuando es Cooper Normal (Escala 1 al 20) */}
+                    {!isLatestCooper2 ? (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
+                          <span>Nivel 1 (Base)</span>
+                          <span className="text-emerald-400 font-bold">
+                            {prevEval && !isPrevCooper2 && prevEval.cooperTest.levelNumber 
+                              ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` 
+                              : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
+                          </span>
+                          <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
+                        </div>
+                        <div className="grid grid-cols-20 gap-0.5 h-2 bg-neutral-950 p-0.5 rounded-full border border-neutral-800">
+                          {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
+                            const currentLvl = latestEval.cooperTest.levelNumber || 1;
+                            const isReached = lvl <= currentLvl;
+                            return (
+                              <div
+                                key={lvl}
+                                className={`h-full rounded-sm transition-all ${
+                                  isReached ? 'bg-blue-500' : 'bg-neutral-800'
+                                }`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      // Cooper 2: Resumen de volumen aeróbico
+                      <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-neutral-400">Volumen en 12 Min:</span>
+                        <span className="text-amber-400 font-bold">
+                          {latestEval.cooperTest.lapsCount || 0} vueltas (~{latestDist}m totales)
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <button
+                  onClick={() => setActiveTab('cooper')}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 pt-1"
+                >
+                  <span>Ver detalle y recomendaciones de Cooper &rarr;</span>
+                </button>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
-                    <span className="text-[10px] text-neutral-400 block font-medium">
-                      En el anterior sacaste ({prevEval ? prevEval.evaluationDate : 'Base inicial'}):
-                    </span>
-                    <div className="text-2xl font-extrabold text-neutral-300 font-brand">
-                      NIVEL {prevEval?.cooperTest.levelNumber || 4}
-                    </div>
-                    <div className="text-[10px] text-neutral-400 font-mono">
-                      {prevEval?.cooperTest.distanceMeters || 2550} metros recorridos
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 space-y-1">
-                    <span className="text-[10px] text-blue-400 block font-semibold">
-                      Ahora sacaste ({latestEval.evaluationDate}):
-                    </span>
-                    <div className="text-2xl font-extrabold text-blue-300 font-brand">
-                      NIVEL {latestEval.cooperTest.levelNumber || 5}
-                    </div>
-                    <div className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                      <span>{latestEval.cooperTest.distanceMeters || 2800}m</span>
-                      {prevEval && <span className="text-emerald-300">(+250m de distancia)</span>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Visual Level Progress Bar */}
-                <div className="space-y-1 pt-1">
-                  <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
-                    <span>Nivel 1 (Base)</span>
-                    <span className="text-emerald-400 font-bold">
-                      {prevEval?.cooperTest.levelNumber ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
-                    </span>
-                    <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5 h-2">
-                    {[1, 2, 3, 4, 5].map((lvl) => {
-                      const currentLvl = latestEval.cooperTest.levelNumber || 1;
-                      const isReached = lvl <= currentLvl;
-                      const isNew = prevEval && prevEval.cooperTest.levelNumber && lvl === currentLvl && currentLvl > prevEval.cooperTest.levelNumber;
-                      return (
-                        <div
-                          key={lvl}
-                          className={`h-full rounded-full transition-all ${
-                            isNew
-                              ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50 animate-pulse'
-                              : isReached
-                              ? 'bg-blue-500'
-                              : 'bg-neutral-800'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            <button
-              onClick={() => setActiveTab('cooper')}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 pt-1"
-            >
-              <span>Ver detalle y recomendaciones de Cooper &rarr;</span>
-            </button>
-          </div>
+            );
+          })()}
 
           {/* TARJETA COMPARATIVA 2: TEST DE RESISTENCIA (POR TIEMPO) */}
           <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
@@ -1691,33 +1855,130 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               })()}
 
               {/* Comparativa Visual Directa con Test Anterior */}
-              {prevEval && (
-                <div className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2 text-xs">
-                  <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
-                    Comparativa Contra Test Anterior
-                  </span>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
-                      <span className="text-[10px] text-neutral-400 block">En el anterior sacaste:</span>
-                      <div className="text-base font-bold text-neutral-300 font-brand">
-                        NIVEL {prevEval.cooperTest.levelNumber}
-                      </div>
-                      <span className="text-[10px] text-neutral-500 font-mono">{prevEval.evaluationDate}</span>
+              {prevEval && (() => {
+                const isLatestCooper2 = latestEval.cooperTest.variant === 'laps' ||
+                  (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
+                  latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                  latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                  latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+
+                const isPrevCooper2 = prevEval.cooperTest.variant === 'laps' ||
+                  (typeof prevEval.cooperTest.lapsCount === 'number' && prevEval.cooperTest.lapsCount > 0) ||
+                  prevEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                  prevEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                  prevEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+
+                const isSameCircuit = isLatestCooper2 && isPrevCooper2 && 
+                  (latestEval.cooperTest.lapLocation || 'outside') === (prevEval.cooperTest.lapLocation || 'outside');
+
+                const latestM = latestEval.cooperTest.metersPerLap || (latestEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+                const prevM = prevEval.cooperTest.metersPerLap || (prevEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+
+                const latestDist = latestEval.cooperTest.distanceMeters || (isLatestCooper2 ? Math.round((latestEval.cooperTest.lapsCount || 0) * latestM) : 0);
+                const prevDist = prevEval.cooperTest.distanceMeters || (isPrevCooper2 ? Math.round((prevEval.cooperTest.lapsCount || 0) * prevM) : 0);
+
+                const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestEval.cooperTest.lapsCount === 'number' && typeof prevEval.cooperTest.lapsCount === 'number')
+                  ? Math.round((latestEval.cooperTest.lapsCount - prevEval.cooperTest.lapsCount) * 10) / 10
+                  : null;
+
+                const levelDelta = (!isLatestCooper2 && !isPrevCooper2)
+                  ? (latestEval.cooperTest.levelNumber || 0) - (prevEval.cooperTest.levelNumber || 0)
+                  : null;
+
+                return (
+                  <div className="p-3.5 rounded-2xl bg-neutral-950/80 border border-neutral-800 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                        Comparativa Contra Test Anterior
+                      </span>
+                      {isLatestCooper2 && isPrevCooper2 && !isSameCircuit && (
+                        <span className="text-[9px] text-amber-400/90 font-mono">
+                          (Pistas distintas: {prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'})
+                        </span>
+                      )}
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/60">
-                      <span className="text-[10px] text-blue-400 block font-semibold">Ahora sacaste:</span>
-                      <div className="text-base font-bold text-blue-300 font-brand">
-                        NIVEL {latestEval.cooperTest.levelNumber}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
+                        <span className="text-[10px] text-neutral-400 block">En el anterior hiciste:</span>
+                        {isPrevCooper2 ? (
+                          <>
+                            <div className="text-base font-bold text-neutral-300 font-brand">
+                              {prevEval.cooperTest.lapsCount || '—'} VUELTAS
+                            </div>
+                            <span className="text-[10px] text-neutral-400 font-mono block">
+                              ~{prevDist}m ({prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {prevM}m/v)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-base font-bold text-neutral-300 font-brand">
+                              NIVEL {prevEval.cooperTest.levelNumber || '—'}
+                            </div>
+                            <span className="text-[10px] text-neutral-400 font-mono block">
+                              {prevEval.cooperTest.distanceMeters ? `${prevEval.cooperTest.distanceMeters}m` : 'Escala 1 al 20'}
+                            </span>
+                          </>
+                        )}
+                        <span className="text-[9px] text-neutral-500 font-mono block mt-0.5">{prevEval.evaluationDate}</span>
                       </div>
-                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>¡Superaste tu nivel!</span>
-                      </span>
+
+                      <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/60">
+                        <span className="text-[10px] text-blue-400 block font-semibold">Ahora hiciste:</span>
+                        {isLatestCooper2 ? (
+                          <>
+                            <div className="text-base font-bold text-amber-300 font-brand">
+                              {latestEval.cooperTest.lapsCount || '—'} VUELTAS
+                            </div>
+                            <span className="text-[10px] text-neutral-300 font-mono block">
+                              ~{latestDist}m ({latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {latestM}m/v)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-base font-bold text-blue-300 font-brand">
+                              NIVEL {latestEval.cooperTest.levelNumber || '—'}
+                            </div>
+                            <span className="text-[10px] text-neutral-300 font-mono block">
+                              {latestDist > 0 ? `${latestDist}m` : 'Escala 1 al 20'}
+                            </span>
+                          </>
+                        )}
+
+                        <div className="mt-1">
+                          {isLatestCooper2 && isPrevCooper2 && isSameCircuit && lapsDelta !== null ? (
+                            lapsDelta > 0 ? (
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" />
+                                <span>+{lapsDelta} vueltas superadas</span>
+                              </span>
+                            ) : lapsDelta === 0 ? (
+                              <span className="text-[10px] text-blue-400">Mismas vueltas sostenidas</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-400">{lapsDelta} vueltas</span>
+                            )
+                          ) : !isLatestCooper2 && !isPrevCooper2 && levelDelta !== null ? (
+                            levelDelta > 0 ? (
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" />
+                                <span>+{levelDelta} Niveles superados</span>
+                              </span>
+                            ) : levelDelta === 0 ? (
+                              <span className="text-[10px] text-blue-400">Nivel sostenido</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-400">{levelDelta} Niveles</span>
+                            )
+                          ) : (
+                            <span className="text-[9px] text-neutral-400">
+                              {isLatestCooper2 !== isPrevCooper2 ? 'Modalidad distinta · Registro histórico' : 'Circuito distinto'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Description & Coaching Recommendation */}
               <div className="space-y-2 pt-2 border-t border-neutral-800/80 text-xs">
@@ -1732,7 +1993,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                 {latestEval.cooperTest.targetZoneRecommendation && (
                   <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
-                    <strong className="text-white block mb-0.5">Pauta del Coach Jorge:</strong>
+                    <strong className="text-white block mb-0.5">
+                      Pauta Técnica del Entrenador ({latestEval.coachName || 'Staff Kinetix'}):
+                    </strong>
                     {latestEval.cooperTest.targetZoneRecommendation}
                   </div>
                 )}
@@ -2547,8 +2810,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('inside');
-                                setCooperMetersPerLap(180);
-                                const dist = cooperLapsCount * 180;
+                                setCooperMetersPerLap(250);
+                                const dist = cooperLapsCount * 250;
                                 setOptionalDistance(dist);
                                 setSelectedCooperLevel(getLevelFromDistance(dist));
                               }}
@@ -2559,7 +2822,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               }`}
                             >
                               <span>🏢 Adentro</span>
-                              <span className="text-[10px] font-normal opacity-80">(Circuito interior Box)</span>
+                              <span className="text-[10px] font-normal opacity-80">(Circuito interior Box / 250m)</span>
                             </button>
                           </div>
                         </div>
@@ -2641,7 +2904,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               <span className="text-xs text-neutral-400 font-mono">m</span>
                             </div>
                             <div className="flex items-center justify-center gap-1 flex-wrap">
-                              {[150, 180, 200, 350, 400].map((quickM) => (
+                              {[180, 200, 250, 300, 400].map((quickM) => (
                                 <button
                                   key={quickM}
                                   type="button"
@@ -3538,7 +3801,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     {cooperVariant === 'laps' ? (
                       <div className="p-3 rounded-2xl bg-neutral-900/70 border border-amber-500/40 space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-neutral-300 font-semibold">Circuito:</span>
+                          <span className="text-[11px] text-neutral-300 font-semibold">Pista / Circuito:</span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
@@ -3547,25 +3810,68 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                                 setCooperMetersPerLap(400);
                                 setOptionalDistance(Math.round(cooperLapsCount * 400));
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                                cooperLapLocation === 'outside' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                cooperLapLocation === 'outside' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
                               }`}
                             >
-                              🌳 Afuera (400m)
+                              🌳 Afuera
                             </button>
                             <button
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('inside');
-                                setCooperMetersPerLap(180);
-                                setOptionalDistance(Math.round(cooperLapsCount * 180));
+                                setCooperMetersPerLap(250);
+                                setOptionalDistance(Math.round(cooperLapsCount * 250));
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                                cooperLapLocation === 'inside' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                cooperLapLocation === 'inside' ? 'bg-blue-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
                               }`}
                             >
-                              🏢 Adentro (180m)
+                              🏢 Adentro
                             </button>
+                          </div>
+                        </div>
+
+                        {/* Metros por cada vuelta (100% Editable por el Coach) */}
+                        <div className="pt-1.5 border-t border-neutral-800/60 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-neutral-300">Metros por cada vuelta (Editable):</span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="10"
+                                step="5"
+                                value={cooperMetersPerLap}
+                                onChange={(e) => {
+                                  const nextM = Math.max(10, parseInt(e.target.value) || 0);
+                                  setCooperMetersPerLap(nextM);
+                                  setOptionalDistance(Math.round(cooperLapsCount * nextM));
+                                }}
+                                className="w-16 bg-neutral-950 border border-amber-500/60 focus:border-amber-400 rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none"
+                              />
+                              <span className="text-[10px] text-neutral-400 font-mono">m/v</span>
+                            </div>
+                          </div>
+                          {/* Preajustes rápidos */}
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <span className="text-[9px] text-neutral-500 mr-0.5">Preajustes:</span>
+                            {[180, 200, 250, 300, 400].map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                  setCooperMetersPerLap(m);
+                                  setOptionalDistance(Math.round(cooperLapsCount * m));
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all border ${
+                                  cooperMetersPerLap === m
+                                    ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                                }`}
+                              >
+                                {m}m
+                              </button>
+                            ))}
                           </div>
                         </div>
 

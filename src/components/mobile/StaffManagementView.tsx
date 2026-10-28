@@ -283,6 +283,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [quickCooperMode, setQuickCooperMode] = useState<'normal' | 'laps'>('normal');
   const [quickCooperLaps, setQuickCooperLaps] = useState<number>(5.5);
   const [quickCooperTrackType, setQuickCooperTrackType] = useState<'afuera' | 'adentro'>('afuera');
+  const [quickCooperMetersPerLap, setQuickCooperMetersPerLap] = useState<number>(400);
   const [quickCooperLevel, setQuickCooperLevel] = useState<number>(3);
   const [quickCooperDistance, setQuickCooperDistance] = useState<number>(2000);
 
@@ -798,7 +799,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         setQuickCooperLaps(lapsVal);
         const trk = coopRec?.lapLocation === 'inside' || coopRec?.notes?.includes('adentro') || coopRec?.notes?.includes('Caminadora') ? 'adentro' : 'afuera';
         setQuickCooperTrackType(trk);
-        setQuickCooperDistance(coopRec?.distanceMeters || Math.round(lapsVal * (trk === 'afuera' ? 400 : 250)));
+        const metersPerLapVal = coopRec?.metersPerLap || (trk === 'afuera' ? 400 : 250);
+        setQuickCooperMetersPerLap(metersPerLapVal);
+        setQuickCooperDistance(coopRec?.distanceMeters || Math.round(lapsVal * metersPerLapVal));
       } else {
         setQuickCooperDistance(coopRec?.distanceMeters || 2000);
       }
@@ -863,6 +866,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCooperDistance(2000);
       setQuickCooperLaps(5.5);
       setQuickCooperTrackType('afuera');
+      setQuickCooperMetersPerLap(400);
       setQuickCoachNotes('');
       setQuickWeights(defaultWeights);
     }
@@ -951,17 +955,17 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       variant: isCooper2 ? 'laps' : 'standard',
       lapLocation: isCooper2 ? (quickCooperTrackType === 'afuera' ? 'outside' : 'inside') : undefined,
       lapsCount: isCooper2 ? quickCooperLaps : undefined,
-      metersPerLap: isCooper2 ? (quickCooperTrackType === 'afuera' ? 400 : 250) : undefined,
+      metersPerLap: isCooper2 ? quickCooperMetersPerLap : undefined,
       distanceMeters: quickCooperStatus === 'completed' ? quickCooperDistance : 0,
       estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((quickCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
       targetZoneRecommendation: isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : 'Zona 2 y Acondicionamiento funcional',
       description: isCooper2 
-        ? `Test Cooper 2 (Por Vueltas): ${quickCooperLaps} vueltas completadas (~${quickCooperDistance}m).` 
+        ? `Test Cooper 2 (Por Vueltas): ${quickCooperLaps} vueltas completadas (${quickCooperMetersPerLap}m c/u = ~${quickCooperDistance}m).` 
         : 'Evaluación de capacidad aeróbica oficial Kinetix.',
       status: quickCooperStatus,
       statusReason: quickCooperReason || undefined,
       notes: quickCooperStatus === 'completed' && isCooper2 
-        ? `Cooper 2: ${quickCooperLaps} vueltas (~${quickCooperDistance}m, ${quickCooperTrackType === 'afuera' ? 'Afuera / Pista 400m' : 'Adentro / 250m'})` 
+        ? `Cooper 2: ${quickCooperLaps} vueltas (~${quickCooperDistance}m, ${quickCooperTrackType === 'afuera' ? 'Afuera' : 'Adentro'} ${quickCooperMetersPerLap}m/v)` 
         : undefined,
     };
 
@@ -4393,34 +4397,85 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       </div>
 
                       {quickCooperMode === 'laps' ? (
-                        <div className="space-y-2 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800">
-                          {/* Afuera vs Adentro */}
+                        <div className="space-y-2 p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800">
+                          {/* Pista / Circuito */}
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] text-neutral-300">Pista / Circuito:</span>
+                            <span className="text-[11px] text-neutral-300 font-semibold">Pista / Circuito:</span>
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                onClick={() => setQuickCooperTrackType('afuera')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  quickCooperTrackType === 'afuera' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                                onClick={() => {
+                                  setQuickCooperTrackType('afuera');
+                                  setQuickCooperMetersPerLap(400);
+                                  setQuickCooperDistance(Math.round(quickCooperLaps * 400));
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                  quickCooperTrackType === 'afuera' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
                                 }`}
                               >
-                                🌳 Afuera (400m)
+                                🌳 Afuera
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setQuickCooperTrackType('adentro')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  quickCooperTrackType === 'adentro' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'
+                                onClick={() => {
+                                  setQuickCooperTrackType('adentro');
+                                  setQuickCooperMetersPerLap(250);
+                                  setQuickCooperDistance(Math.round(quickCooperLaps * 250));
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                  quickCooperTrackType === 'adentro' ? 'bg-blue-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
                                 }`}
                               >
-                                🏢 Adentro (250m)
+                                🏢 Adentro
                               </button>
                             </div>
                           </div>
 
+                          {/* Metros por cada vuelta (100% Editable por el Coach) */}
+                          <div className="pt-1.5 border-t border-neutral-800/60 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-neutral-300">Metros por cada vuelta (Editable):</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="10"
+                                  step="5"
+                                  value={quickCooperMetersPerLap}
+                                  onChange={(e) => {
+                                    const nextM = Math.max(10, parseInt(e.target.value) || 0);
+                                    setQuickCooperMetersPerLap(nextM);
+                                    setQuickCooperDistance(Math.round(quickCooperLaps * nextM));
+                                  }}
+                                  className="w-16 bg-neutral-950 border border-amber-500/60 focus:border-amber-400 rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none"
+                                />
+                                <span className="text-[10px] text-neutral-400 font-mono">m/v</span>
+                              </div>
+                            </div>
+                            {/* Preajustes rápidos */}
+                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                              <span className="text-[9px] text-neutral-500 mr-0.5">Preajustes:</span>
+                              {[180, 200, 250, 300, 400].map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickCooperMetersPerLap(m);
+                                    setQuickCooperDistance(Math.round(quickCooperLaps * m));
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all border ${
+                                    quickCooperMetersPerLap === m
+                                      ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                                  }`}
+                                >
+                                  {m}m
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
                           {/* Contador de Vueltas con Stepper y Teclado */}
-                          <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center justify-between pt-1 border-t border-neutral-800/60">
                             <span className="text-[11px] text-neutral-300">Vueltas completadas:</span>
                             <div className="flex items-center gap-1.5">
                               <button
@@ -4428,7 +4483,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 onClick={() => {
                                   const nextLaps = Math.max(0, quickCooperLaps - 0.5);
                                   setQuickCooperLaps(nextLaps);
-                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                  setQuickCooperDistance(Math.round(nextLaps * quickCooperMetersPerLap));
                                 }}
                                 className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
                               >
@@ -4442,7 +4497,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 onChange={(e) => {
                                   const nextLaps = Math.max(0, parseFloat(e.target.value) || 0);
                                   setQuickCooperLaps(nextLaps);
-                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                  setQuickCooperDistance(Math.round(nextLaps * quickCooperMetersPerLap));
                                 }}
                                 className="w-16 bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-center font-mono font-bold text-white text-xs"
                               />
@@ -4451,7 +4506,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 onClick={() => {
                                   const nextLaps = quickCooperLaps + 0.5;
                                   setQuickCooperLaps(nextLaps);
-                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                  setQuickCooperDistance(Math.round(nextLaps * quickCooperMetersPerLap));
                                 }}
                                 className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
                               >
@@ -4466,11 +4521,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               <span className="text-[11px] text-neutral-300 font-semibold">Distancia aprox. en metros (Editable):</span>
                               <button
                                 type="button"
-                                onClick={() => setQuickCooperDistance(Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)))}
+                                onClick={() => setQuickCooperDistance(Math.round(quickCooperLaps * quickCooperMetersPerLap))}
                                 className="text-[10px] text-blue-400 hover:underline"
-                                title="Recalcular con base en vueltas"
+                                title="Recalcular con base en vueltas × metros por vuelta"
                               >
-                                ↺ Recalcular
+                                ↺ Recalcular ({quickCooperLaps}v × {quickCooperMetersPerLap}m)
                               </button>
                             </div>
                             <div className="flex items-center gap-2">
@@ -4486,7 +4541,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               <span className="text-xs text-neutral-400 font-mono">metros</span>
                             </div>
                             <span className="text-[10px] text-neutral-500 block">
-                              Calculado: ~{Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))}m ({quickCooperLaps} vueltas × {quickCooperTrackType === 'afuera' ? '400m' : '250m'}). Puedes escribir la distancia exacta aquí.
+                              Calculado: ~{Math.round(quickCooperLaps * quickCooperMetersPerLap)}m ({quickCooperLaps} vueltas × {quickCooperMetersPerLap}m). Puedes escribir la distancia exacta aquí.
                             </span>
                           </div>
                         </div>
