@@ -25,6 +25,42 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   const validBodyComp = latestBodyComp && latestBodyComp.userId === athlete.id ? latestBodyComp : null;
   const validEval = latestEval && latestEval.userId === athlete.id ? latestEval : null;
 
+  // Coach validator selection state (allows staff to choose who officially validates the electronic report)
+  const defaultCoachName = validEval?.coachName || 'Leslie (Dirección Kinetix)';
+  const defaultCoachRole = defaultCoachName.includes('Leslie') 
+    ? 'Dirección Kinetix'
+    : defaultCoachName.includes('Jorge')
+    ? 'Head Coach & Dirección Kinetix'
+    : defaultCoachName.includes('Gus')
+    ? 'Coach & Evaluación Deportiva'
+    : 'Entrenador Certificado Kinetix';
+
+  const [validatorCoachName, setValidatorCoachName] = React.useState<string>(defaultCoachName);
+  const [validatorCoachRole, setValidatorCoachRole] = React.useState<string>(defaultCoachRole);
+  const [isCustomValidator, setIsCustomValidator] = React.useState<boolean>(false);
+
+  // Check if Cooper test was performed in Cooper 2 (Laps) modality
+  const isCooper2 = !!(
+    validEval?.cooperTest && (
+      validEval.cooperTest.variant === 'laps' ||
+      (typeof validEval.cooperTest.lapsCount === 'number' && validEval.cooperTest.lapsCount > 0) ||
+      validEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+      validEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+      validEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+    )
+  );
+
+  // Clean coach observations: filter out legacy automated system strings
+  const rawNotes = validEval?.generalCoachNotes?.trim() || '';
+  const isAutomatedNote = (
+    rawNotes.includes('Pesos corregidos/actualizados por el Coach en Panel Staff') ||
+    rawNotes.includes('Evaluación actualizada por el Coach') ||
+    rawNotes.includes('Evaluación registrada por el Coach') ||
+    rawNotes.includes('NA General') ||
+    rawNotes.startsWith('Marca Express de')
+  );
+  const validCoachNotes = !isAutomatedNote && rawNotes ? rawNotes : '';
+
   const now = new Date();
   const formattedDate = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const currentYear = now.getFullYear();
@@ -102,27 +138,82 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
         className="w-full max-w-3xl bg-neutral-900 border border-neutral-800 rounded-3xl p-6 sm:p-8 space-y-6 text-neutral-100 max-h-[95vh] overflow-y-auto shadow-2xl print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:p-0 print:space-y-4"
       >
         {/* Top Control Bar (Hidden in Print) */}
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-4 no-print no-print-area">
-          <div className="flex items-center gap-2">
-            <Award className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-bold text-white font-brand">
-              Informe Oficial de Rendimiento y Composición Corporal
-            </h3>
+        <div className="space-y-3 border-b border-neutral-800 pb-4 no-print no-print-area">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-emerald-400" />
+              <h3 className="text-base font-bold text-white font-brand">
+                Informe Oficial de Rendimiento y Composición Corporal
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-semibold shadow-md transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimir / Guardar PDF</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-semibold shadow-md transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir / Guardar PDF</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+
+          {/* Coach Validator Selection Bar (Only on screen, hides on print) */}
+          <div className="p-2.5 rounded-2xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-3 text-xs flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-neutral-400 font-medium">Validación Técnica del Reporte:</span>
+              <select
+                value={isCustomValidator ? 'custom' : validatorCoachName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'custom') {
+                    setIsCustomValidator(true);
+                  } else {
+                    setIsCustomValidator(false);
+                    setValidatorCoachName(val);
+                    if (val.includes('Leslie')) {
+                      setValidatorCoachRole('Dirección Kinetix');
+                    } else if (val.includes('Jorge')) {
+                      setValidatorCoachRole('Head Coach & Dirección Kinetix');
+                    } else if (val.includes('Gus')) {
+                      setValidatorCoachRole('Coach & Evaluación Deportiva');
+                    } else {
+                      setValidatorCoachRole('Entrenador Certificado Kinetix');
+                    }
+                  }
+                }}
+                className="bg-neutral-900 border border-neutral-700 rounded-xl px-2.5 py-1 text-xs text-white font-semibold outline-none focus:border-blue-500"
+              >
+                <option value="Leslie (Dirección Kinetix)">Leslie (Dirección Kinetix)</option>
+                <option value="Coach Jorge (Head Coach & Dirección Kinetix)">Coach Jorge (Head Coach & Dirección Kinetix)</option>
+                <option value="Coach Gus">Coach Gus (Coach & Evaluación Deportiva)</option>
+                <option value="custom">Otro / Personalizado...</option>
+              </select>
+            </div>
+
+            {isCustomValidator && (
+              <div className="flex items-center gap-1.5 flex-1 max-w-md">
+                <input
+                  type="text"
+                  value={validatorCoachName}
+                  onChange={(e) => setValidatorCoachName(e.target.value)}
+                  placeholder="Nombre del Coach..."
+                  className="flex-1 bg-neutral-900 border border-neutral-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none"
+                />
+                <input
+                  type="text"
+                  value={validatorCoachRole}
+                  onChange={(e) => setValidatorCoachRole(e.target.value)}
+                  placeholder="Cargo institucional..."
+                  className="flex-1 bg-neutral-900 border border-neutral-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -175,7 +266,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] text-neutral-500 uppercase tracking-wider block">Entrenador Responsable</span>
-              <span className="text-emerald-400 font-medium">{validEval?.coachName || 'Leslie (Dueña & Coach)'}</span>
+              <span className="text-emerald-400 font-medium">{validatorCoachName}</span>
             </div>
           </div>
 
@@ -236,17 +327,49 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-4 bg-neutral-900/50 rounded-xl border border-neutral-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">Test de Cooper (12 Minutos)</span>
-                    <span className="text-[#ff5500] font-bold bg-orange-950/80 border border-orange-800/60 px-2 py-0.5 rounded text-[10px]">
-                      NIVEL {validEval.cooperTest.levelNumber || 1} DE 20
+                    <span className="font-semibold text-white">
+                      {isCooper2 ? 'Test Cooper 2 (Por Vueltas)' : 'Test de Cooper (12 Minutos)'}
                     </span>
+                    {isCooper2 ? (
+                      <span className="text-amber-400 font-bold bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded text-[10px]">
+                        COOPER 2 · POR VUELTAS
+                      </span>
+                    ) : (
+                      <span className="text-[#ff5500] font-bold bg-orange-950/80 border border-orange-800/60 px-2 py-0.5 rounded text-[10px]">
+                        NIVEL {validEval.cooperTest.levelNumber || 1} DE 20
+                      </span>
+                    )}
                   </div>
-                  <div className="text-sm font-mono text-neutral-300">
-                    Nivel Asignado: <strong className="text-white">{validEval.cooperTest.level}</strong>
-                  </div>
-                  <div className="text-[11px] text-neutral-400">
+
+                  {isCooper2 ? (
+                    <div className="space-y-1">
+                      <div className="text-sm font-mono text-neutral-200">
+                        Vueltas Completadas: <strong className="text-amber-400 font-bold text-base">{validEval.cooperTest.lapsCount || '—'} vueltas</strong>
+                      </div>
+                      <div className="text-xs font-mono text-emerald-400 font-semibold">
+                        Distancia aprox: ~{validEval.cooperTest.distanceMeters || Math.round((validEval.cooperTest.lapsCount || 0) * (validEval.cooperTest.metersPerLap || 400))} metros
+                      </div>
+                      <div className="text-[11px] text-neutral-400">
+                        Circuito: {validEval.cooperTest.lapLocation === 'outside' ? '🌳 Afuera / Pista exterior (400m)' : '🏢 Adentro / Box (250m)'}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="text-sm font-mono text-neutral-300">
+                        Nivel Asignado: <strong className="text-white">{validEval.cooperTest.level}</strong>
+                      </div>
+                      {validEval.cooperTest.distanceMeters ? (
+                        <div className="text-xs font-mono text-neutral-400">
+                          Distancia estimada: {validEval.cooperTest.distanceMeters} m
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/40">
                     Diagnóstico Staff: {validEval.cooperTest.description}
                   </div>
+
                   {validEval.enduranceTest && (
                     <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/60">
                       Resistencia específica: {validEval.enduranceTest.name} ({validEval.enduranceTest.result})
@@ -269,41 +392,37 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
             )}
           </div>
 
-          {/* Coach Conclusion */}
-          {validEval?.generalCoachNotes && validEval.generalCoachNotes.trim() ? (
+          {/* Coach Conclusion: Only show if coach wrote real notes, otherwise leave clean/blank */}
+          {validCoachNotes ? (
             <div className="print-card pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
               <div>
                 <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
                 <p className="text-neutral-300 text-xs italic mt-0.5 leading-relaxed bg-neutral-950 p-3 rounded-2xl border border-neutral-800">
-                  {validEval.generalCoachNotes}
+                  {validCoachNotes}
                 </p>
               </div>
             </div>
-          ) : (
-            <div className="print-card pt-4 border-t border-neutral-800/80 space-y-2 text-xs">
-              <div>
-                <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider block">Observaciones del Entrenador</span>
-                <div className="min-h-[36px] bg-neutral-950 p-3 rounded-2xl border border-neutral-800/60 text-neutral-600 text-xs italic">
-                  {/* Espacio reservado para dictamen oficial o firma en físico */}
-                </div>
+          ) : null}
+
+          {/* Institutional Electronic Certification & Stamp (100% electronic, no handwritten signature) */}
+          <div className="print-card pt-4 border-t border-neutral-800/80 grid grid-cols-1 sm:grid-cols-2 gap-6 text-[11px] text-neutral-400 font-mono">
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase text-neutral-500 font-sans font-bold">Validación Técnica Oficial</div>
+              <div className="font-bold text-white text-xs">{validatorCoachName}</div>
+              <div className="text-[10px] text-neutral-400">{validatorCoachRole}</div>
+              <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-[10px] font-sans font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Certificación Digital Kinetix · Documento Electrónico Oficial</span>
+              </div>
+              <div className="text-[9px] text-neutral-500 font-sans">
+                Validado y emitido en plataforma Kinetix Progress. No requiere firma física manuscrita.
               </div>
             </div>
-          )}
-
-          {/* Institutional Signature & Stamp (Printable) */}
-          <div className="print-card pt-4 border-t border-neutral-800/80 grid grid-cols-2 gap-6 text-[11px] text-neutral-400 font-mono">
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase text-neutral-500 font-sans">Validación Técnica Oficial</div>
-              <div className="font-bold text-white">{validEval?.coachName || 'Leslie (Dueña & Coach)'}</div>
-              <div className="text-[10px] text-neutral-400">Head Coach & Dirección Kinetix</div>
-              <div className="pt-3 border-b border-neutral-700 w-36"></div>
-              <div className="text-[9px] text-neutral-500">Firma de Conformidad</div>
-            </div>
-            <div className="text-right space-y-1">
-              <div className="text-[10px] uppercase text-neutral-500 font-sans">Sello de Certificación</div>
+            <div className="sm:text-right space-y-1">
+              <div className="text-[10px] uppercase text-neutral-500 font-sans font-bold">Sello de Autenticidad Digital</div>
               <div className="text-emerald-400 font-bold">KINETIX PROGRESS VERIFIED</div>
               <div className="text-[9px] text-neutral-400">ID Folio: {folioCode}</div>
-              <div className="text-[9px] text-neutral-400">Fecha: {formattedDate}</div>
+              <div className="text-[9px] text-neutral-400">Fecha de Emisión: {formattedDate}</div>
               <div className="text-[9px] text-neutral-400">CDMX · Gustavo A. Madero</div>
             </div>
           </div>

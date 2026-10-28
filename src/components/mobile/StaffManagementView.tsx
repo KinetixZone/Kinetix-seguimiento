@@ -518,7 +518,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             cooperTest: naCooper,
             enduranceTest: naEndurance,
             strengthRecords: allNAStrength,
-            generalCoachNotes: `NA General (${genReason}) registrado en Staff.`,
+            generalCoachNotes: expressNotes.trim(),
           });
         } else if (onAddEvaluation) {
           onAddEvaluation({
@@ -529,7 +529,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             cooperTest: naCooper,
             enduranceTest: naEndurance,
             strengthRecords: allNAStrength,
-            generalCoachNotes: `NA General (${genReason}) registrado en Staff.`,
+            generalCoachNotes: expressNotes.trim(),
           });
         }
         countSaved++;
@@ -604,7 +604,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           cooperTest: defaultCooper,
           enduranceTest: defaultEndurance,
           strengthRecords: baseStrength,
-          generalCoachNotes: expressNotes || `Marca Express de ${newRec.exerciseName} registrada en clase.`,
+          generalCoachNotes: expressNotes.trim(),
         });
       }
       countSaved++;
@@ -790,17 +790,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCooperStatus(coopRec?.status || 'completed');
       setQuickCooperReason(coopRec?.statusReason || '');
       setQuickCooperLevel(coopRec?.levelNumber || 3);
-      setQuickCooperDistance(coopRec?.distanceMeters || 2000);
-      const isLaps = coopRec?.notes?.includes('vueltas') || false;
+      const isLaps = coopRec?.variant === 'laps' || (typeof coopRec?.lapsCount === 'number' && coopRec.lapsCount > 0) || coopRec?.notes?.includes('vueltas') || coopRec?.level?.toLowerCase().includes('cooper 2') || false;
       setQuickCooperMode(isLaps ? 'laps' : 'normal');
       if (isLaps) {
         const matchLaps = coopRec?.notes?.match(/([\d.]+)\s*vueltas/);
-        setQuickCooperLaps(matchLaps ? parseFloat(matchLaps[1]) : 5.5);
-        setQuickCooperTrackType(coopRec?.notes?.includes('adentro') || coopRec?.notes?.includes('Caminadora') ? 'adentro' : 'afuera');
+        const lapsVal = coopRec?.lapsCount || (matchLaps ? parseFloat(matchLaps[1]) : 5.5);
+        setQuickCooperLaps(lapsVal);
+        const trk = coopRec?.lapLocation === 'inside' || coopRec?.notes?.includes('adentro') || coopRec?.notes?.includes('Caminadora') ? 'adentro' : 'afuera';
+        setQuickCooperTrackType(trk);
+        setQuickCooperDistance(coopRec?.distanceMeters || Math.round(lapsVal * (trk === 'afuera' ? 400 : 250)));
+      } else {
+        setQuickCooperDistance(coopRec?.distanceMeters || 2000);
       }
 
-      // Notas
-      setQuickCoachNotes(latest.generalCoachNotes || '');
+      // Notas: filtrar textos automáticos anteriores para dejar en blanco si no hay notas reales
+      const rawPastNotes = latest.generalCoachNotes || '';
+      const isAuto = rawPastNotes.includes('Pesos corregidos') || 
+                     rawPastNotes.includes('Evaluación actualizada') || 
+                     rawPastNotes.includes('Evaluación registrada') || 
+                     rawPastNotes.includes('NA General') || 
+                     rawPastNotes.startsWith('Marca Express');
+      setQuickCoachNotes(isAuto ? '' : rawPastNotes);
 
       // Fuerza
       const recs = latest.strengthRecords || [];
@@ -922,10 +932,6 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const totalEnduranceSec = quickEnduranceMinutes * 60 + quickEnduranceSeconds;
     const formattedEndurance = `${quickEnduranceMinutes.toString().padStart(2, '0')}:${quickEnduranceSeconds.toString().padStart(2, '0')} min`;
 
-    const calcCooperDistance = quickCooperMode === 'laps' 
-      ? Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))
-      : quickCooperDistance;
-
     const enduranceTestRecord: EnduranceTimeTestRecord = {
       name: 'Resistencia Funcional',
       result: quickEnduranceStatus === 'completed' ? formattedEndurance : (quickEnduranceStatus === 'na' ? 'NA' : 'NP'),
@@ -936,17 +942,26 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       statusReason: quickEnduranceReason || undefined,
     };
 
+    const isCooper2 = quickCooperMode === 'laps';
     const cooperTestRecord: CooperTestRecord = {
-      level: quickCooperStatus === 'completed' ? `Nivel ${quickCooperLevel}` : (quickCooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-      levelNumber: quickCooperStatus === 'completed' ? quickCooperLevel : 0,
-      distanceMeters: quickCooperStatus === 'completed' ? calcCooperDistance : 0,
-      estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((calcCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
-      targetZoneRecommendation: 'Zona 2 y Acondicionamiento funcional',
-      description: 'Evaluación de capacidad aeróbica oficial Kinetix.',
+      level: quickCooperStatus === 'completed' 
+        ? (isCooper2 ? `Cooper 2 (${quickCooperLaps} vueltas)` : `Nivel ${quickCooperLevel}`) 
+        : (quickCooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+      levelNumber: quickCooperStatus === 'completed' ? (isCooper2 ? 0 : quickCooperLevel) : 0,
+      variant: isCooper2 ? 'laps' : 'standard',
+      lapLocation: isCooper2 ? (quickCooperTrackType === 'afuera' ? 'outside' : 'inside') : undefined,
+      lapsCount: isCooper2 ? quickCooperLaps : undefined,
+      metersPerLap: isCooper2 ? (quickCooperTrackType === 'afuera' ? 400 : 250) : undefined,
+      distanceMeters: quickCooperStatus === 'completed' ? quickCooperDistance : 0,
+      estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((quickCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
+      targetZoneRecommendation: isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : 'Zona 2 y Acondicionamiento funcional',
+      description: isCooper2 
+        ? `Test Cooper 2 (Por Vueltas): ${quickCooperLaps} vueltas completadas (~${quickCooperDistance}m).` 
+        : 'Evaluación de capacidad aeróbica oficial Kinetix.',
       status: quickCooperStatus,
       statusReason: quickCooperReason || undefined,
-      notes: quickCooperStatus === 'completed' && quickCooperMode === 'laps' 
-        ? `Cooper 2: ${quickCooperLaps} vueltas (${quickCooperTrackType === 'afuera' ? 'Afuera / Pista 400m' : 'Adentro / Caminadora 250m'})` 
+      notes: quickCooperStatus === 'completed' && isCooper2 
+        ? `Cooper 2: ${quickCooperLaps} vueltas (~${quickCooperDistance}m, ${quickCooperTrackType === 'afuera' ? 'Afuera / Pista 400m' : 'Adentro / 250m'})` 
         : undefined,
     };
 
@@ -956,7 +971,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         enduranceTest: enduranceTestRecord,
         cooperTest: cooperTestRecord,
         strengthRecords,
-        generalCoachNotes: quickCoachNotes || 'Evaluación actualizada por el Coach.',
+        generalCoachNotes: quickCoachNotes.trim(),
       });
     } else if (onAddEvaluation) {
       onAddEvaluation({
@@ -967,7 +982,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         cooperTest: cooperTestRecord,
         enduranceTest: enduranceTestRecord,
         strengthRecords,
-        generalCoachNotes: quickCoachNotes || 'Evaluación registrada por el Coach.',
+        generalCoachNotes: quickCoachNotes.trim(),
       });
     }
 
@@ -4404,7 +4419,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => setQuickCooperLaps(prev => Math.max(0, prev - 0.5))}
+                                onClick={() => {
+                                  const nextLaps = Math.max(0, quickCooperLaps - 0.5);
+                                  setQuickCooperLaps(nextLaps);
+                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                }}
                                 className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
                               >
                                 -0.5
@@ -4414,20 +4433,55 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 step="0.5"
                                 min="0"
                                 value={quickCooperLaps}
-                                onChange={(e) => setQuickCooperLaps(Math.max(0, parseFloat(e.target.value) || 0))}
+                                onChange={(e) => {
+                                  const nextLaps = Math.max(0, parseFloat(e.target.value) || 0);
+                                  setQuickCooperLaps(nextLaps);
+                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                }}
                                 className="w-16 bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-center font-mono font-bold text-white text-xs"
                               />
                               <button
                                 type="button"
-                                onClick={() => setQuickCooperLaps(prev => prev + 0.5)}
+                                onClick={() => {
+                                  const nextLaps = quickCooperLaps + 0.5;
+                                  setQuickCooperLaps(nextLaps);
+                                  setQuickCooperDistance(Math.round(nextLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)));
+                                }}
                                 className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono font-bold"
                               >
                                 +0.5
                               </button>
                             </div>
                           </div>
-                          <div className="text-[10px] text-right text-blue-400 font-mono">
-                            Distancia estimada: ~{Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))} metros
+
+                          {/* Distancia Aproximada en Metros (Directamente editable por el Coach) */}
+                          <div className="pt-2 border-t border-neutral-800/60 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] text-neutral-300 font-semibold">Distancia aprox. en metros (Editable):</span>
+                              <button
+                                type="button"
+                                onClick={() => setQuickCooperDistance(Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250)))}
+                                className="text-[10px] text-blue-400 hover:underline"
+                                title="Recalcular con base en vueltas"
+                              >
+                                ↺ Recalcular
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                step="10"
+                                value={quickCooperDistance}
+                                onChange={(e) => setQuickCooperDistance(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="flex-1 bg-neutral-950 border border-neutral-700 focus:border-blue-500 rounded-lg px-2.5 py-1 font-mono font-bold text-white text-xs outline-none"
+                                placeholder="Metros totales..."
+                              />
+                              <span className="text-xs text-neutral-400 font-mono">metros</span>
+                            </div>
+                            <span className="text-[10px] text-neutral-500 block">
+                              Calculado: ~{Math.round(quickCooperLaps * (quickCooperTrackType === 'afuera' ? 400 : 250))}m ({quickCooperLaps} vueltas × {quickCooperTrackType === 'afuera' ? '400m' : '250m'}). Puedes escribir la distancia exacta aquí.
+                            </span>
                           </div>
                         </div>
                       ) : (

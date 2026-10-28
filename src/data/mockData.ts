@@ -159,7 +159,7 @@ export const DEMO_ATHLETES: UserProfile[] = [
 export const INITIAL_STAFF_USERS: UserProfile[] = [
   {
     id: 'user-staff-leslie',
-    name: 'Leslie (Dueña & Coach)',
+    name: 'Leslie (Dirección Kinetix)',
     email: 'leslie.coach@kinetix.com',
     role: 'staff',
     staffRole: 'owner', // Control Total: Finanzas, Membresías, Logo, Atletas y Coaches
@@ -195,7 +195,7 @@ export const INITIAL_STAFF_USERS: UserProfile[] = [
   },
   {
     id: 'user-staff-01',
-    name: 'Coach Jorge (Dueño & Head Coach)',
+    name: 'Coach Jorge (Head Coach & Dirección Kinetix)',
     email: 'jorge.coach@kinetix.com',
     role: 'staff',
     staffRole: 'owner', // Control Total: Finanzas, Membresías, Logo, Atletas y Coaches
