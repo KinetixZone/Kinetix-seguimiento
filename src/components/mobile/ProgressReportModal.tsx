@@ -26,9 +26,9 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   const validEval = latestEval && latestEval.userId === athlete.id ? latestEval : null;
 
   // Coach validator selection state (allows staff to choose who officially validates the electronic report)
-  const defaultCoachName = validEval?.coachName || 'Leslie (Dirección Kinetix)';
+  const defaultCoachName = validEval?.coachName || 'Leslie (Dirección & Coach)';
   const defaultCoachRole = defaultCoachName.includes('Leslie') 
-    ? 'Dirección Kinetix'
+    ? 'Dirección & Coach'
     : defaultCoachName.includes('Jorge')
     ? 'Head Coach & Dirección Kinetix'
     : defaultCoachName.includes('Gus')
@@ -189,7 +189,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
                 }}
                 className="bg-neutral-900 border border-neutral-700 rounded-xl px-2.5 py-1 text-xs text-white font-semibold outline-none focus:border-blue-500"
               >
-                <option value="Leslie (Dirección Kinetix)">Leslie (Dirección Kinetix)</option>
+                <option value="Leslie (Dirección & Coach)">Leslie (Dirección & Coach)</option>
                 <option value="Coach Jorge (Head Coach & Dirección Kinetix)">Coach Jorge (Head Coach & Dirección Kinetix)</option>
                 <option value="Coach Gus">Coach Gus (Coach & Evaluación Deportiva)</option>
                 <option value="custom">Otro / Personalizado...</option>

@@ -1342,10 +1342,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </div>
                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
                     isStaffOwner 
-                      ? 'bg-red-950 text-red-400 border border-red-800' 
-                      : 'bg-amber-950 text-amber-400 border border-amber-800'
+                      ? 'bg-red-950/90 text-red-400 border border-red-800' 
+                      : 'bg-amber-950/90 text-amber-400 border border-amber-800'
                   }`}>
-                    {isStaffOwner ? 'Dueño/a' : 'Profe'}
+                    {staff.name.includes('Leslie') 
+                      ? 'Dirección & Coach' 
+                      : staff.name.includes('Jorge') 
+                      ? 'Head Coach & Dir.' 
+                      : isStaffOwner 
+                      ? 'Dirección' 
+                      : 'Coach'}
                   </span>
                 </div>
 
