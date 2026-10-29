@@ -317,30 +317,53 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           </div>
         </div>
 
-        {/* Cooper Aerobic Capacity Card - SHOW ONLY THE LEVEL REACHED */}
-        <div 
-          onClick={() => onNavigateTab('tests')}
-          className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-blue-500/40 transition-all cursor-pointer space-y-1 group"
-        >
-          <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <Heart className="w-3.5 h-3.5 text-red-500" />
-              Test Cooper
-            </span>
-            <span className="text-[10px] text-red-500 font-bold uppercase">
-              {latestEval?.cooperTest.level ? `Nivel ${latestEval.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar'}
-            </span>
-          </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-brand">
-              {latestEval?.cooperTest ? `NIVEL ${latestEval.cooperTest.levelNumber}` : '--'}
-            </span>
-          </div>
-          <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
-            <span className="text-blue-400 font-medium">{latestEval ? 'Evaluación Coach Jorge' : 'Pendiente de evaluar'}</span>
-            <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">Detalle &rarr;</span>
-          </div>
-        </div>
+        {/* Cooper / Course Navette Aerobic Capacity Card */}
+        {(() => {
+          const isCooper2 = !!(latestEval?.cooperTest && (
+            latestEval.cooperTest.variant === 'laps' ||
+            (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
+            latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+            latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+            latestEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+          ));
+
+          const isNA = latestEval?.cooperTest.status === 'na';
+          const isNP = latestEval?.cooperTest.status === 'np';
+          const coachLabel = latestEval?.coachName ? `Evaluación ${latestEval.coachName}` : 'Evaluación Staff Kinetix';
+
+          return (
+            <div 
+              onClick={() => onNavigateTab('tests')}
+              className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-blue-500/40 transition-all cursor-pointer space-y-1 group"
+            >
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Heart className="w-3.5 h-3.5 text-red-500" />
+                  {isCooper2 ? 'Cooper por Vueltas' : 'Course Navette / Cooper'}
+                </span>
+                <span className="text-[10px] text-amber-400 font-bold uppercase">
+                  {isNA ? 'No Aplica (NA)' : isNP ? 'No Presentada (NP)' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} Vueltas` : (latestEval?.cooperTest.level ? `Nivel ${latestEval.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar')}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-brand">
+                  {isNA ? 'NA' : isNP ? 'NP' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} VUELTAS` : (latestEval?.cooperTest ? `NIVEL ${latestEval.cooperTest.levelNumber || 1}` : '--')}
+                </span>
+                {isCooper2 && latestEval?.cooperTest.distanceMeters ? (
+                  <span className="text-xs font-mono text-emerald-400 font-bold">
+                    (~{latestEval.cooperTest.distanceMeters}m)
+                  </span>
+                ) : null}
+              </div>
+              <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
+                <span className="text-blue-400 font-medium">
+                  {latestEval ? coachLabel : 'Pendiente de evaluar'}
+                </span>
+                <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">Detalle &rarr;</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Test de Resistencia (Por Tiempo) Highlight Card */}
@@ -388,7 +411,19 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                 <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-mono font-bold">KINETIX</span>
               </div>
               <div className="text-[11px] text-blue-400 font-medium">
-                Test Cooper: Nivel {latestEval.cooperTest?.levelNumber || 1} · {latestEval.evaluationDate}
+                {(() => {
+                  const isCooper2 = !!(latestEval?.cooperTest && (
+                    latestEval.cooperTest.variant === 'laps' ||
+                    (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
+                    latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                    latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                    latestEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+                  ));
+                  if (isCooper2) {
+                    return `Cooper por Vueltas: ${latestEval.cooperTest.lapsCount || 0} vueltas (~${latestEval.cooperTest.distanceMeters || 0}m) · ${latestEval.evaluationDate}`;
+                  }
+                  return `Course Navette: Nivel ${latestEval.cooperTest?.levelNumber || 1} · ${latestEval.evaluationDate}`;
+                })()}
               </div>
             </div>
           </div>

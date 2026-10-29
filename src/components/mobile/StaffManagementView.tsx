@@ -4381,7 +4381,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               : 'text-neutral-400 hover:text-white'
                           }`}
                         >
-                          Cooper Normal (Metros / Nivel)
+                          Course Navette / Niveles (1 al 20)
                         </button>
                         <button
                           type="button"

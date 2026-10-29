@@ -2746,8 +2746,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             : 'text-neutral-400 hover:text-white'
                         }`}
                       >
-                        <span>🏃 Test Cooper Normal</span>
-                        <span className="text-[10px] font-normal opacity-75">(Metros / Niveles)</span>
+                        <span>🏃 Course Navette / Cooper</span>
+                        <span className="text-[10px] font-normal opacity-75">(Niveles 1 al 20)</span>
                       </button>
 
                       <button
@@ -3781,7 +3781,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           cooperVariant === 'standard' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                         }`}
                       >
-                        Cooper Normal (Nivel 1 al 20)
+                        Course Navette / Niveles (1 al 20)
                       </button>
                       <button
                         type="button"
