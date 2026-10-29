@@ -6,6 +6,7 @@ import {
   StrengthMaxRecord, 
   EvaluationStatus, 
   CooperTestRecord, 
+  CooperTestVariant,
   EnduranceTimeTestRecord 
 } from '../../types';
 import { 
@@ -124,9 +125,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     }
   }, [currentUser.id, athleteList.length]);
 
-  const effectiveAthlete = (selectedAthleteId === currentUser.id ? currentUser : null) ||
-    (athleteList.find(a => a.id === selectedAthleteId)) ||
-    currentUser;
+  const effectiveAthlete = (!canEvaluate || currentUser.role === 'athlete')
+    ? currentUser
+    : ((selectedAthleteId === currentUser.id ? currentUser : null) ||
+       (athleteList.find(a => a.id === selectedAthleteId)) ||
+       currentUser);
 
   const currentAthleteIndex = athleteList.findIndex(a => a.id === effectiveAthlete.id);
   const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
@@ -216,8 +219,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
 
-  // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera)
-  const [cooperVariant, setCooperVariant] = useState<'standard' | 'laps'>('standard');
+  // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera) vs Course Navette
+  const [cooperVariant, setCooperVariant] = useState<CooperTestVariant>('standard');
   const [cooperLapLocation, setCooperLapLocation] = useState<'outside' | 'inside'>('outside');
   const [cooperLapsCount, setCooperLapsCount] = useState<number>(6);
   const [cooperMetersPerLap, setCooperMetersPerLap] = useState<number>(400);
@@ -937,7 +940,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             {activeTab === 'cooper' && 'Nivel Cooper'}
             {activeTab === 'endurance' && 'Resistencia (Tiempo)'}
             {activeTab === 'strength' && 'Fuerza 1RM'}
-            {activeTab === 'history' && 'Historial Staff'}
+            {activeTab === 'history' && (currentUser.role === 'athlete' ? 'Mi Historial' : 'Historial Staff')}
           </span>
         </div>
 
@@ -1093,7 +1096,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           <h2 className="text-xl font-bold text-white font-brand flex items-center gap-2">
             <span>Rendimiento & Tests</span>
             <span className="text-[11px] font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
-              Validado Coach Jorge
+              {latestEval?.coachName ? `Validado ${latestEval.coachName}` : 'Validado Staff Kinetix'}
             </span>
           </h2>
         </div>
@@ -1153,7 +1156,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
-          Historial Staff
+          {currentUser.role === 'athlete' ? 'Mi Historial' : 'Historial Staff'}
         </button>
       </div>
 
@@ -1273,7 +1276,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <div className="flex items-center justify-between flex-wrap gap-1">
                   <span className="text-xs font-bold text-white flex items-center gap-1.5">
                     <Heart className="w-4 h-4 text-red-500" />
-                    <span>{isLatestCooper2 ? '1. Test de Cooper 2 (Por Vueltas)' : '1. Test de Cooper (12 Minutos)'}</span>
+                    <span>
+                      {isLatestCooper2 
+                        ? '1. Cooper por Vueltas (Circuito)' 
+                        : (latestEval.cooperTest.levelNumber && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')))
+                        ? '1. Course Navette / Cooper (Niveles 1 al 20)' 
+                        : '1. Test de Cooper (12 Minutos)'}
+                    </span>
                   </span>
 
                   {latestEval.cooperTest.status === 'na' ? (
@@ -1750,57 +1759,59 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </p>
               </div>
             </div>
-          ) : (
-            /* Main Level Showcase Card */
-            <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
-              <div className="absolute -right-12 -top-12 w-40 h-40 bg-blue-600/15 rounded-full blur-2xl pointer-events-none" />
+          ) : (() => {
+            const isCooper2 = latestEval.cooperTest.variant === 'laps' || 
+              (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) || 
+              latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') || 
+              latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') || 
+              latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
 
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-                  <Heart className="w-4 h-4 text-red-500" />
-                  Test de Cooper (12 Minutos) · Resultado Oficial
-                </span>
-                <span className="text-[10px] text-neutral-400 font-mono">
-                  {latestEval.evaluationDate}
-                </span>
-              </div>
+            const isNavette = latestEval.cooperTest.variant === 'navette' || 
+              (latestEval.cooperTest.levelNumber > 0 && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')));
 
-              {/* COOPER DISPLAY: Separates Cooper 2 (Por Vueltas) from Cooper Normal (12 min / Nivel 1-20) */}
-              {(() => {
-                const isCooper2 = latestEval.cooperTest.variant === 'laps' || 
-                  (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) || 
-                  latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') || 
-                  latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') || 
-                  latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+            return (
+              /* Main Level Showcase Card */
+              <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
+                <div className="absolute -right-12 -top-12 w-40 h-40 bg-blue-600/15 rounded-full blur-2xl pointer-events-none" />
 
-                if (isCooper2) {
-                  return (
-                    <div className="text-center py-3 space-y-2.5">
-                      <span className="text-[11px] font-mono tracking-widest text-amber-400 uppercase font-bold">
-                        Test Cooper 2 · Modalidad por Vueltas
-                      </span>
-                      
-                      <div className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-brand">
-                        {latestEval.cooperTest.lapsCount ? `${latestEval.cooperTest.lapsCount} VUELTAS` : 'POR VUELTAS'}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                    <Heart className="w-4 h-4 text-red-500" />
+                    {isCooper2 
+                      ? 'Cooper por Vueltas · Resultado Oficial' 
+                      : isNavette 
+                      ? 'Course Navette (20m / Léger) · Resultado Oficial' 
+                      : 'Test de Cooper (12 Minutos) · Resultado Oficial'}
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-mono">
+                    {latestEval.evaluationDate}
+                  </span>
+                </div>
+
+                {isCooper2 ? (
+                  <div className="text-center py-3 space-y-2.5">
+                    <span className="text-[11px] font-mono tracking-widest text-amber-400 uppercase font-bold">
+                      Cooper por Vueltas · Circuito de Pista
+                    </span>
+                    
+                    <div className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-brand">
+                      {latestEval.cooperTest.lapsCount ? `${latestEval.cooperTest.lapsCount} VUELTAS` : 'POR VUELTAS'}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-950/70 border border-amber-500/40 text-xs font-bold text-amber-300">
+                        <span>Distancia aprox: ~{latestEval.cooperTest.distanceMeters || Math.round((latestEval.cooperTest.lapsCount || 0) * (latestEval.cooperTest.metersPerLap || 400))} metros</span>
                       </div>
-
-                      <div className="flex items-center justify-center gap-2 flex-wrap">
-                        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-950/70 border border-amber-500/40 text-xs font-bold text-amber-300">
-                          <span>Distancia aprox: ~{latestEval.cooperTest.distanceMeters || Math.round((latestEval.cooperTest.lapsCount || 0) * (latestEval.cooperTest.metersPerLap || 400))} metros</span>
-                        </div>
-                        <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
-                          <span>{latestEval.cooperTest.lapLocation === 'outside' ? '🌳 Circuito exterior (400m)' : '🏢 Circuito interior (250m)'}</span>
-                        </div>
+                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
+                        <span>{latestEval.cooperTest.lapLocation === 'outside' ? '🌳 Circuito exterior (400m)' : '🏢 Circuito interior (250m)'}</span>
                       </div>
                     </div>
-                  );
-                }
-
-                return (
+                  </div>
+                ) : (
                   <>
                     <div className="text-center py-2 space-y-2">
                       <span className="text-[11px] font-mono tracking-widest text-blue-400 uppercase font-bold">
-                        Nivel Alcanzado en Test de 12 Minutos
+                        {isNavette ? 'Palier / Nivel Alcanzado en Course Navette' : 'Nivel Alcanzado en Test de 12 Minutos'}
                       </span>
                       
                       <div className="text-5xl font-extrabold text-white tracking-tight font-brand">
@@ -1814,7 +1825,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                       <div className="flex items-center justify-center">
                         <div className="inline-flex items-center gap-1.5 text-xs text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/30">
-                          <span>🏃 Test Cooper Normal (12 min)</span>
+                          <span>{isNavette ? '🏃 Course Navette / Léger (20m)' : '🏃 Test Cooper Normal (12 min)'}</span>
                           {latestEval.cooperTest.distanceMeters ? (
                             <span className="text-neutral-400 font-mono">· {latestEval.cooperTest.distanceMeters}m</span>
                           ) : null}
@@ -1851,8 +1862,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </div>
                     </div>
                   </>
-                );
-              })()}
+                )}
 
               {/* Comparativa Visual Directa con Test Anterior */}
               {prevEval && (() => {
@@ -2001,7 +2011,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 )}
               </div>
             </div>
-          )}
+          );
+        })()}
         </div>
       )}
 

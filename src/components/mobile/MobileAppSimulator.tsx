@@ -375,7 +375,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           {currentTab === 'tests' && (
             <PhysicalTestsView
               currentUser={currentUser}
-              evaluations={userEvals}
+              evaluations={evaluations}
               onAddEvaluation={onAddEvaluation}
               onDeleteEvaluation={onDeleteEvaluation}
               onUpdateEvaluation={onUpdateEvaluation}

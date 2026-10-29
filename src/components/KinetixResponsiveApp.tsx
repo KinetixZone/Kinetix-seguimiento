@@ -479,7 +479,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
         {currentTab === 'tests' && (
           <PhysicalTestsView
             currentUser={effectiveUser}
-            evaluations={userEvals}
+            evaluations={evaluations}
             onAddEvaluation={onAddEvaluation}
             onDeleteEvaluation={isStaff ? onDeleteEvaluation : undefined}
             onUpdateEvaluation={isStaff ? onUpdateEvaluation : undefined}

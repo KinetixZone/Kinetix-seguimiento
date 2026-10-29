@@ -162,25 +162,25 @@ export default function App() {
       const saved = localStorage.getItem('kinetix_evaluations_data');
       if (saved) {
         const parsed: PhysicalEvaluationRecord[] = JSON.parse(saved);
-        const demoIds = ['user-001', 'user-002', 'user-003', 'user-004'];
-        // Filter out demo athletes and legacy dummy coach evaluations, and normalize 1RM strength records
-        const clean = parsed
-          .filter(e => !demoIds.includes(e.userId) && !e.id.startsWith('eval-coach-'))
-          .map(e => ({
-            ...e,
-            enduranceTest: {
-              ...e.enduranceTest,
-              difficultyLevel: e.enduranceTest.difficultyLevel || (e.enduranceTest.scoreScoreLevel === 'Avanzado' ? 'Avanzado' : e.enduranceTest.scoreScoreLevel === 'Básico' ? 'Principiante' : 'Intermedio'),
-            },
-            strengthRecords: e.strengthRecords.map(s => {
-              if (s.exerciseId === 'pullups_or_rows' && s.weightKg === 95) {
-                return { ...s, reps: 1, estimated1RMKg: 95 };
-              }
-              return s;
-            })
-          }));
-        localStorage.setItem('kinetix_evaluations_data', JSON.stringify(clean));
-        return clean;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = parsed
+            .filter(e => !e.id.startsWith('eval-coach-'))
+            .map(e => ({
+              ...e,
+              enduranceTest: {
+                ...e.enduranceTest,
+                difficultyLevel: e.enduranceTest.difficultyLevel || (e.enduranceTest.scoreScoreLevel === 'Avanzado' ? 'Avanzado' : e.enduranceTest.scoreScoreLevel === 'Básico' ? 'Principiante' : 'Intermedio'),
+              },
+              strengthRecords: (e.strengthRecords || []).map(s => {
+                if (s.exerciseId === 'pullups_or_rows' && s.weightKg === 95) {
+                  return { ...s, reps: 1, estimated1RMKg: 95 };
+                }
+                return s;
+              })
+            }));
+          localStorage.setItem('kinetix_evaluations_data', JSON.stringify(clean));
+          return clean;
+        }
       }
     } catch {}
     return ALL_INITIAL_PHYSICAL_EVALS;

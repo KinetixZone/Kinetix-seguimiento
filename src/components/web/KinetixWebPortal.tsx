@@ -357,7 +357,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           {currentSection === 'tests' && (
             <PhysicalTestsView
               currentUser={currentUser}
-              evaluations={userEvals}
+              evaluations={evaluations}
               onAddEvaluation={onAddEvaluation}
               onDeleteEvaluation={onDeleteEvaluation}
               onUpdateEvaluation={onUpdateEvaluation}

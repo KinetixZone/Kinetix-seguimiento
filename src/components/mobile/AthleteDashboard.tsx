@@ -327,6 +327,11 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
             latestEval.cooperTest.notes?.toLowerCase().includes('vueltas')
           ));
 
+          const isNavette = !isCooper2 && !!(latestEval?.cooperTest && (
+            latestEval.cooperTest.variant === 'navette' ||
+            (latestEval.cooperTest.levelNumber > 0 && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')))
+          ));
+
           const isNA = latestEval?.cooperTest.status === 'na';
           const isNP = latestEval?.cooperTest.status === 'np';
           const coachLabel = latestEval?.coachName ? `Evaluación ${latestEval.coachName}` : 'Evaluación Staff Kinetix';
@@ -339,10 +344,10 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               <div className="flex items-center justify-between text-neutral-400 text-xs">
                 <span className="flex items-center gap-1.5 font-medium">
                   <Heart className="w-3.5 h-3.5 text-red-500" />
-                  {isCooper2 ? 'Cooper por Vueltas' : 'Course Navette / Cooper'}
+                  {isCooper2 ? 'Cooper por Vueltas' : isNavette ? 'Course Navette' : 'Test de Cooper'}
                 </span>
                 <span className="text-[10px] text-amber-400 font-bold uppercase">
-                  {isNA ? 'No Aplica (NA)' : isNP ? 'No Presentada (NP)' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} Vueltas` : (latestEval?.cooperTest.level ? `Nivel ${latestEval.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar')}
+                  {isNA ? 'No Aplica (NA)' : isNP ? 'No Presentada (NP)' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} Vueltas` : isNavette ? `Nivel ${latestEval?.cooperTest.levelNumber || 1} / 20` : (latestEval?.cooperTest.level ? `Nivel ${latestEval.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar')}
                 </span>
               </div>
               <div className="flex items-baseline gap-1.5">
@@ -352,6 +357,10 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                 {isCooper2 && latestEval?.cooperTest.distanceMeters ? (
                   <span className="text-xs font-mono text-emerald-400 font-bold">
                     (~{latestEval.cooperTest.distanceMeters}m)
+                  </span>
+                ) : !isCooper2 && latestEval?.cooperTest.distanceMeters ? (
+                  <span className="text-xs font-mono text-blue-400 font-bold">
+                    ({latestEval.cooperTest.distanceMeters}m)
                   </span>
                 ) : null}
               </div>

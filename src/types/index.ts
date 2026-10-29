@@ -79,7 +79,7 @@ export type CooperRating = 'Muy Malo' | 'Malo' | 'Regular' | 'Bueno' | 'Excelent
 
 export type EvaluationStatus = 'completed' | 'na' | 'np';
 
-export type CooperTestVariant = 'standard' | 'laps'; // Test Cooper normal vs Test Cooper 2 (por vueltas)
+export type CooperTestVariant = 'standard' | 'laps' | 'navette'; // Test Cooper (12m), Cooper 2 (por vueltas) o Course Navette (20m)
 export type CooperLapLocation = 'outside' | 'inside'; // Circuito afuera o adentro
 
 export interface CooperTestRecord {
