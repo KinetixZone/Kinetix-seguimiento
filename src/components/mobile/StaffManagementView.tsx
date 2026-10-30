@@ -4438,15 +4438,22 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               <div className="flex items-center gap-1">
                                 <input
                                   type="number"
-                                  min="10"
-                                  step="5"
-                                  value={quickCooperMetersPerLap}
+                                  min="0"
+                                  step="any"
+                                  value={quickCooperMetersPerLap === 0 ? '' : quickCooperMetersPerLap}
+                                  placeholder="0"
                                   onChange={(e) => {
-                                    const nextM = Math.max(10, parseInt(e.target.value) || 0);
+                                    const raw = e.target.value;
+                                    if (raw === '') {
+                                      setQuickCooperMetersPerLap(0);
+                                      setQuickCooperDistance(0);
+                                      return;
+                                    }
+                                    const nextM = Math.max(0, parseInt(raw, 10) || 0);
                                     setQuickCooperMetersPerLap(nextM);
                                     setQuickCooperDistance(Math.round(quickCooperLaps * nextM));
                                   }}
-                                  className="w-16 bg-neutral-950 border border-amber-500/60 focus:border-amber-400 rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none"
+                                  className="w-20 bg-neutral-950 border border-amber-500/60 focus:border-amber-400 rounded-lg px-2 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none"
                                 />
                                 <span className="text-[10px] text-neutral-400 font-mono">m/v</span>
                               </div>
@@ -4454,7 +4461,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                             {/* Preajustes rápidos */}
                             <div className="flex items-center justify-end gap-1 flex-wrap">
                               <span className="text-[9px] text-neutral-500 mr-0.5">Preajustes:</span>
-                              {[180, 200, 250, 300, 400].map((m) => (
+                              {[0, 180, 200, 250, 300, 400].map((m) => (
                                 <button
                                   key={m}
                                   type="button"
@@ -4468,7 +4475,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                       : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
                                   }`}
                                 >
-                                  {m}m
+                                  {m === 0 ? '0m' : `${m}m`}
                                 </button>
                               ))}
                             </div>
@@ -4491,11 +4498,18 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               </button>
                               <input
                                 type="number"
-                                step="0.5"
+                                step="any"
                                 min="0"
-                                value={quickCooperLaps}
+                                value={quickCooperLaps === 0 ? '' : quickCooperLaps}
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const nextLaps = Math.max(0, parseFloat(e.target.value) || 0);
+                                  const raw = e.target.value;
+                                  if (raw === '') {
+                                    setQuickCooperLaps(0);
+                                    setQuickCooperDistance(0);
+                                    return;
+                                  }
+                                  const nextLaps = Math.max(0, parseFloat(raw) || 0);
                                   setQuickCooperLaps(nextLaps);
                                   setQuickCooperDistance(Math.round(nextLaps * quickCooperMetersPerLap));
                                 }}
@@ -4532,11 +4546,18 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                               <input
                                 type="number"
                                 min="0"
-                                step="10"
-                                value={quickCooperDistance}
-                                onChange={(e) => setQuickCooperDistance(Math.max(0, parseInt(e.target.value) || 0))}
+                                step="any"
+                                value={quickCooperDistance === 0 ? '' : quickCooperDistance}
+                                placeholder="0"
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw === '') {
+                                    setQuickCooperDistance(0);
+                                    return;
+                                  }
+                                  setQuickCooperDistance(Math.max(0, parseInt(raw, 10) || 0));
+                                }}
                                 className="flex-1 bg-neutral-950 border border-neutral-700 focus:border-blue-500 rounded-lg px-2.5 py-1 font-mono font-bold text-white text-xs outline-none"
-                                placeholder="Metros totales..."
                               />
                               <span className="text-xs text-neutral-400 font-mono">metros</span>
                             </div>
@@ -4664,9 +4685,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <input
                           type="number"
                           step="any"
-                          value={quickWeights.squats.weightKg}
+                          value={quickWeights.squats.weightKg === 0 ? '' : quickWeights.squats.weightKg}
+                          placeholder="0"
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const raw = e.target.value;
+                            const val = raw === '' ? 0 : Number(raw) || 0;
                             setQuickWeights(prev => ({
                               ...prev,
                               squats: { ...prev.squats, weightKg: val }
@@ -4776,9 +4799,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <input
                           type="number"
                           step="any"
-                          value={quickWeights.deadlift.weightKg}
+                          value={quickWeights.deadlift.weightKg === 0 ? '' : quickWeights.deadlift.weightKg}
+                          placeholder="0"
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const raw = e.target.value;
+                            const val = raw === '' ? 0 : Number(raw) || 0;
                             setQuickWeights(prev => ({
                               ...prev,
                               deadlift: { ...prev.deadlift, weightKg: val }
@@ -4888,9 +4913,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <input
                           type="number"
                           step="any"
-                          value={quickWeights.hip_thrust.weightKg}
+                          value={quickWeights.hip_thrust.weightKg === 0 ? '' : quickWeights.hip_thrust.weightKg}
+                          placeholder="0"
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const raw = e.target.value;
+                            const val = raw === '' ? 0 : Number(raw) || 0;
                             setQuickWeights(prev => ({
                               ...prev,
                               hip_thrust: { ...prev.hip_thrust, weightKg: val }
@@ -5000,9 +5027,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <input
                           type="number"
                           step="any"
-                          value={quickWeights.horizontal_press.weightKg}
+                          value={quickWeights.horizontal_press.weightKg === 0 ? '' : quickWeights.horizontal_press.weightKg}
+                          placeholder="0"
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const raw = e.target.value;
+                            const val = raw === '' ? 0 : Number(raw) || 0;
                             setQuickWeights(prev => ({
                               ...prev,
                               horizontal_press: { ...prev.horizontal_press, weightKg: val }
@@ -5145,9 +5174,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <input
                           type="number"
                           step="any"
-                          value={quickWeights.pullups_or_rows.weightKg}
+                          value={quickWeights.pullups_or_rows.weightKg === 0 ? '' : quickWeights.pullups_or_rows.weightKg}
+                          placeholder="0"
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const raw = e.target.value;
+                            const val = raw === '' ? 0 : Number(raw) || 0;
                             setQuickWeights(prev => ({
                               ...prev,
                               pullups_or_rows: { ...prev.pullups_or_rows, weightKg: val }
@@ -5193,7 +5224,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           pullups_or_rows: { ...prev.pullups_or_rows, reason }
                         }));
                       }}
-                      placeholder="Motivo (ej. Lesión de codo, ingreso posterior)..."
+                      placeholder="Motivo (ej. Lesión en codo, sin barra)..."
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white outline-none"
                     />
                   )}

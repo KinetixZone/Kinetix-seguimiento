@@ -2861,12 +2861,19 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               </button>
                               <input
                                 type="number"
-                                step="0.5"
+                                step="any"
                                 min="0"
                                 max="100"
-                                value={cooperLapsCount}
+                                value={cooperLapsCount === 0 ? '' : cooperLapsCount}
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const n = Math.max(0, parseFloat(e.target.value) || 0);
+                                  const raw = e.target.value;
+                                  if (raw === '') {
+                                    setCooperLapsCount(0);
+                                    setOptionalDistance(0);
+                                    return;
+                                  }
+                                  const n = Math.max(0, parseFloat(raw) || 0);
                                   setCooperLapsCount(n);
                                   const dist = Math.round(n * cooperMetersPerLap);
                                   setOptionalDistance(dist);
@@ -2899,14 +2906,21 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             <div className="flex items-center justify-center gap-1">
                               <input
                                 type="number"
-                                min="10"
-                                max="2000"
-                                step="10"
-                                value={cooperMetersPerLap}
+                                min="0"
+                                max="5000"
+                                step="any"
+                                value={cooperMetersPerLap === 0 ? '' : cooperMetersPerLap}
+                                placeholder="0"
                                 onChange={(e) => {
-                                  const m = Number(e.target.value) || 0;
+                                  const raw = e.target.value;
+                                  if (raw === '') {
+                                    setCooperMetersPerLap(0);
+                                    setOptionalDistance(0);
+                                    return;
+                                  }
+                                  const m = Math.max(0, Number(raw) || 0);
                                   setCooperMetersPerLap(m);
-                                  const dist = cooperLapsCount * m;
+                                  const dist = Math.round(cooperLapsCount * m);
                                   setOptionalDistance(dist);
                                   setSelectedCooperLevel(getLevelFromDistance(dist));
                                 }}
@@ -2915,13 +2929,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               <span className="text-xs text-neutral-400 font-mono">m</span>
                             </div>
                             <div className="flex items-center justify-center gap-1 flex-wrap">
-                              {[180, 200, 250, 300, 400].map((quickM) => (
+                              {[0, 180, 200, 250, 300, 400].map((quickM) => (
                                 <button
                                   key={quickM}
                                   type="button"
                                   onClick={() => {
                                     setCooperMetersPerLap(quickM);
-                                    const dist = cooperLapsCount * quickM;
+                                    const dist = Math.round(cooperLapsCount * quickM);
                                     setOptionalDistance(dist);
                                     setSelectedCooperLevel(getLevelFromDistance(dist));
                                   }}
@@ -2929,7 +2943,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                                     cooperMetersPerLap === quickM ? 'bg-amber-500 text-black' : 'bg-neutral-800 text-neutral-400 hover:text-white'
                                   }`}
                                 >
-                                  {quickM}m
+                                  {quickM === 0 ? '0m' : `${quickM}m`}
                                 </button>
                               ))}
                             </div>
@@ -2955,11 +2969,18 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             <input
                               type="number"
                               min="0"
-                              step="10"
-                              value={optionalDistance}
-                              onChange={(e) => setOptionalDistance(Math.max(0, parseInt(e.target.value) || 0))}
+                              step="any"
+                              value={optionalDistance === 0 ? '' : optionalDistance}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                  setOptionalDistance(0);
+                                  return;
+                                }
+                                setOptionalDistance(Math.max(0, parseInt(raw, 10) || 0));
+                              }}
                               className="flex-1 bg-neutral-900 border border-amber-500/60 focus:border-amber-400 rounded-xl px-3 py-1.5 font-mono font-extrabold text-amber-400 text-base outline-none"
-                              placeholder="Metros totales..."
                             />
                             <span className="text-xs text-neutral-300 font-mono font-bold pr-1">metros</span>
                           </div>
@@ -3286,10 +3307,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="col-span-6">
                           <input
                             type="number"
-                            value={squatWeight}
-                            onChange={(e) => setSquatWeight(parseFloat(e.target.value) || 0)}
+                            step="any"
+                            min="0"
+                            value={squatWeight === 0 ? '' : squatWeight}
+                            onChange={(e) => setSquatWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
-                            placeholder="Carga kg"
+                            placeholder="0"
                           />
                         </div>
                         <div className="col-span-6 text-right">
@@ -3346,10 +3369,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="col-span-6">
                           <input
                             type="number"
-                            value={deadliftWeight}
-                            onChange={(e) => setDeadliftWeight(parseFloat(e.target.value) || 0)}
+                            step="any"
+                            min="0"
+                            value={deadliftWeight === 0 ? '' : deadliftWeight}
+                            onChange={(e) => setDeadliftWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
-                            placeholder="Carga kg"
+                            placeholder="0"
                           />
                         </div>
                         <div className="col-span-6 text-right">
@@ -3406,10 +3431,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="col-span-6">
                           <input
                             type="number"
-                            value={hipThrustWeight}
-                            onChange={(e) => setHipThrustWeight(parseFloat(e.target.value) || 0)}
+                            step="any"
+                            min="0"
+                            value={hipThrustWeight === 0 ? '' : hipThrustWeight}
+                            onChange={(e) => setHipThrustWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
-                            placeholder="Carga kg"
+                            placeholder="0"
                           />
                         </div>
                         <div className="col-span-6 text-right">
@@ -3466,10 +3493,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="col-span-6">
                           <input
                             type="number"
-                            value={pressWeight}
-                            onChange={(e) => setPressWeight(parseFloat(e.target.value) || 0)}
+                            step="any"
+                            min="0"
+                            value={pressWeight === 0 ? '' : pressWeight}
+                            onChange={(e) => setPressWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs outline-none"
-                            placeholder="Carga kg"
+                            placeholder="0"
                           />
                         </div>
                         <div className="col-span-6 text-right">
@@ -3557,10 +3586,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="col-span-4">
                           <input
                             type="number"
-                            value={rowWeight}
-                            onChange={(e) => setRowWeight(parseFloat(e.target.value) || 0)}
+                            step="any"
+                            min="0"
+                            value={rowWeight === 0 ? '' : rowWeight}
+                            onChange={(e) => setRowWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                             className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-1.5 text-center font-mono text-white text-xs focus:border-blue-500 outline-none"
-                            placeholder={rowExerciseType === 'remo' ? 'Peso (kg)' : 'Peso / Lastre kg'}
+                            placeholder="0"
                           />
                         </div>
                         <div className="col-span-3 text-right">
