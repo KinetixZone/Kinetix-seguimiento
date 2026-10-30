@@ -289,11 +289,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   // NA Presets for fast selection
   const NA_PRESETS = [
     'Ingreso posterior a fecha de pruebas',
+    'Lesión / Incapacidad médica temporal',
     'Adulto mayor / Exento por edad',
     'Etapa formativa infantil',
-    'Lesión / Incapacidad médica temporal',
     'Baja temporal / Ausencia justificada',
   ];
+
+  const [globalCustomReason, setGlobalCustomReason] = useState<string>('Ingreso posterior a fecha de pruebas');
 
   // Helper to detect if all evaluation modules are marked NA
   const isFormAllNA = cooperStatus === 'na' && 
@@ -305,7 +307,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     rowStatus === 'na';
 
   // 1-Click Action to mark the entire evaluation cycle as NA (Nuevo ingreso, exento)
-  const applyGlobalNA = (reasonText: string = 'Ingreso posterior a fecha de pruebas') => {
+  const applyGlobalNA = (reasonText: string = globalCustomReason) => {
+    setGlobalCustomReason(reasonText);
     setCooperStatus('na');
     setCooperReason(reasonText);
     setEnduranceStatus('na');
@@ -321,7 +324,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setRowStatus('na');
     setRowReason(reasonText);
     setCoachNotes(prev => {
-      const clean = prev.replace(/^Periodo exento con NA General.*$/gm, '').trim();
+      const clean = (prev || '').replace(/^Periodo exento con NA General.*$/gm, '').trim();
+      if (!reasonText.trim()) return clean;
       return clean ? `${clean} | NA General: ${reasonText}` : `Periodo exento con NA General (${reasonText}).`;
     });
   };
@@ -2660,15 +2664,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     <button
                       type="button"
                       onClick={restoreAllToCompleted}
-                      className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 active:scale-95 transition-all"
+                      className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 active:scale-95 transition-all cursor-pointer"
                     >
                       Restaurar Pruebas
                     </button>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => applyGlobalNA('Ingreso posterior a fecha de pruebas')}
-                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-extrabold active:scale-95 transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5"
+                      onClick={() => applyGlobalNA(globalCustomReason)}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-extrabold active:scale-95 transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
                     >
                       <Zap className="w-3.5 h-3.5 fill-neutral-950" />
                       <span>⚡ Marcar Todo como NA</span>
@@ -2677,14 +2681,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </div>
 
                 {/* Quick preset chips */}
-                <div className="pt-2 mt-2 border-t border-neutral-800/80 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                <div className="pt-2 mt-2 border-t border-neutral-800/80 flex items-center gap-1.5 overflow-x-auto pb-1">
                   <span className="text-[10px] text-neutral-500 shrink-0 font-medium">Motivos rápidos:</span>
                   {NA_PRESETS.map((preset) => (
                     <button
                       key={preset}
                       type="button"
-                      onClick={() => applyGlobalNA(preset)}
-                      className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all ${
+                      onClick={() => {
+                        setGlobalCustomReason(preset);
+                        applyGlobalNA(preset);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all cursor-pointer ${
                         cooperReason === preset && isFormAllNA
                           ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
                           : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800'
@@ -2693,6 +2700,57 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       {preset}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGlobalCustomReason('');
+                      applyGlobalNA('');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all cursor-pointer ${
+                      cooperReason === '' && isFormAllNA
+                        ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                        : 'bg-neutral-900/80 border-dashed border-neutral-700 text-neutral-400 hover:text-white hover:bg-neutral-800'
+                    }`}
+                  >
+                    ⚪ Sin motivo (Dejar en blanco)
+                  </button>
+                </div>
+
+                {/* Input de motivo editable del coach (o dejar vacío) */}
+                <div className="pt-2 mt-1 border-t border-neutral-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <span className="text-[10px] text-neutral-400 shrink-0 font-medium">
+                    Motivo personalizado o editar:
+                  </span>
+                  <input
+                    type="text"
+                    value={globalCustomReason}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setGlobalCustomReason(val);
+                      if (isFormAllNA) {
+                        applyGlobalNA(val);
+                      }
+                    }}
+                    placeholder="Escribe el motivo del coach o déjalo vacío..."
+                    className="flex-1 bg-neutral-900 border border-neutral-700 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs text-white outline-none placeholder:text-neutral-600"
+                  />
+                  {!isFormAllNA ? (
+                    <button
+                      type="button"
+                      onClick={() => applyGlobalNA(globalCustomReason)}
+                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs rounded-lg active:scale-95 transition-all shrink-0 cursor-pointer"
+                    >
+                      Aplicar este motivo a todo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => applyGlobalNA(globalCustomReason)}
+                      className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs rounded-lg active:scale-95 transition-all shrink-0 border border-neutral-700 cursor-pointer"
+                    >
+                      Actualizar Motivo
+                    </button>
+                  )}
                 </div>
               </div>
 

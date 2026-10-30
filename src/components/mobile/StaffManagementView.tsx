@@ -16,6 +16,7 @@ import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent'
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
+import { BatchEvaluationGridView } from './BatchEvaluationGridView';
 import { 
   Users, 
   UserPlus, 
@@ -198,6 +199,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [savePaymentSuccess, setSavePaymentSuccess] = useState<boolean>(false);
 
+  // Staff view active navigation sub-section: 'athletes' | 'tests' | 'coaches' | 'database' | 'all'
+  const [staffViewSection, setStaffViewSection] = useState<'athletes' | 'tests' | 'coaches' | 'database' | 'all'>('athletes');
+
   // Athlete password inspection & update state for Coaches/Owners
   const [athletePassword, setAthletePassword] = useState<string>('');
   const [showAthletePassword, setShowAthletePassword] = useState<boolean>(false);
@@ -289,6 +293,63 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
   // Full evaluation: Coach notes
   const [quickCoachNotes, setQuickCoachNotes] = useState<string>('');
+
+  // Batch evaluation grid modal state ("Evaluar a Todos de un Jalón")
+  const [showBatchEvaluationGrid, setShowBatchEvaluationGrid] = useState<boolean>(false);
+
+  // NA Presets for fast selection in StaffManagementView
+  const NA_PRESETS = [
+    'Ingreso posterior a fecha de pruebas',
+    'Adulto mayor / Exento por edad',
+    'Etapa formativa infantil',
+    'Lesión / Incapacidad médica temporal',
+    'Baja temporal / Ausencia justificada',
+  ];
+  const [quickCustomNAReason, setQuickCustomNAReason] = useState<string>('');
+
+  // Helper to detect if all evaluation modules are marked NA in modal
+  const isQuickEditAllNA = quickCooperStatus === 'na' &&
+    quickEnduranceStatus === 'na' &&
+    quickWeights.squats.status === 'na' &&
+    quickWeights.deadlift.status === 'na' &&
+    quickWeights.hip_thrust.status === 'na' &&
+    quickWeights.horizontal_press.status === 'na' &&
+    quickWeights.pullups_or_rows.status === 'na';
+
+  // 1-Click Action to mark the entire evaluation cycle as NA (Nuevo ingreso, exento)
+  const applyQuickEditGlobalNA = (reasonText: string = '') => {
+    setQuickCooperStatus('na');
+    setQuickCooperReason(reasonText);
+    setQuickEnduranceStatus('na');
+    setQuickEnduranceReason(reasonText);
+    setQuickWeights(prev => ({
+      squats: { ...prev.squats, status: 'na', reason: reasonText },
+      deadlift: { ...prev.deadlift, status: 'na', reason: reasonText },
+      hip_thrust: { ...prev.hip_thrust, status: 'na', reason: reasonText },
+      horizontal_press: { ...prev.horizontal_press, status: 'na', reason: reasonText },
+      pullups_or_rows: { ...prev.pullups_or_rows, status: 'na', reason: reasonText },
+    }));
+    setQuickCoachNotes(prev => {
+      const clean = prev.replace(/^Periodo exento con NA General.*$/gm, '').trim();
+      if (!reasonText) return clean ? clean : 'Periodo exento con NA General.';
+      return clean ? `${clean} | NA General: ${reasonText}` : `Periodo exento con NA General (${reasonText}).`;
+    });
+  };
+
+  // 1-Click Action to restore all tests back to completed
+  const restoreQuickEditToCompleted = () => {
+    setQuickCooperStatus('completed');
+    setQuickCooperReason('');
+    setQuickEnduranceStatus('completed');
+    setQuickEnduranceReason('');
+    setQuickWeights(prev => ({
+      squats: { ...prev.squats, status: 'completed', reason: '' },
+      deadlift: { ...prev.deadlift, status: 'completed', reason: '' },
+      hip_thrust: { ...prev.hip_thrust, status: 'completed', reason: '' },
+      horizontal_press: { ...prev.horizontal_press, status: 'completed', reason: '' },
+      pullups_or_rows: { ...prev.pullups_or_rows, status: 'completed', reason: '' },
+    }));
+  };
 
   // Helper to determine evaluation status and recency for an athlete
   const getAthleteEvaluationStatus = (athleteId: string) => {
@@ -871,6 +932,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickWeights(defaultWeights);
     }
 
+    setQuickCustomNAReason(latest?.cooperTest?.statusReason || '');
     setQuickEditTab('aerobic');
     setAthleteToEditWeights(targetUser);
     setQuickEditSuccess(false);
@@ -1162,6 +1224,17 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             </button>
           )}
 
+          {/* BOTÓN PROMINENTE: EVALUAR A TODOS (GRILLA MASIVA) */}
+          <button
+            type="button"
+            onClick={() => setShowBatchEvaluationGrid(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-lg shadow-blue-500/30 active:scale-95 transition-all ring-2 ring-blue-400/40 cursor-pointer"
+            title="Abrir Sábana Masiva para calificar a todos los atletas de un solo jalón tipo Excel"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-white" />
+            <span>📊 Evaluar a Todos (Grilla Masiva)</span>
+          </button>
+
           <button
             type="button"
             onClick={() => handleOpenExpressForStaff('single')}
@@ -1191,8 +1264,81 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       </div>
 
-      {/* COACH'S OWN PERSONAL PROGRESS PANEL (Progreso Personal del Coach en Sesión) */}
-      <div className="p-4 rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-900/90 to-red-950/30 border border-red-900/40 space-y-3 shadow-xl">
+      {/* ========================================================================= */}
+      {/* SUB-PESTAÑAS DE NAVEGACIÓN RÁPIDA DEL PANEL DE STAFF */}
+      {/* ========================================================================= */}
+      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-neutral-950 border border-neutral-800 overflow-x-auto shadow-md">
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('athletes')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'athletes'
+              ? 'bg-red-600 text-white shadow-md shadow-red-600/30 ring-1 ring-red-400/40'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>👥 Alumnos & Membresías ({users.filter(u => u.role === 'athlete').length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('tests')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'tests'
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/40'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+          <span>📊 Pruebas Físicas & Sábana Masiva</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('coaches')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'coaches'
+              ? 'bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30 font-extrabold'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>🛡️ Coaches & Dirección ({staffMembers.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('database')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'database'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>☁️ Base de Datos & Respaldos</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('all')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'all'
+              ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+          title="Ver todas las secciones de corrido"
+        >
+          <span>👁️ Ver Todo</span>
+        </button>
+      </div>
+
+      {/* SECCIÓN: EQUIPO DE COACHES & DIRECCIÓN */}
+      {(staffViewSection === 'coaches' || staffViewSection === 'all') && (
+        <>
+          {/* COACH'S OWN PERSONAL PROGRESS PANEL (Progreso Personal del Coach en Sesión) */}
+          <div className="p-4 rounded-3xl bg-gradient-to-br from-neutral-900 via-neutral-900/90 to-red-950/30 border border-red-900/40 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <UserAvatar
@@ -1439,9 +1585,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           })}
         </div>
       </div>
+      </>
+      )}
 
-      {/* BOTÓN RÁPIDO Y PANEL DE CONTROL: VENCEN EN LOS PRÓXIMOS 3 DÍAS */}
-      <div className={`p-4 rounded-3xl border transition-all ${
+      {/* SECCIÓN: VENCIMIENTOS & CÓDIGOS DE COLOR DE PAGO */}
+      {(staffViewSection === 'athletes' || staffViewSection === 'all') && (
+        <>
+          {/* BOTÓN RÁPIDO Y PANEL DE CONTROL: VENCEN EN LOS PRÓXIMOS 3 DÍAS */}
+          <div className={`p-4 rounded-3xl border transition-all ${
         colorFilter === 'due_soon'
           ? 'bg-gradient-to-r from-amber-950 via-neutral-900 to-amber-950 border-amber-500 shadow-xl shadow-amber-500/20 ring-1 ring-amber-500/30'
           : 'bg-gradient-to-r from-amber-950/40 via-neutral-900 to-neutral-900 border-amber-800/50 hover:border-amber-600/70'
@@ -1581,9 +1732,45 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           <span>El número de cada código representa el <strong>día de corte mensual</strong> de pago (Día 5, 15, 20 o 30). Usa el botón amarillo ⚡ para ver quién vence esta semana.</span>
         </div>
       </div>
+      </>
+      )}
 
-      {/* PROGRAMACIÓN OFICIAL: FECHA GLOBAL DE EVALUACIÓN PARA TODOS */}
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-blue-950/40 border border-blue-500/40 space-y-3 shadow-md">
+      {/* SECCIÓN: PRUEBAS FÍSICAS & SÁBANA MASIVA */}
+      {(staffViewSection === 'tests' || staffViewSection === 'all') && (
+        <>
+          {/* HERO BANNER: EVALUACIÓN MASIVA DE TODOS LOS ALUMNOS */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-950/80 via-indigo-950/70 to-neutral-900 border-2 border-blue-500/50 space-y-3 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/30 border border-blue-400/50 flex items-center justify-center text-blue-300 shrink-0 shadow-lg">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    Herramienta Oficial Staff Kinetix
+                  </span>
+                  <h3 className="text-base sm:text-lg font-extrabold text-white font-brand mt-0.5">
+                    Sábana de Evaluación Masiva (Evaluar a Todos de un Jalón)
+                  </h3>
+                  <p className="text-xs text-neutral-300">
+                    Ingresa marcas de todos los alumnos en una sola grilla tipo Excel sin ir uno por uno.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBatchEvaluationGrid(true)}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-blue-500/30 active:scale-95 transition-all ring-2 ring-blue-300/40 cursor-pointer whitespace-nowrap"
+              >
+                <FileSpreadsheet className="w-5 h-5" />
+                <span>📊 Abrir Sábana Masiva (Todos)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* PROGRAMACIÓN OFICIAL: FECHA GLOBAL DE EVALUACIÓN PARA TODOS */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-blue-950/40 border border-blue-500/40 space-y-3 shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start sm:items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
@@ -1658,11 +1845,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
             <button
               type="button"
+              onClick={() => setShowBatchEvaluationGrid(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-blue-400/30"
+              title="Abrir sábana / grilla masiva tipo Excel para evaluar a todos los atletas de un solo jalón"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+              <span>📊 Evaluar a Todos (Grilla Masiva)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => handleOpenExpressForStaff('single')}
               className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
             >
               <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-              <span>1 Atleta</span>
+              <span>1 Atleta Express</span>
             </button>
 
             <button
@@ -1680,14 +1877,91 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 font-semibold text-xs flex items-center gap-1 transition-all active:scale-95"
             >
               <CheckCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>Todos ({users.filter(u => u.role === 'athlete').length})</span>
+              <span>Todos Express</span>
             </button>
           </div>
         </div>
       </div>
+      </>
+      )}
 
-      {/* Search Input con botón de borrado rápido para celular */}
-      <div className="relative">
+      {/* SECCIÓN: BASE DE DATOS SUPABASE & RESPALDOS */}
+      {(staffViewSection === 'database') && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
+                  <span>Base de Datos en la Nube & Respaldos</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    isSupabaseConfigured()
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      : 'bg-amber-950 text-amber-300 border border-amber-800'
+                  }`}>
+                    {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local Seguro'}
+                  </span>
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Respaldo automático permanente, sincronización en tiempo real y exportación de datos
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => setShowSupabaseModal(true)}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-emerald-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-emerald-400">Configurar Supabase</span>
+                <Cloud className="w-4 h-4 text-emerald-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Ver credenciales, probar conexión y ejecutar script SQL oficial.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-blue-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-blue-400">Exportar a Excel / CSV</span>
+                <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Descarga reporte completo con pesajes, asistencias y membresías.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadBackup}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-amber-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-amber-400">Descargar Copia JSON</span>
+                <Download className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Guarda una copia de seguridad local completa de tus atletas y marcas.
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SECCIÓN LISTA DE ALUMNOS (Visible en Alumnos, Pruebas y Ver Todo) */}
+      {(staffViewSection === 'athletes' || staffViewSection === 'tests' || staffViewSection === 'all') && (
+        <>
+          {/* Search Input con botón de borrado rápido para celular */}
+          <div className="relative">
         <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
           type="text"
@@ -2030,6 +2304,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         })
       )}
       </div>
+      </>
+      )}
 
       {/* MODAL: ALTA DE ATLETA POR CORREO */}
       {showCreateModal && (
@@ -4209,6 +4485,108 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               />
             </div>
 
+            {/* NA GENERAL (TODO EL PERIODO) - BOTÓN 1-CLIC Y MOTIVOS RÁPIDOS O PERSONALIZADO */}
+            <div className={`p-3 rounded-2xl border transition-all ${
+              isQuickEditAllNA 
+                ? 'bg-amber-950/40 border-amber-500 shadow-md shadow-amber-500/15' 
+                : 'bg-neutral-950 border-neutral-800'
+            }`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-extrabold ${
+                    isQuickEditAllNA ? 'bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30' : 'bg-neutral-900 text-amber-400 border border-neutral-800'
+                  }`}>
+                    NA
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>{isQuickEditAllNA ? 'Evaluación Completa en NA (No Aplica)' : 'NA General (Todo el Periodo)'}</span>
+                      {isQuickEditAllNA && (
+                        <span className="text-[10px] text-amber-400 bg-amber-500/20 px-2 py-0.2 rounded-full border border-amber-500/30 font-semibold">
+                          Activo
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 block">
+                      Para nuevo ingreso posterior a pruebas, exento por edad, lesión o ausencia
+                    </span>
+                  </div>
+                </div>
+
+                {isQuickEditAllNA ? (
+                  <button
+                    type="button"
+                    onClick={restoreQuickEditToCompleted}
+                    className="px-2.5 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Restaurar Pruebas
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => applyQuickEditGlobalNA(quickCustomNAReason || 'Ingreso posterior a fecha de pruebas')}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-extrabold active:scale-95 transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                    <span>⚡ Marcar Todo como NA</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Motivos rápidos & Causa personalizada o en blanco */}
+              <div className="pt-2 mt-2 border-t border-neutral-800/80 space-y-1.5">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <span className="text-[10px] text-neutral-500 shrink-0 font-medium">Motivos rápidos:</span>
+                  {NA_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setQuickCustomNAReason(preset);
+                        applyQuickEditGlobalNA(preset);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg border text-[10px] whitespace-nowrap active:scale-95 transition-all cursor-pointer ${
+                        (quickCooperReason === preset || quickCustomNAReason === preset) && isQuickEditAllNA
+                          ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input de causa libre o en blanco */}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <input
+                    type="text"
+                    value={quickCustomNAReason}
+                    onChange={(e) => {
+                      setQuickCustomNAReason(e.target.value);
+                      if (isQuickEditAllNA) {
+                        applyQuickEditGlobalNA(e.target.value);
+                      }
+                    }}
+                    placeholder="Escribir causa específica del coach (o dejar en blanco)..."
+                    className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder-neutral-500 outline-none focus:border-amber-500 font-sans"
+                  />
+                  {quickCustomNAReason && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickCustomNAReason('');
+                        if (isQuickEditAllNA) applyQuickEditGlobalNA('');
+                      }}
+                      className="text-neutral-500 hover:text-neutral-300 text-xs px-1"
+                      title="Borrar causa"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Compact Tabs Switcher */}
             <div className="flex items-center gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800">
               <button
@@ -5267,6 +5645,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL: SÁBANA DE EVALUACIÓN MASIVA (EVALUAR A TODOS DE UN JALÓN) */}
+      <BatchEvaluationGridView
+        isOpen={showBatchEvaluationGrid}
+        onClose={() => setShowBatchEvaluationGrid(false)}
+        users={users}
+        evaluations={evaluations}
+        activeStaff={activeStaff}
+        globalEvalDate={globalEvalDate}
+        onAddEvaluation={onAddEvaluation}
+        onUpdateEvaluation={onUpdateEvaluation}
+        onSendNotification={onSendBatchNotification ? (t, b, u) => onSendBatchNotification(t, b, u || []) : undefined}
+        onOpenIndividualEdit={handleOpenQuickEditWeights}
+      />
     </div>
   );
 };

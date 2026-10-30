@@ -400,6 +400,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
             <StaffManagementView
               users={users}
               currentUser={users.find(u => u.role === 'staff') || currentUser}
+              bodyCompRecords={bodyCompRecords}
+              evaluations={evaluations}
               onSelectUserToInspect={(u) => {
                 setSelectedUserId(u.id);
                 setIsInspectingAthlete(true);
@@ -420,6 +422,9 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onDeleteAthlete={onDeleteAthlete}
               onUpdateAthleteProfile={onUpdateAthleteProfile}
               onBackToDashboard={() => setCurrentTab('dashboard')}
+              onAddEvaluation={onAddEvaluation}
+              onUpdateEvaluation={onUpdateEvaluation}
+              onSendBatchNotification={handleTriggerPushBanner}
             />
           )}
         </div>
