@@ -57,10 +57,10 @@ interface AthleteRowState {
   globalNAReason: string;
   // Aeróbico
   cooperStatus: EvaluationStatus;
-  cooperVariant: CooperTestVariant; // 'standard' | 'laps' | 'navette'
+  cooperVariant: CooperTestVariant; // 'standard' | 'laps' | 'navette' | 'both'
   cooperDistance: number;
   cooperLaps: number;
-  cooperTrack: 'afuera' | 'adentro';
+  cooperTrack: 'afuera' | 'adentro' | 'personalizado';
   cooperMetersPerLap: number;
   cooperNavetteLevel: number;
   cooperReason: string;
@@ -151,6 +151,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         const hp = existingInDate.strengthRecords?.find(r => r.exerciseId === 'horizontal_press');
         const rw = existingInDate.strengthRecords?.find(r => r.exerciseId === 'pullups_or_rows');
 
+        const isBoth = coop?.variant === 'both' || (Boolean(coop?.navetteLevelNumber) && Boolean(coop?.lapsCount || coop?.distanceMeters));
         const isLaps = coop?.variant === 'laps' || (typeof coop?.lapsCount === 'number' && coop.lapsCount > 0);
         const isNavette = coop?.variant === 'navette';
 
@@ -166,12 +167,12 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
           isAllNA,
           globalNAReason: coop?.statusReason || '',
           cooperStatus: coop?.status || 'completed',
-          cooperVariant: isNavette ? 'navette' : isLaps ? 'laps' : 'standard',
+          cooperVariant: isBoth ? 'both' : isNavette ? 'navette' : isLaps ? 'laps' : 'standard',
           cooperDistance: coop?.distanceMeters || (isFemale ? 1800 : 2200),
           cooperLaps: coop?.lapsCount || 5.5,
-          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : 'afuera',
+          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : coop?.lapLocation === 'outside' ? 'afuera' : 'personalizado',
           cooperMetersPerLap: coop?.metersPerLap || (coop?.lapLocation === 'inside' ? 250 : 400),
-          cooperNavetteLevel: coop?.levelNumber || 5,
+          cooperNavetteLevel: coop?.navetteLevelNumber || coop?.levelNumber || 5,
           cooperReason: coop?.statusReason || '',
           enduranceStatus: end?.status || 'completed',
           enduranceMinutes: Math.floor(totalSec / 60),
@@ -218,9 +219,9 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
           cooperVariant: coop?.variant || 'standard',
           cooperDistance: coop?.distanceMeters || (isFemale ? 1800 : 2200),
           cooperLaps: coop?.lapsCount || 5.5,
-          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : 'afuera',
-          cooperMetersPerLap: coop?.metersPerLap || 400,
-          cooperNavetteLevel: coop?.levelNumber || 5,
+          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : coop?.lapLocation === 'outside' ? 'afuera' : 'personalizado',
+          cooperMetersPerLap: coop?.metersPerLap || (coop?.lapLocation === 'inside' ? 250 : 400),
+          cooperNavetteLevel: coop?.navetteLevelNumber || coop?.levelNumber || 5,
           cooperReason: '',
           enduranceStatus: 'completed',
           enduranceMinutes: Math.floor(totalSec / 60),
@@ -400,7 +401,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     }
 
     let dist = row.cooperDistance;
-    if (row.cooperVariant === 'laps') {
+    if (row.cooperVariant === 'laps' || (row.cooperVariant === 'both' && row.cooperLaps > 0)) {
       dist = Math.round((row.cooperLaps || 0) * (row.cooperMetersPerLap || 400));
     }
 
@@ -430,6 +431,19 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     const catalog = COOPER_LEVELS_CATALOG[levelNum] || COOPER_LEVELS_CATALOG[5];
     const vo2max = Number(((dist - 504.9) / 44.73).toFixed(1));
 
+    if (row.cooperVariant === 'both') {
+      const navLvl = Math.max(1, Math.min(20, row.cooperNavetteLevel || 5));
+      return {
+        level: `Cooper Nivel ${levelNum} · Navette Nivel ${navLvl}`,
+        levelNumber: levelNum,
+        description: `Evaluación Mixta: Test Cooper (${dist}m, Nivel ${levelNum}) y Course Navette (Nivel ${navLvl}). ${catalog.description}`,
+        targetZoneRecommendation: catalog.coachingRecommendation,
+        distanceMeters: dist,
+        estimatedVo2Max: Math.max(0, vo2max),
+        rating: undefined,
+      };
+    }
+
     return {
       level: row.cooperVariant === 'laps' ? `Cooper 2 · Nivel ${levelNum}` : catalog.levelName,
       levelNumber: levelNum,
@@ -441,7 +455,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     };
   };
 
-  // Guardar todas las evaluaciones de la grilla
+  // Guardar todas las evaluaciones de la evaluación masiva
   const handleSaveAllEvaluations = async () => {
     if (!onAddEvaluation && !onUpdateEvaluation) return;
     setIsSaving(true);
@@ -454,6 +468,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
 
       // Calcular detalles de Cooper
       const coopDetails = calculateCooperDetails(row);
+      const isLapsType = row.cooperVariant === 'laps' || (row.cooperVariant === 'both' && row.cooperLaps > 0);
       const cooperRecord: CooperTestRecord = {
         level: coopDetails.level,
         levelNumber: coopDetails.levelNumber,
@@ -465,11 +480,16 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         status: row.cooperStatus,
         statusReason: row.cooperReason || undefined,
         variant: row.cooperVariant,
-        lapLocation: row.cooperVariant === 'laps' ? (row.cooperTrack === 'afuera' ? 'outside' : 'inside') : undefined,
-        lapsCount: row.cooperVariant === 'laps' ? row.cooperLaps : undefined,
-        metersPerLap: row.cooperVariant === 'laps' ? row.cooperMetersPerLap : undefined,
-        notes: row.cooperVariant === 'laps' 
+        lapLocation: isLapsType ? (row.cooperTrack === 'adentro' ? 'inside' : 'outside') : undefined,
+        lapsCount: isLapsType ? row.cooperLaps : undefined,
+        metersPerLap: isLapsType ? row.cooperMetersPerLap : undefined,
+        navetteLevelNumber: (row.cooperVariant === 'navette' || row.cooperVariant === 'both') ? row.cooperNavetteLevel : undefined,
+        notes: row.cooperVariant === 'both'
+          ? `Ambos Tests: Cooper ${coopDetails.distanceMeters}m (${row.cooperLaps ? `${row.cooperLaps}v en circuito ${row.cooperTrack} a ${row.cooperMetersPerLap}m/v` : '12 min'}) y Course Navette Nivel ${row.cooperNavetteLevel}.`
+          : row.cooperVariant === 'laps' 
           ? `Cooper 2 por Vueltas: ${row.cooperLaps} vueltas en circuito ${row.cooperTrack} (${row.cooperMetersPerLap}m/v = ${coopDetails.distanceMeters}m).`
+          : row.cooperVariant === 'navette'
+          ? `Course Navette: Nivel ${row.cooperNavetteLevel} completado.`
           : undefined,
       };
 
@@ -869,172 +889,348 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                   <div className={`p-3 sm:p-4 space-y-4 ${isExpanded ? 'block' : 'hidden md:block'}`}>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
                       {/* ========================================== */}
-                      {/* 1. AERÓBICO: COOPER / NAVETTE (Cols 4) */}
+                      {/* 1. AERÓBICO: COOPER / NAVETTE / AMBOS (Cols 4) */}
                       {/* ========================================== */}
-                      <div className="md:col-span-4 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <strong className="text-white text-xs flex items-center gap-1 font-bold">
-                            <span>🏃 Aeróbico</span>
-                          </strong>
-                          {/* Status buttons */}
-                          <div className="flex items-center gap-1">
-                            {(['completed', 'na', 'np'] as const).map(st => (
-                              <button
-                                key={st}
-                                type="button"
-                                onClick={() => updateRow(athlete.id, { cooperStatus: st })}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  row.cooperStatus === st
-                                    ? st === 'completed'
-                                      ? 'bg-blue-600 text-white'
-                                      : st === 'na'
-                                      ? 'bg-amber-500 text-neutral-950'
-                                      : 'bg-red-700 text-white'
-                                    : 'bg-neutral-900 text-neutral-400 hover:text-white'
-                                }`}
-                              >
-                                {st === 'completed' ? 'Ok' : st.toUpperCase()}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {row.cooperStatus === 'completed' ? (
-                          <div className="space-y-2">
-                            {/* Variant selector */}
-                            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-neutral-900 border border-neutral-800">
-                              <button
-                                type="button"
-                                onClick={() => updateRow(athlete.id, { cooperVariant: 'standard' })}
-                                className={`flex-1 py-1 rounded text-[10px] font-bold ${
-                                  row.cooperVariant === 'standard' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
-                                }`}
-                              >
-                                Cooper 12m
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateRow(athlete.id, { cooperVariant: 'laps' })}
-                                className={`flex-1 py-1 rounded text-[10px] font-bold ${
-                                  row.cooperVariant === 'laps' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
-                                }`}
-                              >
-                                Cooper 2 (Vueltas)
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateRow(athlete.id, { cooperVariant: 'navette' })}
-                                className={`flex-1 py-1 rounded text-[10px] font-bold ${
-                                  row.cooperVariant === 'navette' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
-                                }`}
-                              >
-                                Navette
-                              </button>
+                      {(() => {
+                        const coopDetails = calculateCooperDetails(row);
+                        return (
+                          <div className="md:col-span-4 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <strong className="text-white text-xs flex items-center gap-1 font-bold">
+                                <span>🏃 Aeróbico</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-normal">
+                                  ({row.cooperVariant === 'both' ? 'Cooper + Navette' : row.cooperVariant === 'navette' ? 'Navette' : row.cooperVariant === 'laps' ? 'Cooper 2' : 'Cooper 12m'})
+                                </span>
+                              </strong>
+                              {/* Status buttons */}
+                              <div className="flex items-center gap-1">
+                                {(['completed', 'na', 'np'] as const).map(st => (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => updateRow(athlete.id, { cooperStatus: st })}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      row.cooperStatus === st
+                                        ? st === 'completed'
+                                          ? 'bg-blue-600 text-white'
+                                          : st === 'na'
+                                          ? 'bg-amber-500 text-neutral-950'
+                                          : 'bg-red-700 text-white'
+                                        : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                                    }`}
+                                  >
+                                    {st === 'completed' ? 'Ok' : st.toUpperCase()}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
 
-                            {/* Inputs según variante */}
-                            {row.cooperVariant === 'standard' && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] text-neutral-400">Metros recorridos:</span>
-                                <div className="flex items-center gap-1 bg-neutral-900 px-2 py-1 rounded-lg border border-neutral-700">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    value={row.cooperDistance === 0 ? '' : row.cooperDistance}
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                      updateRow(athlete.id, { cooperDistance: isNaN(val) ? 0 : val });
-                                    }}
-                                    className="w-16 bg-transparent text-right font-mono font-bold text-white text-xs outline-none"
-                                  />
-                                  <span className="text-[10px] text-neutral-400">m</span>
+                            {row.cooperStatus === 'completed' ? (
+                              <div className="space-y-2">
+                                {/* Variant selector: 4 claras opciones */}
+                                <div className="grid grid-cols-4 gap-1 p-0.5 rounded-lg bg-neutral-900 border border-neutral-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateRow(athlete.id, { cooperVariant: 'standard' })}
+                                    className={`py-1 rounded text-[10px] font-bold text-center transition-all ${
+                                      row.cooperVariant === 'standard' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                                    }`}
+                                    title="Test Cooper 12 Minutos Tradicional (Metros directos)"
+                                  >
+                                    Cooper 12m
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateRow(athlete.id, { cooperVariant: 'laps' })}
+                                    className={`py-1 rounded text-[10px] font-bold text-center transition-all ${
+                                      row.cooperVariant === 'laps' ? 'bg-amber-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                                    }`}
+                                    title="Cooper 2 por Vueltas (Pista Adentro / Afuera)"
+                                  >
+                                    Vueltas
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateRow(athlete.id, { cooperVariant: 'navette' })}
+                                    className={`py-1 rounded text-[10px] font-bold text-center transition-all ${
+                                      row.cooperVariant === 'navette' ? 'bg-purple-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                                    }`}
+                                    title="Course Navette (Palier / Nivel 1 al 20)"
+                                  >
+                                    Navette
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateRow(athlete.id, { cooperVariant: 'both' })}
+                                    className={`py-1 rounded text-[10px] font-bold text-center transition-all ${
+                                      row.cooperVariant === 'both' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                                    }`}
+                                    title="Ambas pruebas: Cooper y Course Navette evaluados juntos"
+                                  >
+                                    Ambos
+                                  </button>
                                 </div>
-                              </div>
-                            )}
 
-                            {row.cooperVariant === 'laps' && (
-                              <div className="space-y-1.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] text-neutral-400">Vueltas:</span>
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    value={row.cooperLaps === 0 ? '' : row.cooperLaps}
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                      updateRow(athlete.id, { cooperLaps: isNaN(val) ? 0 : val });
-                                    }}
-                                    className="w-14 bg-neutral-900 border border-neutral-700 px-1.5 py-0.5 rounded text-center font-mono font-bold text-white text-xs outline-none"
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="text-[10px] text-neutral-400">Pista:</span>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: 400 })}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] ${row.cooperTrack === 'afuera' ? 'bg-emerald-600 text-white font-bold' : 'bg-neutral-900 text-neutral-400'}`}
-                                    >
-                                      Afuera (400m)
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: 250 })}
-                                      className={`px-1.5 py-0.5 rounded text-[10px] ${row.cooperTrack === 'adentro' ? 'bg-emerald-600 text-white font-bold' : 'bg-neutral-900 text-neutral-400'}`}
-                                    >
-                                      Adentro (250m)
-                                    </button>
+                                {/* VARIANTE 1: COOPER 12 MINUTOS TRADICIONAL */}
+                                {row.cooperVariant === 'standard' && (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-[10px] text-neutral-400">Metros 12 min:</span>
+                                      <div className="flex items-center gap-1 bg-neutral-900 px-2 py-0.5 rounded-lg border border-neutral-700">
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          value={row.cooperDistance === 0 ? '' : row.cooperDistance}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            updateRow(athlete.id, { cooperDistance: isNaN(val) ? 0 : val });
+                                          }}
+                                          className="w-16 bg-transparent text-right font-mono font-bold text-white text-xs outline-none"
+                                        />
+                                        <span className="text-[10px] text-neutral-400 font-mono">m</span>
+                                      </div>
+                                      <span className="text-[10px] font-mono text-blue-400 font-bold bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-800/80 whitespace-nowrap">
+                                        {coopDetails.levelNumber > 0 ? `Nivel ${coopDetails.levelNumber}` : 'Nivel 1'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[9px] text-neutral-400 pt-0.5">
+                                      <span>Circuito de Referencia:</span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera' })}
+                                          className={`px-1.5 py-0.5 rounded ${row.cooperTrack === 'afuera' ? 'bg-emerald-600 text-white font-bold' : 'bg-neutral-900 text-neutral-400'}`}
+                                        >
+                                          Afuera
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro' })}
+                                          className={`px-1.5 py-0.5 rounded ${row.cooperTrack === 'adentro' ? 'bg-blue-600 text-white font-bold' : 'bg-neutral-900 text-neutral-400'}`}
+                                        >
+                                          Adentro
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="flex items-center justify-between gap-1 text-[10px] text-neutral-400 pt-0.5">
-                                  <span>Metros/vuelta:</span>
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    value={row.cooperMetersPerLap === 0 ? '' : row.cooperMetersPerLap}
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                      updateRow(athlete.id, { cooperMetersPerLap: isNaN(val) ? 0 : val });
-                                    }}
-                                    className="w-12 bg-neutral-900 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono text-white text-[10px] outline-none"
-                                  />
-                                  <span className="font-mono text-emerald-400 font-bold">
-                                    Total: {Math.round((row.cooperLaps || 0) * (row.cooperMetersPerLap || 400))}m
-                                  </span>
-                                </div>
-                              </div>
-                            )}
+                                )}
 
-                            {row.cooperVariant === 'navette' && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] text-neutral-400">Nivel Navette (1 al 20):</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="20"
-                                  value={row.cooperNavetteLevel}
-                                  onChange={(e) => updateRow(athlete.id, { cooperNavetteLevel: Math.max(1, Math.min(20, parseInt(e.target.value) || 1)) })}
-                                  className="w-14 bg-neutral-900 border border-neutral-700 px-2 py-1 rounded-lg text-center font-mono font-bold text-white text-xs outline-none"
-                                />
+                                {/* VARIANTE 2: COOPER 2 POR VUELTAS */}
+                                {row.cooperVariant === 'laps' && (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-[10px] text-neutral-400">Pista / Circuito:</span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: 400 })}
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                            row.cooperTrack === 'afuera' && row.cooperMetersPerLap === 400
+                                              ? 'bg-emerald-600 text-white shadow-sm'
+                                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                                          }`}
+                                        >
+                                          Afuera (400m)
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: 250 })}
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                            row.cooperTrack === 'adentro' && row.cooperMetersPerLap === 250
+                                              ? 'bg-blue-600 text-white shadow-sm'
+                                              : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                                          }`}
+                                        >
+                                          Adentro (250m)
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <div className="bg-neutral-900 px-2 py-1 rounded-lg border border-neutral-700">
+                                        <span className="text-[9px] text-neutral-400 block font-semibold">Vueltas:</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          value={row.cooperLaps === 0 ? '' : row.cooperLaps}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            updateRow(athlete.id, { cooperLaps: isNaN(val) ? 0 : val });
+                                          }}
+                                          className="w-full bg-transparent text-center font-mono font-bold text-white text-xs outline-none"
+                                        />
+                                      </div>
+
+                                      <div className="bg-neutral-900 px-2 py-1 rounded-lg border border-neutral-700">
+                                        <span className="text-[9px] text-neutral-400 block font-semibold">Metros/vuelta:</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          value={row.cooperMetersPerLap === 0 ? '' : row.cooperMetersPerLap}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            updateRow(athlete.id, { 
+                                              cooperMetersPerLap: isNaN(val) ? 0 : val,
+                                              cooperTrack: val === 400 ? 'afuera' : val === 250 ? 'adentro' : 'personalizado'
+                                            });
+                                          }}
+                                          className="w-full bg-transparent text-center font-mono font-bold text-amber-300 text-xs outline-none"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[10px] bg-neutral-900/60 px-2 py-0.5 rounded border border-neutral-800">
+                                      <span className="text-neutral-400">Total:</span>
+                                      <span className="font-mono text-emerald-400 font-bold">
+                                        {Math.round((row.cooperLaps || 0) * (row.cooperMetersPerLap || 400))}m · {coopDetails.levelNumber > 0 ? `Nivel ${coopDetails.levelNumber}` : 'Nivel 1'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* VARIANTE 3: COURSE NAVETTE */}
+                                {row.cooperVariant === 'navette' && (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-[10px] text-neutral-400">Nivel Navette (1 al 20):</span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperNavetteLevel: Math.max(1, (row.cooperNavetteLevel || 5) - 1) })}
+                                          className="w-6 h-6 rounded bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center justify-center active:scale-95"
+                                        >
+                                          -
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="20"
+                                          value={row.cooperNavetteLevel}
+                                          onChange={(e) => updateRow(athlete.id, { cooperNavetteLevel: Math.max(1, Math.min(20, parseInt(e.target.value) || 1)) })}
+                                          className="w-12 bg-neutral-900 border border-neutral-700 py-1 rounded text-center font-mono font-bold text-white text-xs outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperNavetteLevel: Math.min(20, (row.cooperNavetteLevel || 5) + 1) })}
+                                          className="w-6 h-6 rounded bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center justify-center active:scale-95"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="text-[10px] text-purple-300 font-mono bg-purple-950/40 px-2 py-0.5 rounded border border-purple-800/40 text-center">
+                                      Test Navette · Palier {row.cooperNavetteLevel || 5} de 20
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* VARIANTE 4: AMBOS (COOPER + NAVETTE JUNTOS) */}
+                                {row.cooperVariant === 'both' && (
+                                  <div className="space-y-2 p-2 rounded-lg bg-neutral-900/90 border border-emerald-500/40">
+                                    {/* Subsección 1: Cooper */}
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between text-[9px] text-neutral-400">
+                                        <span className="font-bold text-neutral-200">1. Cooper (Pista):</span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: 400 })}
+                                            className={`px-1.5 py-0.2 rounded font-bold ${row.cooperTrack === 'afuera' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                                          >
+                                            Afuera 400m
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: 250 })}
+                                            className={`px-1.5 py-0.2 rounded font-bold ${row.cooperTrack === 'adentro' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
+                                          >
+                                            Adentro 250m
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-1 text-[10px]">
+                                        <span className="text-neutral-400">Vueltas:</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          value={row.cooperLaps === 0 ? '' : row.cooperLaps}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            updateRow(athlete.id, { cooperLaps: isNaN(val) ? 0 : val });
+                                          }}
+                                          className="w-12 bg-neutral-950 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-white text-[10px] outline-none"
+                                        />
+                                        <span className="text-neutral-400">m/v:</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0"
+                                          value={row.cooperMetersPerLap === 0 ? '' : row.cooperMetersPerLap}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            updateRow(athlete.id, { cooperMetersPerLap: isNaN(val) ? 0 : val });
+                                          }}
+                                          className="w-12 bg-neutral-950 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-amber-300 text-[10px] outline-none"
+                                        />
+                                        <span className="text-[10px] font-mono text-emerald-400 font-bold whitespace-nowrap">
+                                          ={Math.round((row.cooperLaps || 0) * (row.cooperMetersPerLap || 400))}m
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Subsección 2: Navette */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-neutral-800 text-[10px]">
+                                      <span className="text-purple-300 font-bold">2. Navette Nivel:</span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperNavetteLevel: Math.max(1, (row.cooperNavetteLevel || 5) - 1) })}
+                                          className="w-5 h-5 rounded bg-neutral-800 text-white font-bold text-xs flex items-center justify-center active:scale-95"
+                                        >
+                                          -
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="20"
+                                          value={row.cooperNavetteLevel}
+                                          onChange={(e) => updateRow(athlete.id, { cooperNavetteLevel: Math.max(1, Math.min(20, parseInt(e.target.value) || 1)) })}
+                                          className="w-10 bg-neutral-950 border border-purple-500/50 py-0.5 rounded text-center font-mono font-bold text-purple-300 text-xs outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRow(athlete.id, { cooperNavetteLevel: Math.min(20, (row.cooperNavetteLevel || 5) + 1) })}
+                                          className="w-5 h-5 rounded bg-neutral-800 text-white font-bold text-xs flex items-center justify-center active:scale-95"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            ) : (
+                              <input
+                                type="text"
+                                value={row.cooperReason}
+                                onChange={(e) => updateRow(athlete.id, { cooperReason: e.target.value })}
+                                placeholder="Motivo de NA/NP (o dejar en blanco)..."
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white outline-none"
+                              />
                             )}
                           </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={row.cooperReason}
-                            onChange={(e) => updateRow(athlete.id, { cooperReason: e.target.value })}
-                            placeholder="Motivo (o dejar en blanco)..."
-                            className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white outline-none"
-                          />
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {/* ========================================== */}
                       {/* 2. RESISTENCIA FUNCIONAL (Cols 3) */}

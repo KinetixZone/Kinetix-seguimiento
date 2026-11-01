@@ -218,8 +218,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [cooperReason, setCooperReason] = useState<string>('');
   const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
   const [optionalDistance, setOptionalDistance] = useState<number>(2800);
+  const [selectedNavetteLevel, setSelectedNavetteLevel] = useState<number>(5);
 
-  // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera) vs Course Navette
+  // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera) vs Course Navette vs Ambos
   const [cooperVariant, setCooperVariant] = useState<CooperTestVariant>('standard');
   const [cooperLapLocation, setCooperLapLocation] = useState<'outside' | 'inside'>('outside');
   const [cooperLapsCount, setCooperLapsCount] = useState<number>(6);
@@ -367,6 +368,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setCooperLapLocation(latest.cooperTest.lapLocation || 'outside');
       setCooperLapsCount(latest.cooperTest.lapsCount || 6);
       setCooperMetersPerLap(latest.cooperTest.metersPerLap || (latest.cooperTest.lapLocation === 'inside' ? 250 : 400));
+      setSelectedNavetteLevel(latest.cooperTest.navetteLevelNumber || (latest.cooperTest.variant === 'navette' ? latest.cooperTest.levelNumber : 5));
 
       // Endurance Test state
       const endStatus = latest.enduranceTest?.status || 
@@ -482,16 +484,27 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     const isCooperDone = cooperStatus === 'completed';
     const isEnduranceDone = enduranceStatus === 'completed';
     const effectiveCooperDistance = isCooperDone
-      ? (cooperVariant === 'laps' ? (optionalDistance > 0 ? optionalDistance : cooperLapsCount * cooperMetersPerLap) : optionalDistance)
+      ? (cooperVariant === 'laps' || cooperVariant === 'both' ? (optionalDistance > 0 ? optionalDistance : cooperLapsCount * cooperMetersPerLap) : optionalDistance)
       : 0;
 
+    let computedCooperLevelTitle = levelInfo.levelName;
+    if (cooperVariant === 'laps') {
+      computedCooperLevelTitle = `Cooper 2 (${cooperLapsCount} vueltas · ${effectiveCooperDistance}m)`;
+    } else if (cooperVariant === 'navette') {
+      computedCooperLevelTitle = `Nivel ${selectedNavetteLevel} (Course Navette)`;
+    } else if (cooperVariant === 'both') {
+      computedCooperLevelTitle = `Cooper 12m (${effectiveCooperDistance}m) + Navette Nivel ${selectedNavetteLevel}`;
+    }
+
     const cooperTestObj: CooperTestRecord = {
-      level: isCooperDone 
-        ? (cooperVariant === 'laps' ? `Cooper 2 (${cooperLapsCount} vueltas)` : levelInfo.levelName) 
-        : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-      levelNumber: isCooperDone ? (cooperVariant === 'laps' ? 0 : selectedCooperLevel) : 0,
+      level: isCooperDone ? computedCooperLevelTitle : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+      levelNumber: isCooperDone ? (cooperVariant === 'navette' ? selectedNavetteLevel : selectedCooperLevel) : 0,
       description: isCooperDone 
-        ? (cooperVariant === 'laps'
+        ? (cooperVariant === 'both'
+            ? `Ambos Tests Realizados: Cooper (${effectiveCooperDistance}m, Nivel ${selectedCooperLevel}) y Course Navette (Palier ${selectedNavetteLevel} de 20).`
+            : cooperVariant === 'navette'
+            ? `Course Navette: Nivel ${selectedNavetteLevel} de 20 (Palier completado).`
+            : cooperVariant === 'laps'
             ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera (circuito exterior)' : 'adentro (circuito box)'} (${cooperMetersPerLap}m c/u = ${effectiveCooperDistance.toLocaleString()}m).`
             : levelInfo.description)
         : (cooperStatus === 'na' 
@@ -504,16 +517,21 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       notes: cooperReason 
         ? `${cooperStatus.toUpperCase()}: ${cooperReason}` 
         : (isCooperDone 
-            ? (cooperVariant === 'laps'
-                ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} = ${effectiveCooperDistance}m (${levelInfo.badgeLabel})`
-                : `Test Cooper Normal: ${levelInfo.badgeLabel} (${optionalDistance}m)`)
+            ? (cooperVariant === 'both'
+                ? `Ambos: Cooper ${effectiveCooperDistance}m (${cooperLapsCount > 0 ? `${cooperLapsCount}v ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} ${cooperMetersPerLap}m/v` : '12 min'}) + Navette Nivel ${selectedNavetteLevel}`
+                : cooperVariant === 'laps'
+                ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} = ${effectiveCooperDistance}m`
+                : cooperVariant === 'navette'
+                ? `Course Navette: Nivel ${selectedNavetteLevel} de 20`
+                : `Test Cooper (12 Min): ${optionalDistance}m (Nivel ${selectedCooperLevel})`)
             : `Estado: ${cooperStatus.toUpperCase()}`),
       status: cooperStatus,
       statusReason: cooperReason,
       variant: cooperVariant,
-      lapLocation: cooperVariant === 'laps' ? cooperLapLocation : undefined,
-      lapsCount: cooperVariant === 'laps' ? cooperLapsCount : undefined,
-      metersPerLap: cooperVariant === 'laps' ? cooperMetersPerLap : undefined,
+      lapLocation: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapLocation : undefined,
+      lapsCount: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapsCount : undefined,
+      metersPerLap: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperMetersPerLap : undefined,
+      navetteLevelNumber: (cooperVariant === 'navette' || cooperVariant === 'both') ? selectedNavetteLevel : undefined,
     };
 
     const enduranceTestObj: EnduranceTimeTestRecord = {
@@ -2804,19 +2822,19 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                 {cooperStatus === 'completed' ? (
                   <>
-                    {/* SELECTOR ENTRE TEST COOPER NORMAL Y TEST COOPER 2 (POR VUELTAS) */}
-                    <div className="p-1 rounded-xl bg-neutral-900 border border-neutral-800 grid grid-cols-2 gap-1 text-xs">
+                    {/* SELECTOR DE 4 VARIANTES AERÓBICAS OFICIALES KINETIX */}
+                    <div className="p-1 rounded-xl bg-neutral-900 border border-neutral-800 grid grid-cols-4 gap-1 text-xs">
                       <button
                         type="button"
                         onClick={() => setCooperVariant('standard')}
-                        className={`py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
                           cooperVariant === 'standard'
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'text-neutral-400 hover:text-white'
                         }`}
+                        title="Test de Cooper 12 Minutos Tradicional (Metros directos)"
                       >
-                        <span>🏃 Course Navette / Cooper</span>
-                        <span className="text-[10px] font-normal opacity-75">(Niveles 1 al 20)</span>
+                        🏃 Cooper 12m
                       </button>
 
                       <button
@@ -2827,14 +2845,40 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           setSelectedCooperLevel(getLevelFromDistance(dist));
                           setOptionalDistance(dist);
                         }}
-                        className={`py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
                           cooperVariant === 'laps'
-                            ? 'bg-amber-500 text-neutral-950 font-extrabold shadow-sm'
+                            ? 'bg-amber-600 text-white font-extrabold shadow-sm'
                             : 'text-neutral-400 hover:text-white'
                         }`}
+                        title="Test Cooper 2 (Por Vueltas en Pista)"
                       >
-                        <span>🔄 Test Cooper 2</span>
-                        <span className="text-[10px] font-bold opacity-85">(Por Vueltas)</span>
+                        🔄 Vueltas
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCooperVariant('navette')}
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
+                          cooperVariant === 'navette'
+                            ? 'bg-purple-600 text-white font-extrabold shadow-sm'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                        title="Course Navette / Test 20m Luc Léger (Niveles 1 al 20)"
+                      >
+                        🎽 Navette
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCooperVariant('both')}
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
+                          cooperVariant === 'both'
+                            ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                        title="Hicieron ambas pruebas: Cooper y Course Navette en este ciclo"
+                      >
+                        🏃+🎽 Ambos
                       </button>
                     </div>
 
@@ -3872,16 +3916,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                 {cooperStatus === 'completed' ? (
                   <div className="space-y-3">
-                    {/* Toggle Cooper Normal vs Cooper 2 por Vueltas */}
-                    <div className="flex items-center gap-1 bg-neutral-900 p-0.5 rounded-xl border border-neutral-800">
+                    {/* Selector de 4 Variantes en Edición */}
+                    <div className="grid grid-cols-4 gap-1 p-0.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
                       <button
                         type="button"
                         onClick={() => setCooperVariant('standard')}
-                        className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
                           cooperVariant === 'standard' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                         }`}
+                        title="Cooper 12 Minutos Tradicional"
                       >
-                        Course Navette / Niveles (1 al 20)
+                        🏃 Cooper 12m
                       </button>
                       <button
                         type="button"
@@ -3890,11 +3935,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           const d = Math.round(cooperLapsCount * cooperMetersPerLap);
                           setOptionalDistance(d);
                         }}
-                        className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
                           cooperVariant === 'laps' ? 'bg-amber-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                         }`}
+                        title="Cooper 2 por Vueltas"
                       >
-                        Cooper 2 (Por Vueltas)
+                        🔄 Vueltas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCooperVariant('navette')}
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
+                          cooperVariant === 'navette' ? 'bg-purple-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                        }`}
+                        title="Course Navette (Palier 1 al 20)"
+                      >
+                        🎽 Navette
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCooperVariant('both')}
+                        className={`py-1.5 px-1 rounded-lg font-bold transition-all text-center ${
+                          cooperVariant === 'both' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                        }`}
+                        title="Ambos Tests Realizados"
+                      >
+                        🏃+🎽 Ambos
                       </button>
                     </div>
 
@@ -4635,9 +4701,21 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         ];
 
                     const isCooper2 = cooperVariant === 'laps';
+                    const isBoth = cooperVariant === 'both';
+                    const isNavette = cooperVariant === 'navette';
+                    const isLapsType = isCooper2 || (isBoth && cooperLapsCount > 0);
                     const effectiveCooperDist = isCooperDone
-                      ? (isCooper2 ? (optionalDistance > 0 ? optionalDistance : cooperLapsCount * cooperMetersPerLap) : optionalDistance)
+                      ? (isLapsType ? (optionalDistance > 0 ? optionalDistance : cooperLapsCount * cooperMetersPerLap) : optionalDistance)
                       : 0;
+
+                    let editCooperLevel = levelInfo.levelName;
+                    if (isBoth) {
+                      editCooperLevel = `Cooper 12m (${effectiveCooperDist}m) + Navette Nivel ${selectedNavetteLevel}`;
+                    } else if (isNavette) {
+                      editCooperLevel = `Nivel ${selectedNavetteLevel} (Course Navette)`;
+                    } else if (isCooper2) {
+                      editCooperLevel = `Cooper 2 (${cooperLapsCount} vueltas)`;
+                    }
 
                     onUpdateEvaluation(editingEval.id, {
                       evaluationDate: evalDate,
@@ -4645,25 +4723,36 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         ...editingEval.cooperTest,
                         status: cooperStatus,
                         statusReason: cooperReason,
-                        variant: isCooper2 ? 'laps' : 'standard',
-                        lapLocation: isCooper2 ? cooperLapLocation : undefined,
-                        lapsCount: isCooper2 ? cooperLapsCount : undefined,
-                        metersPerLap: isCooper2 ? cooperMetersPerLap : undefined,
+                        variant: cooperVariant,
+                        lapLocation: isLapsType ? cooperLapLocation : undefined,
+                        lapsCount: isLapsType ? cooperLapsCount : undefined,
+                        metersPerLap: isLapsType ? cooperMetersPerLap : undefined,
+                        navetteLevelNumber: (isNavette || isBoth) ? selectedNavetteLevel : undefined,
                         distanceMeters: effectiveCooperDist,
                         level: isCooperDone 
-                          ? (isCooper2 ? `Cooper 2 (${cooperLapsCount} vueltas)` : levelInfo.levelName) 
+                          ? editCooperLevel 
                           : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-                        levelNumber: isCooperDone ? (isCooper2 ? 0 : selectedCooperLevel) : 0,
+                        levelNumber: isCooperDone ? (isNavette ? selectedNavetteLevel : selectedCooperLevel) : 0,
                         description: isCooperDone 
-                          ? (isCooper2 
-                              ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera (circuito exterior)' : 'adentro (circuito box)'} (~${effectiveCooperDist}m).`
+                          ? (isBoth
+                              ? `Ambos Tests: Cooper (${effectiveCooperDist}m) y Course Navette Nivel ${selectedNavetteLevel}.`
+                              : isNavette
+                              ? `Course Navette: Nivel ${selectedNavetteLevel} completado.`
+                              : isCooper2 
+                              ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} (~${effectiveCooperDist}m).`
                               : levelInfo.description) 
                           : (cooperStatus === 'na' ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
                         targetZoneRecommendation: isCooperDone 
                           ? (isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : levelInfo.coachingRecommendation) 
                           : 'Acondicionamiento físico adaptado.',
-                        notes: isCooperDone && isCooper2 
-                          ? `Cooper 2: ${cooperLapsCount} vueltas (~${effectiveCooperDist}m, ${cooperLapLocation === 'outside' ? 'Afuera' : 'Adentro'})`
+                        notes: isCooperDone 
+                          ? (isBoth
+                              ? `Ambos: Cooper ${effectiveCooperDist}m + Navette Nivel ${selectedNavetteLevel}`
+                              : isCooper2
+                              ? `Cooper 2: ${cooperLapsCount} vueltas (~${effectiveCooperDist}m, ${cooperLapLocation === 'outside' ? 'Afuera' : 'Adentro'})`
+                              : isNavette
+                              ? `Navette Nivel ${selectedNavetteLevel}`
+                              : `Cooper 12m: ${effectiveCooperDist}m`)
                           : undefined,
                       },
                       enduranceTest: {

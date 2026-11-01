@@ -79,7 +79,7 @@ export type CooperRating = 'Muy Malo' | 'Malo' | 'Regular' | 'Bueno' | 'Excelent
 
 export type EvaluationStatus = 'completed' | 'na' | 'np';
 
-export type CooperTestVariant = 'standard' | 'laps' | 'navette'; // Test Cooper (12m), Cooper 2 (por vueltas) o Course Navette (20m)
+export type CooperTestVariant = 'standard' | 'laps' | 'navette' | 'both'; // Test Cooper (12m), Cooper 2 (por vueltas), Course Navette (20m) o Ambos juntos
 export type CooperLapLocation = 'outside' | 'inside'; // Circuito afuera o adentro
 
 export interface CooperTestRecord {
@@ -93,10 +93,11 @@ export interface CooperTestRecord {
   notes?: string;
   status?: EvaluationStatus; // 'completed' | 'na' | 'np'
   statusReason?: string; // Motivo: Adulto mayor, Niños, Lesión, Enfermedad
-  variant?: CooperTestVariant; // 'standard' (Test Cooper Normal) o 'laps' (Test Cooper 2 por vueltas)
+  variant?: CooperTestVariant; // 'standard' | 'laps' | 'navette' | 'both'
   lapLocation?: CooperLapLocation; // 'outside' (Afuera) o 'inside' (Adentro)
   lapsCount?: number; // Número de vueltas completadas
-  metersPerLap?: number; // Metros que mide cada vuelta (ej. 400m afuera o 180m adentro)
+  metersPerLap?: number; // Metros que mide cada vuelta (ej. 400m afuera o 250m adentro)
+  navetteLevelNumber?: number; // Nivel de Course Navette (1 al 20) si se hizo Navette o Ambos
 }
 
 export type BrandTheme = 'blue' | 'red';

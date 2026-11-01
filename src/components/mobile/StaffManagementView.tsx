@@ -1224,7 +1224,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             </button>
           )}
 
-          {/* BOTÓN PROMINENTE: EVALUAR A TODOS (GRILLA MASIVA) */}
+          {/* BOTÓN PROMINENTE: EVALUAR A TODOS (EVALUACIÓN MASIVA) */}
           <button
             type="button"
             onClick={() => setShowBatchEvaluationGrid(true)}
@@ -1232,7 +1232,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             title="Abrir Sábana Masiva para calificar a todos los atletas de un solo jalón tipo Excel"
           >
             <FileSpreadsheet className="w-4 h-4 text-white" />
-            <span>📊 Evaluar a Todos (Grilla Masiva)</span>
+            <span>📊 Evaluar a Todos (Evaluación Masiva)</span>
           </button>
 
           <button
@@ -1847,10 +1847,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               type="button"
               onClick={() => setShowBatchEvaluationGrid(true)}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-blue-400/30"
-              title="Abrir sábana / grilla masiva tipo Excel para evaluar a todos los atletas de un solo jalón"
+              title="Abrir sábana masiva tipo Excel para evaluar a todos los atletas de un solo jalón"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
-              <span>📊 Evaluar a Todos (Grilla Masiva)</span>
+              <span>📊 Evaluar a Todos (Evaluación Masiva)</span>
             </button>
 
             <button
