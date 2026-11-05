@@ -120,6 +120,10 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
   const [showBatchNAModal, setShowBatchNAModal] = useState<boolean>(false);
   const [batchNAReason, setBatchNAReason] = useState<string>('Ingreso posterior a fecha de pruebas');
 
+  // Estado de guardado individual por atleta
+  const [savingAthleteId, setSavingAthleteId] = useState<string | null>(null);
+  const [justSavedAthleteIds, setJustSavedAthleteIds] = useState<Record<string, boolean>>({});
+
   const athletes = useMemo(() => {
     return users.filter(u => u.role === 'athlete');
   }, [users]);
@@ -455,6 +459,142 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     };
   };
 
+  // Construir el payload completo de evaluación para un atleta
+  const buildEvaluationPayload = (row: AthleteRowState, athleteId: string) => {
+    // Calcular detalles de Cooper
+    const coopDetails = calculateCooperDetails(row);
+    const isLapsType = row.cooperVariant === 'laps' || (row.cooperVariant === 'both' && row.cooperLaps > 0);
+    const cooperRecord: CooperTestRecord = {
+      level: coopDetails.level,
+      levelNumber: coopDetails.levelNumber,
+      description: coopDetails.description,
+      targetZoneRecommendation: coopDetails.targetZoneRecommendation,
+      distanceMeters: coopDetails.distanceMeters,
+      estimatedVo2Max: coopDetails.estimatedVo2Max,
+      rating: coopDetails.rating,
+      status: row.cooperStatus,
+      statusReason: row.cooperReason || undefined,
+      variant: row.cooperVariant,
+      lapLocation: isLapsType ? (row.cooperTrack === 'adentro' ? 'inside' : 'outside') : undefined,
+      lapsCount: isLapsType ? row.cooperLaps : undefined,
+      metersPerLap: isLapsType ? row.cooperMetersPerLap : undefined,
+      navetteLevelNumber: (row.cooperVariant === 'navette' || row.cooperVariant === 'both') ? row.cooperNavetteLevel : undefined,
+      notes: row.cooperVariant === 'both'
+        ? `Ambos Tests: Cooper ${coopDetails.distanceMeters}m (${row.cooperLaps ? `${row.cooperLaps}v en circuito ${row.cooperTrack} a ${row.cooperMetersPerLap}m/v` : '12 min'}) y Course Navette Nivel ${row.cooperNavetteLevel}.`
+        : row.cooperVariant === 'laps' 
+        ? `Cooper 2 por Vueltas: ${row.cooperLaps} vueltas en circuito ${row.cooperTrack} (${row.cooperMetersPerLap}m/v = ${coopDetails.distanceMeters}m).`
+        : row.cooperVariant === 'navette'
+        ? `Course Navette: Nivel ${row.cooperNavetteLevel} completado.`
+        : undefined,
+    };
+
+    // Resistencia
+    const totalSec = row.enduranceMinutes * 60 + row.enduranceSeconds;
+    const minStr = String(row.enduranceMinutes).padStart(2, '0');
+    const secStr = String(row.enduranceSeconds).padStart(2, '0');
+    const enduranceRecord: EnduranceTimeTestRecord = {
+      name: 'Evaluación de Resistencia Funcional',
+      result: row.enduranceStatus === 'completed' ? `${minStr}:${secStr} min` : (row.enduranceStatus === 'na' ? 'NA' : 'NP'),
+      timeSeconds: row.enduranceStatus === 'completed' ? totalSec : 0,
+      difficultyLevel: row.enduranceDifficulty,
+      status: row.enduranceStatus,
+      statusReason: row.enduranceReason || undefined,
+    };
+
+    // Fuerza 1RM (5 ejercicios)
+    const strengthRecords: StrengthMaxRecord[] = [
+      {
+        exerciseId: 'squats',
+        exerciseName: 'Sentadillas',
+        weightKg: row.squatsStatus === 'completed' ? row.squatsWeight : 0,
+        reps: row.squatsStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: row.squatsStatus === 'completed' ? calculate1RM(row.squatsWeight, 1) : 0,
+        weightUnit: 'kg',
+        status: row.squatsStatus,
+        statusReason: row.squatsReason || undefined,
+      },
+      {
+        exerciseId: 'deadlift',
+        exerciseName: 'Peso Muerto',
+        weightKg: row.deadliftStatus === 'completed' ? row.deadliftWeight : 0,
+        reps: row.deadliftStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: row.deadliftStatus === 'completed' ? calculate1RM(row.deadliftWeight, 1) : 0,
+        weightUnit: 'kg',
+        status: row.deadliftStatus,
+        statusReason: row.deadliftReason || undefined,
+      },
+      {
+        exerciseId: 'hip_thrust',
+        exerciseName: 'Hip Thrust',
+        weightKg: row.hipThrustStatus === 'completed' ? row.hipThrustWeight : 0,
+        reps: row.hipThrustStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: row.hipThrustStatus === 'completed' ? calculate1RM(row.hipThrustWeight, 1) : 0,
+        weightUnit: 'kg',
+        status: row.hipThrustStatus,
+        statusReason: row.hipThrustReason || undefined,
+      },
+      {
+        exerciseId: 'horizontal_press',
+        exerciseName: 'Press Horizontal',
+        weightKg: row.pressStatus === 'completed' ? row.pressWeight : 0,
+        reps: row.pressStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: row.pressStatus === 'completed' ? calculate1RM(row.pressWeight, 1) : 0,
+        weightUnit: 'kg',
+        status: row.pressStatus,
+        statusReason: row.pressReason || undefined,
+      },
+      {
+        exerciseId: 'pullups_or_rows',
+        exerciseName: row.pullupsOrRowsType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
+        exerciseType: row.pullupsOrRowsType,
+        weightKg: row.pullupsOrRowsStatus === 'completed' ? row.pullupsOrRowsWeight : 0,
+        reps: row.pullupsOrRowsStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: row.pullupsOrRowsStatus === 'completed' ? calculate1RM(row.pullupsOrRowsWeight, 1) : 0,
+        weightUnit: 'kg',
+        status: row.pullupsOrRowsStatus,
+        statusReason: row.pullupsOrRowsReason || undefined,
+      },
+    ];
+
+    return {
+      userId: athleteId,
+      evaluationDate: selectedDate,
+      coachId: activeStaff.id,
+      coachName: activeStaff.name,
+      cooperTest: cooperRecord,
+      enduranceTest: enduranceRecord,
+      strengthRecords,
+      generalCoachNotes: row.coachNotes.trim(),
+    };
+  };
+
+  // Guardar cambios únicamente de un solo atleta
+  const handleSaveSingleAthlete = async (athleteId: string) => {
+    const row = rows[athleteId];
+    if (!row) return;
+
+    setSavingAthleteId(athleteId);
+    const payload = buildEvaluationPayload(row, athleteId);
+
+    if (row.existingEvalId && onUpdateEvaluation) {
+      onUpdateEvaluation(row.existingEvalId, payload);
+    } else if (onAddEvaluation) {
+      onAddEvaluation(payload);
+    }
+
+    updateRow(athleteId, { isModified: false });
+    setJustSavedAthleteIds(prev => ({ ...prev, [athleteId]: true }));
+    setSavingAthleteId(null);
+
+    const athObj = users.find(u => u.id === athleteId);
+    setSaveSuccessMsg(`¡Evaluación de ${athObj?.name || 'atleta'} guardada exitosamente!`);
+
+    setTimeout(() => {
+      setJustSavedAthleteIds(prev => ({ ...prev, [athleteId]: false }));
+      setSaveSuccessMsg(null);
+    }, 3000);
+  };
+
   // Guardar todas las evaluaciones de la evaluación masiva
   const handleSaveAllEvaluations = async () => {
     if (!onAddEvaluation && !onUpdateEvaluation) return;
@@ -466,117 +606,14 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
       const row = rows[ath.id];
       if (!row) continue;
 
-      // Calcular detalles de Cooper
-      const coopDetails = calculateCooperDetails(row);
-      const isLapsType = row.cooperVariant === 'laps' || (row.cooperVariant === 'both' && row.cooperLaps > 0);
-      const cooperRecord: CooperTestRecord = {
-        level: coopDetails.level,
-        levelNumber: coopDetails.levelNumber,
-        description: coopDetails.description,
-        targetZoneRecommendation: coopDetails.targetZoneRecommendation,
-        distanceMeters: coopDetails.distanceMeters,
-        estimatedVo2Max: coopDetails.estimatedVo2Max,
-        rating: coopDetails.rating,
-        status: row.cooperStatus,
-        statusReason: row.cooperReason || undefined,
-        variant: row.cooperVariant,
-        lapLocation: isLapsType ? (row.cooperTrack === 'adentro' ? 'inside' : 'outside') : undefined,
-        lapsCount: isLapsType ? row.cooperLaps : undefined,
-        metersPerLap: isLapsType ? row.cooperMetersPerLap : undefined,
-        navetteLevelNumber: (row.cooperVariant === 'navette' || row.cooperVariant === 'both') ? row.cooperNavetteLevel : undefined,
-        notes: row.cooperVariant === 'both'
-          ? `Ambos Tests: Cooper ${coopDetails.distanceMeters}m (${row.cooperLaps ? `${row.cooperLaps}v en circuito ${row.cooperTrack} a ${row.cooperMetersPerLap}m/v` : '12 min'}) y Course Navette Nivel ${row.cooperNavetteLevel}.`
-          : row.cooperVariant === 'laps' 
-          ? `Cooper 2 por Vueltas: ${row.cooperLaps} vueltas en circuito ${row.cooperTrack} (${row.cooperMetersPerLap}m/v = ${coopDetails.distanceMeters}m).`
-          : row.cooperVariant === 'navette'
-          ? `Course Navette: Nivel ${row.cooperNavetteLevel} completado.`
-          : undefined,
-      };
-
-      // Resistencia
-      const totalSec = row.enduranceMinutes * 60 + row.enduranceSeconds;
-      const minStr = String(row.enduranceMinutes).padStart(2, '0');
-      const secStr = String(row.enduranceSeconds).padStart(2, '0');
-      const enduranceRecord: EnduranceTimeTestRecord = {
-        name: 'Evaluación de Resistencia Funcional',
-        result: row.enduranceStatus === 'completed' ? `${minStr}:${secStr} min` : (row.enduranceStatus === 'na' ? 'NA' : 'NP'),
-        timeSeconds: row.enduranceStatus === 'completed' ? totalSec : 0,
-        difficultyLevel: row.enduranceDifficulty,
-        status: row.enduranceStatus,
-        statusReason: row.enduranceReason || undefined,
-      };
-
-      // Fuerza 1RM (5 ejercicios)
-      const strengthRecords: StrengthMaxRecord[] = [
-        {
-          exerciseId: 'squats',
-          exerciseName: 'Sentadillas',
-          weightKg: row.squatsStatus === 'completed' ? row.squatsWeight : 0,
-          reps: row.squatsStatus === 'completed' ? 1 : 0,
-          estimated1RMKg: row.squatsStatus === 'completed' ? calculate1RM(row.squatsWeight, 1) : 0,
-          weightUnit: 'kg',
-          status: row.squatsStatus,
-          statusReason: row.squatsReason || undefined,
-        },
-        {
-          exerciseId: 'deadlift',
-          exerciseName: 'Peso Muerto',
-          weightKg: row.deadliftStatus === 'completed' ? row.deadliftWeight : 0,
-          reps: row.deadliftStatus === 'completed' ? 1 : 0,
-          estimated1RMKg: row.deadliftStatus === 'completed' ? calculate1RM(row.deadliftWeight, 1) : 0,
-          weightUnit: 'kg',
-          status: row.deadliftStatus,
-          statusReason: row.deadliftReason || undefined,
-        },
-        {
-          exerciseId: 'hip_thrust',
-          exerciseName: 'Hip Thrust',
-          weightKg: row.hipThrustStatus === 'completed' ? row.hipThrustWeight : 0,
-          reps: row.hipThrustStatus === 'completed' ? 1 : 0,
-          estimated1RMKg: row.hipThrustStatus === 'completed' ? calculate1RM(row.hipThrustWeight, 1) : 0,
-          weightUnit: 'kg',
-          status: row.hipThrustStatus,
-          statusReason: row.hipThrustReason || undefined,
-        },
-        {
-          exerciseId: 'horizontal_press',
-          exerciseName: 'Press Horizontal',
-          weightKg: row.pressStatus === 'completed' ? row.pressWeight : 0,
-          reps: row.pressStatus === 'completed' ? 1 : 0,
-          estimated1RMKg: row.pressStatus === 'completed' ? calculate1RM(row.pressWeight, 1) : 0,
-          weightUnit: 'kg',
-          status: row.pressStatus,
-          statusReason: row.pressReason || undefined,
-        },
-        {
-          exerciseId: 'pullups_or_rows',
-          exerciseName: row.pullupsOrRowsType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
-          exerciseType: row.pullupsOrRowsType,
-          weightKg: row.pullupsOrRowsStatus === 'completed' ? row.pullupsOrRowsWeight : 0,
-          reps: row.pullupsOrRowsStatus === 'completed' ? 1 : 0,
-          estimated1RMKg: row.pullupsOrRowsStatus === 'completed' ? calculate1RM(row.pullupsOrRowsWeight, 1) : 0,
-          weightUnit: 'kg',
-          status: row.pullupsOrRowsStatus,
-          statusReason: row.pullupsOrRowsReason || undefined,
-        },
-      ];
-
-      const payload = {
-        userId: ath.id,
-        evaluationDate: selectedDate,
-        coachId: activeStaff.id,
-        coachName: activeStaff.name,
-        cooperTest: cooperRecord,
-        enduranceTest: enduranceRecord,
-        strengthRecords,
-        generalCoachNotes: row.coachNotes.trim(),
-      };
+      const payload = buildEvaluationPayload(row, ath.id);
 
       if (row.existingEvalId && onUpdateEvaluation) {
         onUpdateEvaluation(row.existingEvalId, payload);
       } else if (onAddEvaluation) {
         onAddEvaluation(payload);
       }
+      updateRow(ath.id, { isModified: false });
       savedCount++;
     }
 
@@ -829,14 +866,14 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                       </div>
                     </div>
 
-                    {/* Acciones Rápidas de Fila: NA General & Acordeón Móvil */}
-                    <div className="flex items-center gap-2 self-end md:self-auto">
+                    {/* Acciones Rápidas de Fila: NA General, Guardar Atleta & Acordeón Móvil */}
+                    <div className="flex items-center gap-2 self-end md:self-auto flex-wrap sm:flex-nowrap">
                       {row.isAllNA ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-[11px] text-amber-300 bg-amber-500/20 px-2 py-1 rounded-xl border border-amber-500/30 font-bold flex items-center gap-1">
                             <span>🚫 NA General</span>
                             {row.globalNAReason && (
-                              <span className="text-[10px] text-neutral-300 font-normal">({row.globalNAReason})</span>
+                              <span className="text-[10px] text-neutral-300 font-normal truncate max-w-[120px]">({row.globalNAReason})</span>
                             )}
                           </span>
                           <button
@@ -856,9 +893,41 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                           title="Marcar todas las pruebas de este atleta como NA (No Aplica)"
                         >
                           <Zap className="w-3 h-3 fill-amber-400" />
-                          <span>🚫 Marcar NA General</span>
+                          <span>🚫 NA General</span>
                         </button>
                       )}
+
+                      {/* Botón Guardar este Atleta Individualmente */}
+                      <button
+                        type="button"
+                        disabled={savingAthleteId === athlete.id}
+                        onClick={() => handleSaveSingleAthlete(athlete.id)}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer whitespace-nowrap ${
+                          justSavedAthleteIds[athlete.id]
+                            ? 'bg-emerald-600 text-white border border-emerald-400 shadow-emerald-500/20 ring-2 ring-emerald-400/40'
+                            : row.isModified
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400 ring-2 ring-emerald-500/30 animate-pulse'
+                            : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700'
+                        }`}
+                        title="Guardar de inmediato la evaluación de este atleta únicamente"
+                      >
+                        {justSavedAthleteIds[athlete.id] ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                            <span>¡Guardado! ✓</span>
+                          </>
+                        ) : savingAthleteId === athlete.id ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{row.isModified ? 'Guardar Atleta *' : 'Guardar Atleta'}</span>
+                          </>
+                        )}
+                      </button>
 
                       {onOpenIndividualEdit && (
                         <button
@@ -1323,87 +1392,319 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                           <span className="text-[10px] text-neutral-400 font-mono">Pesos en kg</span>
                         </div>
 
-                        {/* Fila de 5 ejercicios compactos */}
+                        {/* Fila de 5 ejercicios compactos con selector ✓ | NA | NP individual */}
                         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1">
                           {/* 1. Sentadillas */}
-                          <div className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-1">
-                            <span className="text-[9px] text-neutral-400 block font-semibold truncate">Sentadilla</span>
-                            <div className="flex items-center gap-0.5">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={row.squatsStatus !== 'completed' ? '' : (row.squatsWeight === 0 ? '' : row.squatsWeight)}
-                                placeholder={row.squatsStatus !== 'completed' ? row.squatsStatus.toUpperCase() : '0'}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                  updateRow(athlete.id, { squatsWeight: isNaN(val) ? 0 : val });
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none"
-                              />
+                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
+                            row.squatsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
+                            row.squatsStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
+                            'bg-neutral-900 border-neutral-800'
+                          }`}>
+                            <div className="flex items-center justify-between gap-0.5">
+                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Sentadilla</span>
+                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'completed' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.squatsStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="✓ 1RM Calificada"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'na' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.squatsStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NA (No Aplica)"
+                                >
+                                  NA
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'np' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.squatsStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NP (No Presentada)"
+                                >
+                                  NP
+                                </button>
+                              </div>
                             </div>
+
+                            {row.squatsStatus === 'completed' ? (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={row.squatsWeight === 0 ? '' : row.squatsWeight}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    updateRow(athlete.id, { squatsWeight: isNaN(val) ? 0 : val });
+                                  }}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                                  row.squatsStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                  {row.squatsStatus.toUpperCase()}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={row.squatsReason}
+                                  onChange={(e) => updateRow(athlete.id, { squatsReason: e.target.value })}
+                                  placeholder="Causa..."
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {/* 2. Peso Muerto */}
-                          <div className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-1">
-                            <span className="text-[9px] text-neutral-400 block font-semibold truncate">P. Muerto</span>
-                            <div className="flex items-center gap-0.5">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={row.deadliftStatus !== 'completed' ? '' : (row.deadliftWeight === 0 ? '' : row.deadliftWeight)}
-                                placeholder={row.deadliftStatus !== 'completed' ? row.deadliftStatus.toUpperCase() : '0'}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                  updateRow(athlete.id, { deadliftWeight: isNaN(val) ? 0 : val });
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none"
-                              />
+                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
+                            row.deadliftStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
+                            row.deadliftStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
+                            'bg-neutral-900 border-neutral-800'
+                          }`}>
+                            <div className="flex items-center justify-between gap-0.5">
+                              <span className="text-[9px] text-neutral-300 font-semibold truncate">P. Muerto</span>
+                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'completed' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.deadliftStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="✓ 1RM Calificada"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'na' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.deadliftStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NA (No Aplica)"
+                                >
+                                  NA
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'np' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.deadliftStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NP (No Presentada)"
+                                >
+                                  NP
+                                </button>
+                              </div>
                             </div>
+
+                            {row.deadliftStatus === 'completed' ? (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={row.deadliftWeight === 0 ? '' : row.deadliftWeight}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    updateRow(athlete.id, { deadliftWeight: isNaN(val) ? 0 : val });
+                                  }}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                                  row.deadliftStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                  {row.deadliftStatus.toUpperCase()}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={row.deadliftReason}
+                                  onChange={(e) => updateRow(athlete.id, { deadliftReason: e.target.value })}
+                                  placeholder="Causa..."
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {/* 3. Hip Thrust */}
-                          <div className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-1">
-                            <span className="text-[9px] text-neutral-400 block font-semibold truncate">Hip Thrust</span>
-                            <div className="flex items-center gap-0.5">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={row.hipThrustStatus !== 'completed' ? '' : (row.hipThrustWeight === 0 ? '' : row.hipThrustWeight)}
-                                placeholder={row.hipThrustStatus !== 'completed' ? row.hipThrustStatus.toUpperCase() : '0'}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                  updateRow(athlete.id, { hipThrustWeight: isNaN(val) ? 0 : val });
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none"
-                              />
+                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
+                            row.hipThrustStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
+                            row.hipThrustStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
+                            'bg-neutral-900 border-neutral-800'
+                          }`}>
+                            <div className="flex items-center justify-between gap-0.5">
+                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Hip Thrust</span>
+                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'completed' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.hipThrustStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="✓ 1RM Calificada"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'na' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.hipThrustStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NA (No Aplica)"
+                                >
+                                  NA
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'np' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.hipThrustStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NP (No Presentada)"
+                                >
+                                  NP
+                                </button>
+                              </div>
                             </div>
+
+                            {row.hipThrustStatus === 'completed' ? (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={row.hipThrustWeight === 0 ? '' : row.hipThrustWeight}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    updateRow(athlete.id, { hipThrustWeight: isNaN(val) ? 0 : val });
+                                  }}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                                  row.hipThrustStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                  {row.hipThrustStatus.toUpperCase()}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={row.hipThrustReason}
+                                  onChange={(e) => updateRow(athlete.id, { hipThrustReason: e.target.value })}
+                                  placeholder="Causa..."
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {/* 4. Press Horizontal */}
-                          <div className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-1">
-                            <span className="text-[9px] text-neutral-400 block font-semibold truncate">Press Bco</span>
-                            <div className="flex items-center gap-0.5">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={row.pressStatus !== 'completed' ? '' : (row.pressWeight === 0 ? '' : row.pressWeight)}
-                                placeholder={row.pressStatus !== 'completed' ? row.pressStatus.toUpperCase() : '0'}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                  updateRow(athlete.id, { pressWeight: isNaN(val) ? 0 : val });
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none"
-                              />
+                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
+                            row.pressStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
+                            row.pressStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
+                            'bg-neutral-900 border-neutral-800'
+                          }`}>
+                            <div className="flex items-center justify-between gap-0.5">
+                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Press Bco</span>
+                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pressStatus: 'completed' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pressStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="✓ 1RM Calificada"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pressStatus: 'na' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pressStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NA (No Aplica)"
+                                >
+                                  NA
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pressStatus: 'np' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pressStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NP (No Presentada)"
+                                >
+                                  NP
+                                </button>
+                              </div>
                             </div>
+
+                            {row.pressStatus === 'completed' ? (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={row.pressWeight === 0 ? '' : row.pressWeight}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    updateRow(athlete.id, { pressWeight: isNaN(val) ? 0 : val });
+                                  }}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                                  row.pressStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                  {row.pressStatus.toUpperCase()}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={row.pressReason}
+                                  onChange={(e) => updateRow(athlete.id, { pressReason: e.target.value })}
+                                  placeholder="Causa..."
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
 
-                          {/* 5. Tracción: Remo vs Dominadas (Toggle explícito solicitado por Leslie) */}
-                          <div className="p-1.5 rounded-lg bg-neutral-900 border border-amber-500/40 space-y-1">
-                            <div className="flex items-center justify-between">
+                          {/* 5. Tracción: Remo vs Dominadas */}
+                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
+                            row.pullupsOrRowsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
+                            row.pullupsOrRowsStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
+                            'bg-neutral-900 border-amber-500/40'
+                          }`}>
+                            <div className="flex items-center justify-between gap-0.5">
                               <button
                                 type="button"
                                 onClick={() => updateRow(athlete.id, {
@@ -1414,21 +1715,73 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                               >
                                 <span>{row.pullupsOrRowsType === 'remo' ? 'Remo 🔄' : 'Dominadas 🔄'}</span>
                               </button>
+
+                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'completed' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pullupsOrRowsStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="✓ 1RM Calificada"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'na' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pullupsOrRowsStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NA (No Aplica)"
+                                >
+                                  NA
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'np' })}
+                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
+                                    row.pullupsOrRowsStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
+                                  }`}
+                                  title="NP (No Presentada)"
+                                >
+                                  NP
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-0.5">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={row.pullupsOrRowsStatus !== 'completed' ? '' : (row.pullupsOrRowsWeight === 0 ? '' : row.pullupsOrRowsWeight)}
-                                placeholder={row.pullupsOrRowsStatus !== 'completed' ? row.pullupsOrRowsStatus.toUpperCase() : '0'}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                  updateRow(athlete.id, { pullupsOrRowsWeight: isNaN(val) ? 0 : val });
-                                }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none"
-                              />
-                            </div>
+
+                            {row.pullupsOrRowsStatus === 'completed' ? (
+                              <div className="flex items-center gap-0.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={row.pullupsOrRowsWeight === 0 ? '' : row.pullupsOrRowsWeight}
+                                  placeholder="0"
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                    updateRow(athlete.id, { pullupsOrRowsWeight: isNaN(val) ? 0 : val });
+                                  }}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none focus:border-amber-500"
+                                />
+                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                                  row.pullupsOrRowsStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                  {row.pullupsOrRowsStatus.toUpperCase()}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={row.pullupsOrRowsReason}
+                                  onChange={(e) => updateRow(athlete.id, { pullupsOrRowsReason: e.target.value })}
+                                  placeholder="Causa..."
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
