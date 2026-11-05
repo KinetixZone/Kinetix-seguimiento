@@ -129,169 +129,135 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
   }, [users]);
 
   // Inicializar o sincronizar el estado de las filas según la fecha seleccionada
+  // Inicializar o sincronizar el estado de las filas según la fecha seleccionada
   useEffect(() => {
     if (!isOpen) return;
 
-    const newRows: Record<string, AthleteRowState> = {};
+    setRows(prevRows => {
+      const newRows: Record<string, AthleteRowState> = {};
 
-    athletes.forEach(ath => {
-      // 1. Buscar si ya existe una evaluación en esa fecha exacta
-      const existingInDate = evaluations.find(e => e.userId === ath.id && e.evaluationDate === selectedDate);
-      
-      // 2. Si no, buscar la última evaluación anterior para sugerir valores
-      const userPastEvals = evaluations.filter(e => e.userId === ath.id);
-      const sortedPast = [...userPastEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
-      const latest = existingInDate || sortedPast[0];
+      athletes.forEach(ath => {
+        // Si el coach ya estaba editando esta fila en la sesión actual y la fila está modificada, PRESERVARLA
+        const existingRow = prevRows[ath.id];
 
-      const isFemale = ath.gender === 'female';
+        // 1. Buscar si ya existe una evaluación guardada en esa fecha exacta
+        const existingInDate = evaluations.find(e => e.userId === ath.id && e.evaluationDate === selectedDate);
+        const isFemale = ath.gender === 'female';
 
-      if (existingInDate) {
-        // Precargar con los datos existentes
-        const coop = existingInDate.cooperTest;
-        const end = existingInDate.enduranceTest;
-        const sq = existingInDate.strengthRecords?.find(r => r.exerciseId === 'squats');
-        const dl = existingInDate.strengthRecords?.find(r => r.exerciseId === 'deadlift');
-        const ht = existingInDate.strengthRecords?.find(r => r.exerciseId === 'hip_thrust');
-        const hp = existingInDate.strengthRecords?.find(r => r.exerciseId === 'horizontal_press');
-        const rw = existingInDate.strengthRecords?.find(r => r.exerciseId === 'pullups_or_rows');
+        if (existingInDate) {
+          // Si ya existe en la fecha, y el coach no la tiene en estado 'isModified', cargar los datos reales guardados
+          if (existingRow && existingRow.isModified) {
+            newRows[ath.id] = {
+              ...existingRow,
+              existingEvalId: existingInDate.id,
+            };
+            return;
+          }
 
-        const isBoth = coop?.variant === 'both' || (Boolean(coop?.navetteLevelNumber) && Boolean(coop?.lapsCount || coop?.distanceMeters));
-        const isLaps = coop?.variant === 'laps' || (typeof coop?.lapsCount === 'number' && coop.lapsCount > 0);
-        const isNavette = coop?.variant === 'navette';
+          const coop = existingInDate.cooperTest;
+          const end = existingInDate.enduranceTest;
+          const sq = existingInDate.strengthRecords?.find(r => r.exerciseId === 'squats');
+          const dl = existingInDate.strengthRecords?.find(r => r.exerciseId === 'deadlift');
+          const ht = existingInDate.strengthRecords?.find(r => r.exerciseId === 'hip_thrust');
+          const hp = existingInDate.strengthRecords?.find(r => r.exerciseId === 'horizontal_press');
+          const rw = existingInDate.strengthRecords?.find(r => r.exerciseId === 'pullups_or_rows');
 
-        const totalSec = typeof end?.timeSeconds === 'number' ? end.timeSeconds : 180;
+          const isBoth = coop?.variant === 'both' || (Boolean(coop?.navetteLevelNumber) && Boolean(coop?.lapsCount || coop?.distanceMeters));
+          const isLaps = coop?.variant === 'laps' || (typeof coop?.lapsCount === 'number' && coop.lapsCount > 0);
+          const isNavette = coop?.variant === 'navette';
 
-        const isAllNA = coop?.status === 'na' && end?.status === 'na' &&
-          sq?.status === 'na' && dl?.status === 'na' && ht?.status === 'na' &&
-          hp?.status === 'na' && rw?.status === 'na';
+          const totalSec = typeof end?.timeSeconds === 'number' ? end.timeSeconds : 0;
 
-        newRows[ath.id] = {
-          userId: ath.id,
-          isModified: false,
-          isAllNA,
-          globalNAReason: coop?.statusReason || '',
-          cooperStatus: coop?.status || 'completed',
-          cooperVariant: isBoth ? 'both' : isNavette ? 'navette' : isLaps ? 'laps' : 'standard',
-          cooperDistance: coop?.distanceMeters || (isFemale ? 1800 : 2200),
-          cooperLaps: coop?.lapsCount || 5.5,
-          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : coop?.lapLocation === 'outside' ? 'afuera' : 'personalizado',
-          cooperMetersPerLap: coop?.metersPerLap || (coop?.lapLocation === 'inside' ? 250 : 400),
-          cooperNavetteLevel: coop?.navetteLevelNumber || coop?.levelNumber || 5,
-          cooperReason: coop?.statusReason || '',
-          enduranceStatus: end?.status || 'completed',
-          enduranceMinutes: Math.floor(totalSec / 60),
-          enduranceSeconds: totalSec % 60,
-          enduranceDifficulty: end?.difficultyLevel || 'Intermedio',
-          enduranceReason: end?.statusReason || '',
-          squatsWeight: sq?.weightKg || (isFemale ? 45 : 60),
-          squatsStatus: sq?.status || 'completed',
-          squatsReason: sq?.statusReason || '',
-          deadliftWeight: dl?.weightKg || (isFemale ? 60 : 80),
-          deadliftStatus: dl?.status || 'completed',
-          deadliftReason: dl?.statusReason || '',
-          hipThrustWeight: ht?.weightKg || (isFemale ? 65 : 70),
-          hipThrustStatus: ht?.status || 'completed',
-          hipThrustReason: ht?.statusReason || '',
-          pressWeight: hp?.weightKg || (isFemale ? 30 : 50),
-          pressStatus: hp?.status || 'completed',
-          pressReason: hp?.statusReason || '',
-          pullupsOrRowsType: rw?.exerciseType === 'dominadas' ? 'dominadas' : 'remo',
-          pullupsOrRowsWeight: rw?.weightKg || (isFemale ? 35 : 50),
-          pullupsOrRowsStatus: rw?.status || 'completed',
-          pullupsOrRowsReason: rw?.statusReason || '',
-          coachNotes: existingInDate.generalCoachNotes || '',
-          existingEvalId: existingInDate.id,
-        };
-      } else if (latest) {
-        // Sugerir datos de su último ciclo pero como nuevo registro a guardar
-        const coop = latest.cooperTest;
-        const end = latest.enduranceTest;
-        const sq = latest.strengthRecords?.find(r => r.exerciseId === 'squats');
-        const dl = latest.strengthRecords?.find(r => r.exerciseId === 'deadlift');
-        const ht = latest.strengthRecords?.find(r => r.exerciseId === 'hip_thrust');
-        const hp = latest.strengthRecords?.find(r => r.exerciseId === 'horizontal_press');
-        const rw = latest.strengthRecords?.find(r => r.exerciseId === 'pullups_or_rows');
+          const isAllNA = coop?.status === 'na' && end?.status === 'na' &&
+            sq?.status === 'na' && dl?.status === 'na' && ht?.status === 'na' &&
+            hp?.status === 'na' && rw?.status === 'na';
 
-        const totalSec = typeof end?.timeSeconds === 'number' ? end.timeSeconds : 180;
+          newRows[ath.id] = {
+            userId: ath.id,
+            isModified: false,
+            isAllNA,
+            globalNAReason: coop?.statusReason || '',
+            cooperStatus: coop?.status || 'completed',
+            cooperVariant: isBoth ? 'both' : isNavette ? 'navette' : isLaps ? 'laps' : 'standard',
+            cooperDistance: coop?.distanceMeters || 0,
+            cooperLaps: coop?.lapsCount || 0,
+            cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : coop?.lapLocation === 'outside' ? 'afuera' : 'personalizado',
+            cooperMetersPerLap: coop?.metersPerLap || (coop?.lapLocation === 'inside' ? 250 : 400),
+            cooperNavetteLevel: coop?.navetteLevelNumber || coop?.levelNumber || 5,
+            cooperReason: coop?.statusReason || '',
+            enduranceStatus: end?.status || 'completed',
+            enduranceMinutes: Math.floor(totalSec / 60),
+            enduranceSeconds: totalSec % 60,
+            enduranceDifficulty: end?.difficultyLevel || 'Intermedio',
+            enduranceReason: end?.statusReason || '',
+            squatsWeight: sq?.weightKg || 0,
+            squatsStatus: sq?.status || 'completed',
+            squatsReason: sq?.statusReason || '',
+            deadliftWeight: dl?.weightKg || 0,
+            deadliftStatus: dl?.status || 'completed',
+            deadliftReason: dl?.statusReason || '',
+            hipThrustWeight: ht?.weightKg || 0,
+            hipThrustStatus: ht?.status || 'completed',
+            hipThrustReason: ht?.statusReason || '',
+            pressWeight: hp?.weightKg || 0,
+            pressStatus: hp?.status || 'completed',
+            pressReason: hp?.statusReason || '',
+            pullupsOrRowsType: rw?.exerciseType === 'dominadas' ? 'dominadas' : 'remo',
+            pullupsOrRowsWeight: rw?.weightKg || 0,
+            pullupsOrRowsStatus: rw?.status || 'completed',
+            pullupsOrRowsReason: rw?.statusReason || '',
+            coachNotes: existingInDate.generalCoachNotes || '',
+            existingEvalId: existingInDate.id,
+          };
+        } else {
+          // NO existe evaluación en esta fecha: Empezar en CERO para que NO se propaguen pesos ajenos
+          if (existingRow && existingRow.isModified) {
+            newRows[ath.id] = existingRow;
+            return;
+          }
 
-        newRows[ath.id] = {
-          userId: ath.id,
-          isModified: false,
-          isAllNA: false,
-          globalNAReason: '',
-          cooperStatus: 'completed',
-          cooperVariant: coop?.variant || 'standard',
-          cooperDistance: coop?.distanceMeters || (isFemale ? 1800 : 2200),
-          cooperLaps: coop?.lapsCount || 5.5,
-          cooperTrack: coop?.lapLocation === 'inside' ? 'adentro' : coop?.lapLocation === 'outside' ? 'afuera' : 'personalizado',
-          cooperMetersPerLap: coop?.metersPerLap || (coop?.lapLocation === 'inside' ? 250 : 400),
-          cooperNavetteLevel: coop?.navetteLevelNumber || coop?.levelNumber || 5,
-          cooperReason: '',
-          enduranceStatus: 'completed',
-          enduranceMinutes: Math.floor(totalSec / 60),
-          enduranceSeconds: totalSec % 60,
-          enduranceDifficulty: end?.difficultyLevel || 'Intermedio',
-          enduranceReason: '',
-          squatsWeight: sq?.weightKg || (isFemale ? 45 : 60),
-          squatsStatus: 'completed',
-          squatsReason: '',
-          deadliftWeight: dl?.weightKg || (isFemale ? 60 : 80),
-          deadliftStatus: 'completed',
-          deadliftReason: '',
-          hipThrustWeight: ht?.weightKg || (isFemale ? 65 : 70),
-          hipThrustStatus: 'completed',
-          hipThrustReason: '',
-          pressWeight: hp?.weightKg || (isFemale ? 30 : 50),
-          pressStatus: 'completed',
-          pressReason: '',
-          pullupsOrRowsType: rw?.exerciseType === 'dominadas' ? 'dominadas' : 'remo',
-          pullupsOrRowsWeight: rw?.weightKg || (isFemale ? 35 : 50),
-          pullupsOrRowsStatus: 'completed',
-          pullupsOrRowsReason: '',
-          coachNotes: '',
-        };
-      } else {
-        // Atleta nuevo sin historial
-        newRows[ath.id] = {
-          userId: ath.id,
-          isModified: false,
-          isAllNA: false,
-          globalNAReason: '',
-          cooperStatus: 'completed',
-          cooperVariant: 'standard',
-          cooperDistance: isFemale ? 1800 : 2200,
-          cooperLaps: 5.5,
-          cooperTrack: 'afuera',
-          cooperMetersPerLap: 400,
-          cooperNavetteLevel: 5,
-          cooperReason: '',
-          enduranceStatus: 'completed',
-          enduranceMinutes: 3,
-          enduranceSeconds: 0,
-          enduranceDifficulty: 'Intermedio',
-          enduranceReason: '',
-          squatsWeight: isFemale ? 45 : 60,
-          squatsStatus: 'completed',
-          squatsReason: '',
-          deadliftWeight: isFemale ? 60 : 80,
-          deadliftStatus: 'completed',
-          deadliftReason: '',
-          hipThrustWeight: isFemale ? 65 : 70,
-          hipThrustStatus: 'completed',
-          hipThrustReason: '',
-          pressWeight: isFemale ? 30 : 50,
-          pressStatus: 'completed',
-          pressReason: '',
-          pullupsOrRowsType: 'remo',
-          pullupsOrRowsWeight: isFemale ? 35 : 50,
-          pullupsOrRowsStatus: 'completed',
-          pullupsOrRowsReason: '',
-          coachNotes: '',
-        };
-      }
+          newRows[ath.id] = {
+            userId: ath.id,
+            isModified: false,
+            isAllNA: false,
+            globalNAReason: '',
+            cooperStatus: 'completed',
+            cooperVariant: 'standard',
+            cooperDistance: 0,
+            cooperLaps: 0,
+            cooperTrack: 'afuera',
+            cooperMetersPerLap: 400,
+            cooperNavetteLevel: 5,
+            cooperReason: '',
+            enduranceStatus: 'completed',
+            enduranceMinutes: 0,
+            enduranceSeconds: 0,
+            enduranceDifficulty: 'Intermedio',
+            enduranceReason: '',
+            squatsWeight: 0,
+            squatsStatus: 'completed',
+            squatsReason: '',
+            deadliftWeight: 0,
+            deadliftStatus: 'completed',
+            deadliftReason: '',
+            hipThrustWeight: 0,
+            hipThrustStatus: 'completed',
+            hipThrustReason: '',
+            pressWeight: 0,
+            pressStatus: 'completed',
+            pressReason: '',
+            pullupsOrRowsType: 'remo',
+            pullupsOrRowsWeight: 0,
+            pullupsOrRowsStatus: 'completed',
+            pullupsOrRowsReason: '',
+            coachNotes: '',
+            existingEvalId: undefined,
+          };
+        }
+      });
+
+      return newRows;
     });
-
-    setRows(newRows);
   }, [isOpen, selectedDate, athletes, evaluations]);
 
   // Filtrado de atletas visibles
@@ -605,6 +571,16 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     for (const ath of athletes) {
       const row = rows[ath.id];
       if (!row) continue;
+
+      // Solo guardar atletas que hayan sido modificados, tengan registro existente o contengan datos reales
+      const hasActualData = row.isModified ||
+        Boolean(row.existingEvalId) ||
+        row.isAllNA ||
+        row.squatsWeight > 0 || row.deadliftWeight > 0 || row.hipThrustWeight > 0 || row.pressWeight > 0 || row.pullupsOrRowsWeight > 0 ||
+        row.cooperDistance > 0 || row.cooperLaps > 0 || row.enduranceMinutes > 0 || row.enduranceSeconds > 0 ||
+        row.cooperStatus !== 'completed' || row.enduranceStatus !== 'completed';
+
+      if (!hasActualData) continue;
 
       const payload = buildEvaluationPayload(row, ath.id);
 
@@ -1302,20 +1278,21 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                       })()}
 
                       {/* ========================================== */}
-                      {/* 2. RESISTENCIA FUNCIONAL (Cols 3) */}
                       {/* ========================================== */}
-                      <div className="md:col-span-3 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+                      {/* 2. RESISTENCIA FUNCIONAL (Cols 2 en desktop) */}
+                      {/* ========================================== */}
+                      <div className="md:col-span-2 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
                         <div className="flex items-center justify-between">
                           <strong className="text-white text-xs flex items-center gap-1 font-bold">
                             <span>⏱️ Resistencia</span>
                           </strong>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5">
                             {(['completed', 'na', 'np'] as const).map(st => (
                               <button
                                 key={st}
                                 type="button"
                                 onClick={() => updateRow(athlete.id, { enduranceStatus: st })}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                   row.enduranceStatus === st
                                     ? st === 'completed'
                                       ? 'bg-blue-600 text-white'
@@ -1333,7 +1310,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
 
                         {row.enduranceStatus === 'completed' ? (
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center justify-between gap-1">
                               <span className="text-[10px] text-neutral-400">Tiempo:</span>
                               <div className="flex items-center gap-1">
                                 <input
@@ -1342,7 +1319,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   max="59"
                                   value={row.enduranceMinutes}
                                   onChange={(e) => updateRow(athlete.id, { enduranceMinutes: Math.max(0, parseInt(e.target.value) || 0) })}
-                                  className="w-10 bg-neutral-900 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-white text-xs outline-none"
+                                  className="w-9 bg-neutral-900 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-white text-xs outline-none"
                                 />
                                 <span className="text-neutral-400 font-mono">:</span>
                                 <input
@@ -1351,9 +1328,9 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   max="59"
                                   value={row.enduranceSeconds}
                                   onChange={(e) => updateRow(athlete.id, { enduranceSeconds: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })}
-                                  className="w-10 bg-neutral-900 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-white text-xs outline-none"
+                                  className="w-9 bg-neutral-900 border border-neutral-700 px-1 py-0.5 rounded text-center font-mono font-bold text-white text-xs outline-none"
                                 />
-                                <span className="text-[10px] text-neutral-400">min</span>
+                                <span className="text-[10px] text-neutral-400">m</span>
                               </div>
                             </div>
 
@@ -1362,7 +1339,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                               <select
                                 value={row.enduranceDifficulty}
                                 onChange={(e) => updateRow(athlete.id, { enduranceDifficulty: e.target.value as any })}
-                                className="bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] text-white outline-none font-bold"
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-[10px] text-white outline-none font-bold"
                               >
                                 <option value="Principiante">Principiante</option>
                                 <option value="Intermedio">Intermedio</option>
@@ -1375,69 +1352,75 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                             type="text"
                             value={row.enduranceReason}
                             onChange={(e) => updateRow(athlete.id, { enduranceReason: e.target.value })}
-                            placeholder="Motivo (o dejar en blanco)..."
+                            placeholder="Motivo NA/NP..."
                             className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[10px] text-white outline-none"
                           />
                         )}
                       </div>
 
                       {/* ========================================== */}
-                      {/* 3. FUERZA 1RM (5 EJERCICIOS) (Cols 5) */}
+                      {/* 3. FUERZA 1RM (5 EJERCICIOS) (Cols 6 en desktop con NOMBRES 100% VISIBLES) */}
                       {/* ========================================== */}
-                      <div className="md:col-span-5 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+                      <div className="md:col-span-6 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
                         <div className="flex items-center justify-between">
-                          <strong className="text-white text-xs flex items-center gap-1 font-bold">
+                          <strong className="text-white text-xs flex items-center gap-1.5 font-bold">
                             <span>🏋️ Fuerza 1RM (5 Ejercicios)</span>
                           </strong>
-                          <span className="text-[10px] text-neutral-400 font-mono">Pesos en kg</span>
+                          <span className="text-[10px] text-neutral-400 font-mono">Pesos en kg · 1RM</span>
                         </div>
 
-                        {/* Fila de 5 ejercicios compactos con selector ✓ | NA | NP individual */}
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-1">
+                        {/* Fila de 5 ejercicios con Nombres Grandes y Claros */}
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-0.5">
                           {/* 1. Sentadillas */}
-                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
-                            row.squatsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
-                            row.squatsStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
-                            'bg-neutral-900 border-neutral-800'
+                          <div className={`p-2 rounded-xl border space-y-1.5 transition-all flex flex-col justify-between ${
+                            row.squatsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/50 shadow-inner' :
+                            row.squatsStatus === 'np' ? 'bg-red-950/30 border-red-500/50 shadow-inner' :
+                            'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
                           }`}>
-                            <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Sentadilla</span>
-                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'completed' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.squatsStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="✓ 1RM Calificada"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'na' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.squatsStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NA (No Aplica)"
-                                >
-                                  NA
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { squatsStatus: 'np' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.squatsStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NP (No Presentada)"
-                                >
-                                  NP
-                                </button>
-                              </div>
+                            {/* Nombre del Ejercicio */}
+                            <div className="text-center pb-0.5 border-b border-neutral-800/80">
+                              <span className="text-[11px] font-extrabold text-white block tracking-tight">
+                                Sentadilla
+                              </span>
                             </div>
 
+                            {/* Selector ✓ | NA | NP */}
+                            <div className="grid grid-cols-3 gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[9px] font-bold text-center">
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { squatsStatus: 'completed' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.squatsStatus === 'completed' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="✓ 1RM Calificada"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { squatsStatus: 'na' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.squatsStatus === 'na' ? 'bg-amber-500 text-neutral-950 font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NA (No Aplica)"
+                              >
+                                NA
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { squatsStatus: 'np' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.squatsStatus === 'np' ? 'bg-red-600 text-white font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NP (No Presentada)"
+                              >
+                                NP
+                              </button>
+                            </div>
+
+                            {/* Input de peso o causa */}
                             {row.squatsStatus === 'completed' ? (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1 bg-neutral-950 border border-neutral-700 focus-within:border-blue-500 rounded-lg px-2 py-1">
                                 <input
                                   type="number"
                                   step="any"
@@ -1448,13 +1431,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                     const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                     updateRow(athlete.id, { squatsWeight: isNaN(val) ? 0 : val });
                                   }}
-                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                  className="w-full bg-transparent text-center font-mono font-extrabold text-white text-xs outline-none"
                                 />
-                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-semibold">kg</span>
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                              <div className="space-y-1">
+                                <div className={`text-[10px] font-extrabold py-0.5 rounded text-center border ${
                                   row.squatsStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
                                 }`}>
                                   {row.squatsStatus.toUpperCase()}
@@ -1464,56 +1447,62 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   value={row.squatsReason}
                                   onChange={(e) => updateRow(athlete.id, { squatsReason: e.target.value })}
                                   placeholder="Causa..."
-                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[9px] text-white outline-none"
                                 />
                               </div>
                             )}
                           </div>
 
                           {/* 2. Peso Muerto */}
-                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
-                            row.deadliftStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
-                            row.deadliftStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
-                            'bg-neutral-900 border-neutral-800'
+                          <div className={`p-2 rounded-xl border space-y-1.5 transition-all flex flex-col justify-between ${
+                            row.deadliftStatus === 'na' ? 'bg-amber-950/30 border-amber-500/50 shadow-inner' :
+                            row.deadliftStatus === 'np' ? 'bg-red-950/30 border-red-500/50 shadow-inner' :
+                            'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
                           }`}>
-                            <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[9px] text-neutral-300 font-semibold truncate">P. Muerto</span>
-                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'completed' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.deadliftStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="✓ 1RM Calificada"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'na' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.deadliftStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NA (No Aplica)"
-                                >
-                                  NA
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { deadliftStatus: 'np' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.deadliftStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NP (No Presentada)"
-                                >
-                                  NP
-                                </button>
-                              </div>
+                            {/* Nombre del Ejercicio */}
+                            <div className="text-center pb-0.5 border-b border-neutral-800/80">
+                              <span className="text-[11px] font-extrabold text-white block tracking-tight">
+                                Peso Muerto
+                              </span>
                             </div>
 
+                            {/* Selector ✓ | NA | NP */}
+                            <div className="grid grid-cols-3 gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[9px] font-bold text-center">
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { deadliftStatus: 'completed' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.deadliftStatus === 'completed' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="✓ 1RM Calificada"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { deadliftStatus: 'na' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.deadliftStatus === 'na' ? 'bg-amber-500 text-neutral-950 font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NA (No Aplica)"
+                              >
+                                NA
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { deadliftStatus: 'np' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.deadliftStatus === 'np' ? 'bg-red-600 text-white font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NP (No Presentada)"
+                              >
+                                NP
+                              </button>
+                            </div>
+
+                            {/* Input de peso o causa */}
                             {row.deadliftStatus === 'completed' ? (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1 bg-neutral-950 border border-neutral-700 focus-within:border-blue-500 rounded-lg px-2 py-1">
                                 <input
                                   type="number"
                                   step="any"
@@ -1524,13 +1513,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                     const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                     updateRow(athlete.id, { deadliftWeight: isNaN(val) ? 0 : val });
                                   }}
-                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                  className="w-full bg-transparent text-center font-mono font-extrabold text-white text-xs outline-none"
                                 />
-                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-semibold">kg</span>
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                              <div className="space-y-1">
+                                <div className={`text-[10px] font-extrabold py-0.5 rounded text-center border ${
                                   row.deadliftStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
                                 }`}>
                                   {row.deadliftStatus.toUpperCase()}
@@ -1540,56 +1529,62 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   value={row.deadliftReason}
                                   onChange={(e) => updateRow(athlete.id, { deadliftReason: e.target.value })}
                                   placeholder="Causa..."
-                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[9px] text-white outline-none"
                                 />
                               </div>
                             )}
                           </div>
 
                           {/* 3. Hip Thrust */}
-                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
-                            row.hipThrustStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
-                            row.hipThrustStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
-                            'bg-neutral-900 border-neutral-800'
+                          <div className={`p-2 rounded-xl border space-y-1.5 transition-all flex flex-col justify-between ${
+                            row.hipThrustStatus === 'na' ? 'bg-amber-950/30 border-amber-500/50 shadow-inner' :
+                            row.hipThrustStatus === 'np' ? 'bg-red-950/30 border-red-500/50 shadow-inner' :
+                            'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
                           }`}>
-                            <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Hip Thrust</span>
-                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'completed' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.hipThrustStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="✓ 1RM Calificada"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'na' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.hipThrustStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NA (No Aplica)"
-                                >
-                                  NA
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { hipThrustStatus: 'np' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.hipThrustStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NP (No Presentada)"
-                                >
-                                  NP
-                                </button>
-                              </div>
+                            {/* Nombre del Ejercicio */}
+                            <div className="text-center pb-0.5 border-b border-neutral-800/80">
+                              <span className="text-[11px] font-extrabold text-white block tracking-tight">
+                                Hip Thrust
+                              </span>
                             </div>
 
+                            {/* Selector ✓ | NA | NP */}
+                            <div className="grid grid-cols-3 gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[9px] font-bold text-center">
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { hipThrustStatus: 'completed' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.hipThrustStatus === 'completed' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="✓ 1RM Calificada"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { hipThrustStatus: 'na' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.hipThrustStatus === 'na' ? 'bg-amber-500 text-neutral-950 font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NA (No Aplica)"
+                              >
+                                NA
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { hipThrustStatus: 'np' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.hipThrustStatus === 'np' ? 'bg-red-600 text-white font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NP (No Presentada)"
+                              >
+                                NP
+                              </button>
+                            </div>
+
+                            {/* Input de peso o causa */}
                             {row.hipThrustStatus === 'completed' ? (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1 bg-neutral-950 border border-neutral-700 focus-within:border-blue-500 rounded-lg px-2 py-1">
                                 <input
                                   type="number"
                                   step="any"
@@ -1600,13 +1595,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                     const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                     updateRow(athlete.id, { hipThrustWeight: isNaN(val) ? 0 : val });
                                   }}
-                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                  className="w-full bg-transparent text-center font-mono font-extrabold text-white text-xs outline-none"
                                 />
-                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-semibold">kg</span>
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                              <div className="space-y-1">
+                                <div className={`text-[10px] font-extrabold py-0.5 rounded text-center border ${
                                   row.hipThrustStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
                                 }`}>
                                   {row.hipThrustStatus.toUpperCase()}
@@ -1616,56 +1611,62 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   value={row.hipThrustReason}
                                   onChange={(e) => updateRow(athlete.id, { hipThrustReason: e.target.value })}
                                   placeholder="Causa..."
-                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[9px] text-white outline-none"
                                 />
                               </div>
                             )}
                           </div>
 
-                          {/* 4. Press Horizontal */}
-                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
-                            row.pressStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
-                            row.pressStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
-                            'bg-neutral-900 border-neutral-800'
+                          {/* 4. Press Horizontal / Banca */}
+                          <div className={`p-2 rounded-xl border space-y-1.5 transition-all flex flex-col justify-between ${
+                            row.pressStatus === 'na' ? 'bg-amber-950/30 border-amber-500/50 shadow-inner' :
+                            row.pressStatus === 'np' ? 'bg-red-950/30 border-red-500/50 shadow-inner' :
+                            'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
                           }`}>
-                            <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[9px] text-neutral-300 font-semibold truncate">Press Bco</span>
-                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pressStatus: 'completed' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pressStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="✓ 1RM Calificada"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pressStatus: 'na' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pressStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NA (No Aplica)"
-                                >
-                                  NA
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pressStatus: 'np' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pressStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NP (No Presentada)"
-                                >
-                                  NP
-                                </button>
-                              </div>
+                            {/* Nombre del Ejercicio */}
+                            <div className="text-center pb-0.5 border-b border-neutral-800/80">
+                              <span className="text-[11px] font-extrabold text-white block tracking-tight">
+                                Press Banco
+                              </span>
                             </div>
 
+                            {/* Selector ✓ | NA | NP */}
+                            <div className="grid grid-cols-3 gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[9px] font-bold text-center">
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pressStatus: 'completed' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pressStatus === 'completed' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="✓ 1RM Calificada"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pressStatus: 'na' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pressStatus === 'na' ? 'bg-amber-500 text-neutral-950 font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NA (No Aplica)"
+                              >
+                                NA
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pressStatus: 'np' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pressStatus === 'np' ? 'bg-red-600 text-white font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NP (No Presentada)"
+                              >
+                                NP
+                              </button>
+                            </div>
+
+                            {/* Input de peso o causa */}
                             {row.pressStatus === 'completed' ? (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1 bg-neutral-950 border border-neutral-700 focus-within:border-blue-500 rounded-lg px-2 py-1">
                                 <input
                                   type="number"
                                   step="any"
@@ -1676,13 +1677,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                     const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                     updateRow(athlete.id, { pressWeight: isNaN(val) ? 0 : val });
                                   }}
-                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-white text-xs outline-none focus:border-blue-500"
+                                  className="w-full bg-transparent text-center font-mono font-extrabold text-white text-xs outline-none"
                                 />
-                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-semibold">kg</span>
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                              <div className="space-y-1">
+                                <div className={`text-[10px] font-extrabold py-0.5 rounded text-center border ${
                                   row.pressStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
                                 }`}>
                                   {row.pressStatus.toUpperCase()}
@@ -1692,66 +1693,69 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   value={row.pressReason}
                                   onChange={(e) => updateRow(athlete.id, { pressReason: e.target.value })}
                                   placeholder="Causa..."
-                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[9px] text-white outline-none"
                                 />
                               </div>
                             )}
                           </div>
 
-                          {/* 5. Tracción: Remo vs Dominadas */}
-                          <div className={`p-1.5 rounded-lg border space-y-1 transition-all ${
-                            row.pullupsOrRowsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/40' :
-                            row.pullupsOrRowsStatus === 'np' ? 'bg-red-950/30 border-red-500/40' :
-                            'bg-neutral-900 border-amber-500/40'
+                          {/* 5. Tracción: Remo vs Dominadas (Alternador Explícito) */}
+                          <div className={`p-2 rounded-xl border space-y-1.5 transition-all flex flex-col justify-between ${
+                            row.pullupsOrRowsStatus === 'na' ? 'bg-amber-950/30 border-amber-500/50 shadow-inner' :
+                            row.pullupsOrRowsStatus === 'np' ? 'bg-red-950/30 border-red-500/50 shadow-inner' :
+                            'bg-neutral-900/90 border-amber-500/50 hover:border-amber-400 shadow-sm'
                           }`}>
-                            <div className="flex items-center justify-between gap-0.5">
+                            {/* Botón Alternador Remo / Dominadas con Nombre Claro */}
+                            <div className="text-center pb-0.5 border-b border-neutral-800/80">
                               <button
                                 type="button"
                                 onClick={() => updateRow(athlete.id, {
                                   pullupsOrRowsType: row.pullupsOrRowsType === 'remo' ? 'dominadas' : 'remo'
                                 })}
-                                className="text-[9px] font-bold text-amber-300 hover:text-amber-200 underline truncate flex items-center gap-0.5"
-                                title="Haz clic para alternar entre Remo con Barra y Dominadas para este atleta"
+                                className="w-full text-[11px] font-extrabold text-amber-300 hover:text-amber-200 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Haz clic para alternar entre Remo con Barra y Dominadas"
                               >
                                 <span>{row.pullupsOrRowsType === 'remo' ? 'Remo 🔄' : 'Dominadas 🔄'}</span>
                               </button>
-
-                              <div className="flex items-center gap-0.5 bg-neutral-950 p-0.5 rounded border border-neutral-800 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'completed' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pullupsOrRowsStatus === 'completed' ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="✓ 1RM Calificada"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'na' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pullupsOrRowsStatus === 'na' ? 'bg-amber-500 text-neutral-950' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NA (No Aplica)"
-                                >
-                                  NA
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'np' })}
-                                  className={`px-1 py-0.2 rounded text-[8px] font-bold ${
-                                    row.pullupsOrRowsStatus === 'np' ? 'bg-red-600 text-white' : 'text-neutral-500 hover:text-white'
-                                  }`}
-                                  title="NP (No Presentada)"
-                                >
-                                  NP
-                                </button>
-                              </div>
                             </div>
 
+                            {/* Selector ✓ | NA | NP */}
+                            <div className="grid grid-cols-3 gap-0.5 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[9px] font-bold text-center">
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'completed' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pullupsOrRowsStatus === 'completed' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="✓ 1RM Calificada"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'na' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pullupsOrRowsStatus === 'na' ? 'bg-amber-500 text-neutral-950 font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NA (No Aplica)"
+                              >
+                                NA
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRow(athlete.id, { pullupsOrRowsStatus: 'np' })}
+                                className={`py-0.5 rounded transition-all ${
+                                  row.pullupsOrRowsStatus === 'np' ? 'bg-red-600 text-white font-black' : 'text-neutral-500 hover:text-white'
+                                }`}
+                                title="NP (No Presentada)"
+                              >
+                                NP
+                              </button>
+                            </div>
+
+                            {/* Input de peso o causa */}
                             {row.pullupsOrRowsStatus === 'completed' ? (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1 bg-neutral-950 border border-neutral-700 focus-within:border-amber-500 rounded-lg px-2 py-1">
                                 <input
                                   type="number"
                                   step="any"
@@ -1762,13 +1766,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                     const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                     updateRow(athlete.id, { pullupsOrRowsWeight: isNaN(val) ? 0 : val });
                                   }}
-                                  className="w-full bg-neutral-950 border border-neutral-700 rounded px-1 py-0.5 text-center font-mono font-bold text-amber-300 text-xs outline-none focus:border-amber-500"
+                                  className="w-full bg-transparent text-center font-mono font-extrabold text-amber-300 text-xs outline-none"
                                 />
-                                <span className="text-[9px] text-neutral-400 font-mono">kg</span>
+                                <span className="text-[10px] text-neutral-400 font-mono font-semibold">kg</span>
                               </div>
                             ) : (
-                              <div className="space-y-0.5">
-                                <div className={`text-[9px] font-bold py-0.2 rounded text-center border ${
+                              <div className="space-y-1">
+                                <div className={`text-[10px] font-extrabold py-0.5 rounded text-center border ${
                                   row.pullupsOrRowsStatus === 'na' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'
                                 }`}>
                                   {row.pullupsOrRowsStatus.toUpperCase()}
@@ -1778,7 +1782,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                   value={row.pullupsOrRowsReason}
                                   onChange={(e) => updateRow(athlete.id, { pullupsOrRowsReason: e.target.value })}
                                   placeholder="Causa..."
-                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1 py-0.5 text-[8px] text-white outline-none"
+                                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[9px] text-white outline-none"
                                 />
                               </div>
                             )}

@@ -382,7 +382,18 @@ export default function App() {
       ...evalRec,
       id: `eval-${Date.now()}`,
     };
-    setEvaluations(prev => [...prev, newEval]);
+    setEvaluations(prev => {
+      const existingIdx = prev.findIndex(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
+      if (existingIdx !== -1) {
+        const updated = [...prev];
+        updated[existingIdx] = {
+          ...prev[existingIdx],
+          ...evalRec,
+        };
+        return updated;
+      }
+      return [...prev, newEval];
+    });
 
     // Send automatic notification to the athlete with their 1RM milestone
     const topRM = evalRec.strengthRecords?.reduce(

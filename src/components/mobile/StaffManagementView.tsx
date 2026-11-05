@@ -826,12 +826,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
     const latest = sorted[0];
 
-    const defaultWeights = {
-      squats: { weightKg: targetUser.gender === 'female' ? 45 : 60, status: 'completed' as EvaluationStatus, reason: '' },
-      deadlift: { weightKg: targetUser.gender === 'female' ? 60 : 80, status: 'completed' as EvaluationStatus, reason: '' },
-      hip_thrust: { weightKg: targetUser.gender === 'female' ? 65 : 70, status: 'completed' as EvaluationStatus, reason: '' },
-      horizontal_press: { weightKg: targetUser.gender === 'female' ? 30 : 50, status: 'completed' as EvaluationStatus, reason: '' },
-      pullups_or_rows: { weightKg: targetUser.gender === 'female' ? 35 : 50, type: 'remo' as 'remo' | 'dominadas', status: 'completed' as EvaluationStatus, reason: '' },
+    const zeroWeights = {
+      squats: { weightKg: 0, status: 'completed' as EvaluationStatus, reason: '' },
+      deadlift: { weightKg: 0, status: 'completed' as EvaluationStatus, reason: '' },
+      hip_thrust: { weightKg: 0, status: 'completed' as EvaluationStatus, reason: '' },
+      horizontal_press: { weightKg: 0, status: 'completed' as EvaluationStatus, reason: '' },
+      pullups_or_rows: { weightKg: 0, type: 'remo' as 'remo' | 'dominadas', status: 'completed' as EvaluationStatus, reason: '' },
     };
 
     if (latest) {
@@ -843,7 +843,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickEnduranceStatus(endRec?.status || 'completed');
       setQuickEnduranceReason(endRec?.statusReason || '');
       setQuickEnduranceDifficulty(endRec?.difficultyLevel || 'Intermedio');
-      const totalSec = typeof endRec?.timeSeconds === 'number' ? endRec.timeSeconds : 180;
+      const totalSec = typeof endRec?.timeSeconds === 'number' ? endRec.timeSeconds : 0;
       setQuickEnduranceMinutes(Math.floor(totalSec / 60));
       setQuickEnduranceSeconds(totalSec % 60);
 
@@ -856,7 +856,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCooperMode(isLaps ? 'laps' : 'normal');
       if (isLaps) {
         const matchLaps = coopRec?.notes?.match(/([\d.]+)\s*vueltas/);
-        const lapsVal = coopRec?.lapsCount || (matchLaps ? parseFloat(matchLaps[1]) : 5.5);
+        const lapsVal = coopRec?.lapsCount || (matchLaps ? parseFloat(matchLaps[1]) : 0);
         setQuickCooperLaps(lapsVal);
         const trk = coopRec?.lapLocation === 'inside' || coopRec?.notes?.includes('adentro') || coopRec?.notes?.includes('Caminadora') ? 'adentro' : 'afuera';
         setQuickCooperTrackType(trk);
@@ -864,7 +864,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         setQuickCooperMetersPerLap(metersPerLapVal);
         setQuickCooperDistance(coopRec?.distanceMeters || Math.round(lapsVal * metersPerLapVal));
       } else {
-        setQuickCooperDistance(coopRec?.distanceMeters || 2000);
+        setQuickCooperDistance(coopRec?.distanceMeters || 0);
       }
 
       // Notas: filtrar textos automáticos anteriores para dejar en blanco si no hay notas reales
@@ -876,7 +876,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                      rawPastNotes.startsWith('Marca Express');
       setQuickCoachNotes(isAuto ? '' : rawPastNotes);
 
-      // Fuerza
+      // Fuerza: solo cargar los pesos específicos y reales de este atleta (sin inventar números)
       const recs = latest.strengthRecords || [];
       const sq = recs.find(r => r.exerciseId === 'squats');
       const dl = recs.find(r => r.exerciseId === 'deadlift');
@@ -886,27 +886,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
       setQuickWeights({
         squats: {
-          weightKg: sq && sq.status === 'completed' && sq.weightKg > 0 ? sq.weightKg : defaultWeights.squats.weightKg,
+          weightKg: sq && sq.status === 'completed' && sq.weightKg > 0 ? sq.weightKg : 0,
           status: sq?.status || 'completed',
           reason: sq?.statusReason || '',
         },
         deadlift: {
-          weightKg: dl && dl.status === 'completed' && dl.weightKg > 0 ? dl.weightKg : defaultWeights.deadlift.weightKg,
+          weightKg: dl && dl.status === 'completed' && dl.weightKg > 0 ? dl.weightKg : 0,
           status: dl?.status || 'completed',
           reason: dl?.statusReason || '',
         },
         hip_thrust: {
-          weightKg: ht && ht.status === 'completed' && ht.weightKg > 0 ? ht.weightKg : defaultWeights.hip_thrust.weightKg,
+          weightKg: ht && ht.status === 'completed' && ht.weightKg > 0 ? ht.weightKg : 0,
           status: ht?.status || 'completed',
           reason: ht?.statusReason || '',
         },
         horizontal_press: {
-          weightKg: hp && hp.status === 'completed' && hp.weightKg > 0 ? hp.weightKg : defaultWeights.horizontal_press.weightKg,
+          weightKg: hp && hp.status === 'completed' && hp.weightKg > 0 ? hp.weightKg : 0,
           status: hp?.status || 'completed',
           reason: hp?.statusReason || '',
         },
         pullups_or_rows: {
-          weightKg: rw && rw.status === 'completed' && rw.weightKg > 0 ? rw.weightKg : defaultWeights.pullups_or_rows.weightKg,
+          weightKg: rw && rw.status === 'completed' && rw.weightKg > 0 ? rw.weightKg : 0,
           type: (rw?.exerciseType === 'dominadas' ? 'dominadas' : 'remo'),
           status: rw?.status || 'completed',
           reason: rw?.statusReason || '',
@@ -917,19 +917,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickEditEvalDate(globalEvalDate || new Date().toISOString().slice(0, 10));
       setQuickEnduranceStatus('completed');
       setQuickEnduranceReason('');
-      setQuickEnduranceMinutes(3);
+      setQuickEnduranceMinutes(0);
       setQuickEnduranceSeconds(0);
       setQuickEnduranceDifficulty('Intermedio');
       setQuickCooperStatus('completed');
       setQuickCooperReason('');
       setQuickCooperMode('normal');
       setQuickCooperLevel(3);
-      setQuickCooperDistance(2000);
-      setQuickCooperLaps(5.5);
+      setQuickCooperDistance(0);
+      setQuickCooperLaps(0);
       setQuickCooperTrackType('afuera');
       setQuickCooperMetersPerLap(400);
       setQuickCoachNotes('');
-      setQuickWeights(defaultWeights);
+      setQuickWeights(zeroWeights);
     }
 
     setQuickCustomNAReason(latest?.cooperTest?.statusReason || '');
@@ -1056,6 +1056,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     setTimeout(() => {
       setQuickEditSuccess(false);
       setAthleteToEditWeights(null);
+      setQuickEditExistingEvalId(null);
     }, 1200);
   };
 
@@ -4464,7 +4465,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setAthleteToEditWeights(null)}
+                onClick={() => {
+                  setAthleteToEditWeights(null);
+                  setQuickEditExistingEvalId(null);
+                }}
                 className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -5627,7 +5631,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setAthleteToEditWeights(null)}
+                  onClick={() => {
+                    setAthleteToEditWeights(null);
+                    setQuickEditExistingEvalId(null);
+                  }}
                   className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-colors cursor-pointer"
                 >
                   Cancelar

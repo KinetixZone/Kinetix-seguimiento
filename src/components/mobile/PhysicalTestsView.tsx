@@ -113,23 +113,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>(currentUser.id);
 
   useEffect(() => {
-    if (currentUser.role === 'athlete') {
-      setSelectedAthleteId(currentUser.id);
-    } else if (currentUser.role === 'staff') {
-      setSelectedAthleteId(prev => {
-        // If current selection is valid (either the coach herself or an existing athlete), keep it!
-        if (prev === currentUser.id) return prev;
-        if (athleteList.some(a => a.id === prev)) return prev;
-        return currentUser.id;
-      });
-    }
-  }, [currentUser.id, athleteList.length]);
+    setSelectedAthleteId(currentUser.id);
+  }, [currentUser.id]);
 
-  const effectiveAthlete = (!canEvaluate || currentUser.role === 'athlete')
+  const effectiveAthlete = !canEvaluate
     ? currentUser
-    : ((selectedAthleteId === currentUser.id ? currentUser : null) ||
-       (athleteList.find(a => a.id === selectedAthleteId)) ||
-       currentUser);
+    : (athleteList.find(a => a.id === selectedAthleteId) || (selectedAthleteId === currentUser.id ? currentUser : null) || currentUser);
 
   const currentAthleteIndex = athleteList.findIndex(a => a.id === effectiveAthlete.id);
   const nextAthlete = athleteList.length > 0 && currentAthleteIndex !== -1
@@ -216,14 +205,14 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   // Cooper Test State (Supports completed, NA - niños/adultos mayores, NP - no presentada/lesión)
   const [cooperStatus, setCooperStatus] = useState<EvaluationStatus>('completed');
   const [cooperReason, setCooperReason] = useState<string>('');
-  const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(10);
-  const [optionalDistance, setOptionalDistance] = useState<number>(2800);
+  const [selectedCooperLevel, setSelectedCooperLevel] = useState<number>(5);
+  const [optionalDistance, setOptionalDistance] = useState<number>(0);
   const [selectedNavetteLevel, setSelectedNavetteLevel] = useState<number>(5);
 
   // Test Cooper 1 (Normal por Niveles/Metros) vs Test Cooper 2 (Por Vueltas - Adentro o Afuera) vs Course Navette vs Ambos
   const [cooperVariant, setCooperVariant] = useState<CooperTestVariant>('standard');
   const [cooperLapLocation, setCooperLapLocation] = useState<'outside' | 'inside'>('outside');
-  const [cooperLapsCount, setCooperLapsCount] = useState<number>(6);
+  const [cooperLapsCount, setCooperLapsCount] = useState<number>(0);
   const [cooperMetersPerLap, setCooperMetersPerLap] = useState<number>(400);
 
   const getLevelFromDistance = (meters: number): number => {
@@ -253,37 +242,37 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [enduranceStatus, setEnduranceStatus] = useState<EvaluationStatus>('completed');
   const [enduranceReason, setEnduranceReason] = useState<string>('');
   const [enduranceExerciseName, setEnduranceExerciseName] = useState<string>('Evaluación de Resistencia Funcional');
-  const [enduranceMinutes, setEnduranceMinutes] = useState<number>(7);
-  const [enduranceSeconds, setEnduranceSeconds] = useState<number>(14);
-  const [enduranceScoreLevel, setEnduranceScoreLevel] = useState<'Básico' | 'Intermedio' | 'Avanzado' | 'Élite'>('Avanzado');
+  const [enduranceMinutes, setEnduranceMinutes] = useState<number>(0);
+  const [enduranceSeconds, setEnduranceSeconds] = useState<number>(0);
+  const [enduranceScoreLevel, setEnduranceScoreLevel] = useState<'Básico' | 'Intermedio' | 'Avanzado' | 'Élite'>('Intermedio');
   const [enduranceDifficulty, setEnduranceDifficulty] = useState<'Principiante' | 'Intermedio' | 'Avanzado'>('Intermedio');
 
   // 5 Key Strength Exercises (Each can be completed, NA - niños/adultos mayores, NP - no presentada/enfermedad)
   const [squatStatus, setSquatStatus] = useState<EvaluationStatus>('completed');
   const [squatReason, setSquatReason] = useState<string>('');
-  const [squatWeight, setSquatWeight] = useState<number>(120);
+  const [squatWeight, setSquatWeight] = useState<number>(0);
   const [squatReps, setSquatReps] = useState<number>(1);
 
   const [deadliftStatus, setDeadliftStatus] = useState<EvaluationStatus>('completed');
   const [deadliftReason, setDeadliftReason] = useState<string>('');
-  const [deadliftWeight, setDeadliftWeight] = useState<number>(140);
+  const [deadliftWeight, setDeadliftWeight] = useState<number>(0);
   const [deadliftReps, setDeadliftReps] = useState<number>(1);
 
   const [hipThrustStatus, setHipThrustStatus] = useState<EvaluationStatus>('completed');
   const [hipThrustReason, setHipThrustReason] = useState<string>('');
-  const [hipThrustWeight, setHipThrustWeight] = useState<number>(150);
+  const [hipThrustWeight, setHipThrustWeight] = useState<number>(0);
   const [hipThrustReps, setHipThrustReps] = useState<number>(1);
 
   const [pressStatus, setPressStatus] = useState<EvaluationStatus>('completed');
   const [pressReason, setPressReason] = useState<string>('');
-  const [pressWeight, setPressWeight] = useState<number>(90);
+  const [pressWeight, setPressWeight] = useState<number>(0);
   const [pressReps, setPressReps] = useState<number>(1);
 
   // Remo vs Dominadas Selector & Weight
   const [rowStatus, setRowStatus] = useState<EvaluationStatus>('completed');
   const [rowReason, setRowReason] = useState<string>('');
   const [rowExerciseType, setRowExerciseType] = useState<'remo' | 'dominadas'>('remo');
-  const [rowWeight, setRowWeight] = useState<number>(75);
+  const [rowWeight, setRowWeight] = useState<number>(0);
   const [rowReps, setRowReps] = useState<number>(1);
   const [coachNotes, setCoachNotes] = useState<string>('');
 
@@ -349,7 +338,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     setRowReason('');
   };
 
-  // Loads an athlete's baseline into the form or sets pristine defaults
+  // Loads an athlete's baseline into the form or sets pristine defaults (0 for unmeasured)
   const loadAthleteBaselineIntoForm = (athleteId: string, customEval?: PhysicalEvaluationRecord | null) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
@@ -363,10 +352,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setCooperStatus(cpStatus);
       setCooperReason(latest.cooperTest.statusReason || '');
       setSelectedCooperLevel(latest.cooperTest.levelNumber || 5);
-      setOptionalDistance(latest.cooperTest.distanceMeters || 2200);
+      setOptionalDistance(latest.cooperTest.distanceMeters || 0);
       setCooperVariant(latest.cooperTest.variant || 'standard');
       setCooperLapLocation(latest.cooperTest.lapLocation || 'outside');
-      setCooperLapsCount(latest.cooperTest.lapsCount || 6);
+      setCooperLapsCount(latest.cooperTest.lapsCount || 0);
       setCooperMetersPerLap(latest.cooperTest.metersPerLap || (latest.cooperTest.lapLocation === 'inside' ? 250 : 400));
       setSelectedNavetteLevel(latest.cooperTest.navetteLevelNumber || (latest.cooperTest.variant === 'navette' ? latest.cooperTest.levelNumber : 5));
 
@@ -376,7 +365,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setEnduranceStatus(endStatus);
       setEnduranceReason(latest.enduranceTest?.statusReason || '');
       setEnduranceExerciseName(latest.enduranceTest?.name || 'Evaluación de Resistencia Funcional');
-      const timeSec = latest.enduranceTest?.timeSeconds || 420;
+      const timeSec = typeof latest.enduranceTest?.timeSeconds === 'number' ? latest.enduranceTest.timeSeconds : 0;
       setEnduranceMinutes(Math.floor(timeSec / 60));
       setEnduranceSeconds(timeSec % 60);
       setEnduranceScoreLevel((latest.enduranceTest?.scoreScoreLevel as any) || 'Intermedio');
@@ -384,29 +373,29 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         setEnduranceDifficulty(latest.enduranceTest.difficultyLevel as any);
       }
 
-      // Strength records state
+      // Strength records state: EXACT measurements or 0 (no fake defaults)
       const sq = latest.strengthRecords?.find(s => s.exerciseId === 'squats');
       setSquatStatus(sq?.status || (sq && sq.weightKg === 0 && sq.notes?.includes('NA') ? 'na' : 'completed'));
       setSquatReason(sq?.statusReason || (sq?.notes?.includes('NA') ? sq.notes.replace(/^NA:\s*/i, '').trim() : ''));
-      setSquatWeight(sq ? sq.weightKg : 40);
+      setSquatWeight(sq ? sq.weightKg : 0);
       setSquatReps(sq ? sq.reps : 1);
 
       const dl = latest.strengthRecords?.find(s => s.exerciseId === 'deadlift');
       setDeadliftStatus(dl?.status || (dl && dl.weightKg === 0 && dl.notes?.includes('NA') ? 'na' : 'completed'));
       setDeadliftReason(dl?.statusReason || (dl?.notes?.includes('NA') ? dl.notes.replace(/^NA:\s*/i, '').trim() : ''));
-      setDeadliftWeight(dl ? dl.weightKg : 50);
+      setDeadliftWeight(dl ? dl.weightKg : 0);
       setDeadliftReps(dl ? dl.reps : 1);
 
       const ht = latest.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
       setHipThrustStatus(ht?.status || (ht && ht.weightKg === 0 && ht.notes?.includes('NA') ? 'na' : 'completed'));
       setHipThrustReason(ht?.statusReason || (ht?.notes?.includes('NA') ? ht.notes.replace(/^NA:\s*/i, '').trim() : ''));
-      setHipThrustWeight(ht ? ht.weightKg : 50);
+      setHipThrustWeight(ht ? ht.weightKg : 0);
       setHipThrustReps(ht ? ht.reps : 1);
 
       const pr = latest.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
       setPressStatus(pr?.status || (pr && pr.weightKg === 0 && pr.notes?.includes('NA') ? 'na' : 'completed'));
       setPressReason(pr?.statusReason || (pr?.notes?.includes('NA') ? pr.notes.replace(/^NA:\s*/i, '').trim() : ''));
-      setPressWeight(pr ? pr.weightKg : 30);
+      setPressWeight(pr ? pr.weightKg : 0);
       setPressReps(pr ? pr.reps : 1);
 
       const rw = latest.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
@@ -417,46 +406,55 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         setRowReps(rw.reps);
         setRowExerciseType(rw.exerciseType || (rw.exerciseName.toLowerCase().includes('dominad') ? 'dominadas' : 'remo'));
       } else {
-        setRowWeight(30);
+        setRowWeight(0);
         setRowReps(1);
         setRowExerciseType('remo');
       }
       setCoachNotes(''); // Never leak notes from previous athlete
     } else {
+      // Pristine clean initialization for unmeasured athlete: ALL ZEROES!
       setCooperStatus('completed');
       setCooperReason('');
       setSelectedCooperLevel(5);
-      setOptionalDistance(2000);
+      setOptionalDistance(0);
+      setCooperVariant('standard');
+      setCooperLapsCount(0);
+      setCooperMetersPerLap(400);
       setEnduranceStatus('completed');
       setEnduranceReason('');
       setEnduranceExerciseName('Evaluación de Resistencia Funcional');
-      setEnduranceMinutes(7);
+      setEnduranceMinutes(0);
       setEnduranceSeconds(0);
       setEnduranceScoreLevel('Intermedio');
       setSquatStatus('completed');
       setSquatReason('');
-      setSquatWeight(40);
+      setSquatWeight(0);
       setSquatReps(1);
       setDeadliftStatus('completed');
       setDeadliftReason('');
-      setDeadliftWeight(50);
+      setDeadliftWeight(0);
       setDeadliftReps(1);
       setHipThrustStatus('completed');
       setHipThrustReason('');
-      setHipThrustWeight(50);
+      setHipThrustWeight(0);
       setHipThrustReps(1);
       setPressStatus('completed');
       setPressReason('');
-      setPressWeight(30);
+      setPressWeight(0);
       setPressReps(1);
       setRowStatus('completed');
       setRowReason('');
       setRowExerciseType('remo');
-      setRowWeight(30);
-      setRowReps(10);
+      setRowWeight(0);
+      setRowReps(1);
       setCoachNotes('');
     }
   };
+
+  // Sync form baseline and express athlete whenever effectiveAthlete changes
+  useEffect(() => {
+    loadAthleteBaselineIntoForm(effectiveAthlete.id);
+  }, [effectiveAthlete.id]);
 
   const handleOpenAddModal = () => {
     loadAthleteBaselineIntoForm(effectiveAthlete.id);
@@ -620,17 +618,21 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     e.preventDefault();
     onAddEvaluation(buildEvaluationPayload());
     setShowAddEvalModal(false);
+    loadAthleteBaselineIntoForm(effectiveAthlete.id);
   };
 
   const handleSaveAndNextEvaluation = () => {
     onAddEvaluation(buildEvaluationPayload());
 
-    if (athleteList.length > 0 && onSelectNextAthlete && nextAthlete) {
+    if (athleteList.length > 0 && nextAthlete) {
       const savedName = effectiveAthlete.name;
       const targetNext = nextAthlete;
 
       // Advance to next athlete and load their clean baseline
-      onSelectNextAthlete(targetNext);
+      setSelectedAthleteId(targetNext.id);
+      if (onSelectNextAthlete) {
+        onSelectNextAthlete(targetNext);
+      }
       loadAthleteBaselineIntoForm(targetNext.id);
       setNextAthleteToast(`¡Evaluación guardada para ${savedName.split(' ')[0]}! Evaluando ahora a: ${targetNext.name}`);
       setTimeout(() => setNextAthleteToast(null), 4000);
@@ -2538,7 +2540,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     <button
                       onClick={() => {
                         setEditingEval(ev);
-                        loadAthleteBaselineIntoForm(currentUser.id, ev);
+                        loadAthleteBaselineIntoForm(ev.userId, ev);
                         setEvalDate(ev.evaluationDate);
                         setCoachNotes(ev.generalCoachNotes || '');
                       }}
@@ -3803,7 +3805,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </h3>
               </div>
               <button
-                onClick={() => setEditingEval(null)}
+                onClick={() => {
+                  setEditingEval(null);
+                  loadAthleteBaselineIntoForm(effectiveAthlete.id);
+                }}
                 className="text-neutral-400 hover:text-white p-1"
               >
                 <X className="w-5 h-5" />
@@ -4623,7 +4628,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <div className="pt-2 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingEval(null)}
+                  onClick={() => {
+                    setEditingEval(null);
+                    loadAthleteBaselineIntoForm(effectiveAthlete.id);
+                  }}
                   className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors"
                 >
                   Cancelar / Volver
@@ -4768,6 +4776,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       generalCoachNotes: coachNotes.trim(),
                     });
                     setEditingEval(null);
+                    loadAthleteBaselineIntoForm(effectiveAthlete.id);
                   }}
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"
                 >
