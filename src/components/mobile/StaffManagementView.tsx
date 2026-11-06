@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   UserProfile, 
   BodyCompositionRecord, 
@@ -44,6 +44,12 @@ import {
   ShieldAlert,
   Clock,
   TrendingUp,
+  TrendingDown,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  PieChart,
+  Target,
   Info,
   FileSpreadsheet,
   Bell,
@@ -198,8 +204,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [savePaymentSuccess, setSavePaymentSuccess] = useState<boolean>(false);
 
-  // Staff view active navigation sub-section: 'athletes' | 'tests' | 'coaches' | 'database' | 'all'
-  const [staffViewSection, setStaffViewSection] = useState<'athletes' | 'tests' | 'coaches' | 'database' | 'all'>('athletes');
+  // Staff view active navigation sub-section: 'athletes' | 'analytics' | 'tests' | 'coaches' | 'database' | 'all'
+  const [staffViewSection, setStaffViewSection] = useState<'athletes' | 'analytics' | 'tests' | 'coaches' | 'database' | 'all'>('athletes');
+
+  // Executive KPI summary collapsible banner state
+  const [isExecutiveSummaryExpanded, setIsExecutiveSummaryExpanded] = useState<boolean>(false);
+
+  // Athlete physical evaluation and body composition filter: 'all' | 'evaluated' | 'pending_eval' | 'with_body' | 'pending_body'
+  const [evalStatusFilter, setEvalStatusFilter] = useState<'all' | 'evaluated' | 'pending_eval' | 'with_body' | 'pending_body'>('all');
 
   // Athlete password inspection & update state for Coaches/Owners
   const [athletePassword, setAthletePassword] = useState<string>('');
@@ -743,6 +755,193 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     return diff >= 0 && diff <= 3;
   };
 
+  // =========================================================================
+  // KINETIX BOX AGGREGATE ANALYTICS & PERFORMANCE INTELLIGENCE
+  // Regla estricta: Únicamente analiza atletas (u.role === 'athlete').
+  // Las pruebas y marcas de los Coaches (Leslie, Jorge, Gus) quedan 100% aisladas y protegidas.
+  // =========================================================================
+  const boxAnalytics = useMemo(() => {
+    const athletes = users.filter(u => u.role === 'athlete');
+    const totalAthletes = athletes.length;
+
+    // 1. Membresías & Retención
+    const activeCount = athletes.filter(a => a.membership?.status === 'active').length;
+    const expiringSoonCount = athletes.filter(a => a.membership?.status === 'expiring_soon').length;
+    const suspendedCount = athletes.filter(a => a.membership?.status === 'suspended').length;
+    const expiredCount = athletes.filter(a => a.membership?.status === 'expired' || a.membership?.status === 'canceled').length;
+    const retentionRate = totalAthletes > 0 ? Math.round(((activeCount + expiringSoonCount) / totalAthletes) * 100) : 0;
+
+    // Desglose por día de corte
+    const cutoff5 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 5);
+    const cutoff15 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 15);
+    const cutoff20 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 20);
+    const cutoff30 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 30);
+
+    // 2. Evaluaciones Físicas Oficiales (Cooper, Navette, 1RM)
+    const athleteEvalMap = new Map<string, PhysicalEvaluationRecord[]>();
+    athletes.forEach(a => athleteEvalMap.set(a.id, []));
+    evaluations.forEach(ev => {
+      if (athleteEvalMap.has(ev.userId)) {
+        athleteEvalMap.get(ev.userId)!.push(ev);
+      }
+    });
+
+    let evaluatedAthletesCount = 0;
+    let totalEvaluationsLogged = 0;
+    let latestBoxEvalDate = '';
+
+    // Promedios 1RM del Box (solo atletas evaluados)
+    let squatSum = 0, squatCount = 0;
+    let deadliftSum = 0, deadliftCount = 0;
+    let hipThrustSum = 0, hipThrustCount = 0;
+    let pressSum = 0, pressCount = 0;
+    let rowSum = 0, rowCount = 0;
+
+    athleteEvalMap.forEach((evalList) => {
+      if (evalList.length > 0) {
+        evaluatedAthletesCount++;
+        totalEvaluationsLogged += evalList.length;
+        evalList.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate));
+        const latest = evalList[0];
+        if (!latestBoxEvalDate || latest.evaluationDate > latestBoxEvalDate) {
+          latestBoxEvalDate = latest.evaluationDate;
+        }
+
+        latest.strengthRecords?.forEach(sr => {
+          if (sr.status === 'completed' && sr.weightKg > 0) {
+            if (sr.exerciseId === 'squats') { squatSum += sr.weightKg; squatCount++; }
+            else if (sr.exerciseId === 'deadlift') { deadliftSum += sr.weightKg; deadliftCount++; }
+            else if (sr.exerciseId === 'hip_thrust') { hipThrustSum += sr.weightKg; hipThrustCount++; }
+            else if (sr.exerciseId === 'horizontal_press') { pressSum += sr.weightKg; pressCount++; }
+            else if (sr.exerciseId === 'pullups_or_rows') { rowSum += sr.weightKg; rowCount++; }
+          }
+        });
+      }
+    });
+
+    const evaluationCoveragePercent = totalAthletes > 0 ? Math.round((evaluatedAthletesCount / totalAthletes) * 100) : 0;
+    const pendingEvaluationCount = totalAthletes - evaluatedAthletesCount;
+
+    // 3. Composición Corporal (Báscula Renpho Bioimpedancia)
+    const athleteBodyMap = new Map<string, BodyCompositionRecord[]>();
+    athletes.forEach(a => athleteBodyMap.set(a.id, []));
+    bodyCompRecords.forEach(bc => {
+      if (athleteBodyMap.has(bc.userId)) {
+        athleteBodyMap.get(bc.userId)!.push(bc);
+      }
+    });
+
+    let athletesWithBodyRecords = 0;
+    let athletesWithMultipleWeighIns = 0;
+    let totalFatDelta = 0;
+    let totalMuscleDelta = 0;
+    let totalWeightDelta = 0;
+    let fatImprovedCount = 0;
+    let muscleGainedCount = 0;
+
+    let currentFatSum = 0;
+    let currentFatCount = 0;
+    let currentWeightSum = 0;
+    let currentWeightCount = 0;
+
+    interface AthleteBodyEvolution {
+      athlete: UserProfile;
+      initialRecord: BodyCompositionRecord;
+      latestRecord: BodyCompositionRecord;
+      fatDelta: number;
+      muscleDelta: number;
+      weightDelta: number;
+      recordsCount: number;
+    }
+
+    const bodyEvolutionList: AthleteBodyEvolution[] = [];
+
+    athletes.forEach(a => {
+      const records = athleteBodyMap.get(a.id) || [];
+      if (records.length > 0) {
+        athletesWithBodyRecords++;
+        // Ordenar cronológicamente (más antiguo primero)
+        records.sort((r1, r2) => r1.recordedAt.localeCompare(r2.recordedAt));
+        const initial = records[0];
+        const latest = records[records.length - 1];
+
+        currentFatSum += latest.bodyFatPercent;
+        currentFatCount++;
+        currentWeightSum += latest.weightKg;
+        currentWeightCount++;
+
+        if (records.length >= 2) {
+          athletesWithMultipleWeighIns++;
+          const fatDelta = parseFloat((latest.bodyFatPercent - initial.bodyFatPercent).toFixed(1));
+          const muscleDelta = parseFloat((latest.muscleMassPercent - initial.muscleMassPercent).toFixed(1));
+          const weightDelta = parseFloat((latest.weightKg - initial.weightKg).toFixed(1));
+
+          totalFatDelta += fatDelta;
+          totalMuscleDelta += muscleDelta;
+          totalWeightDelta += weightDelta;
+
+          if (fatDelta < 0) fatImprovedCount++;
+          if (muscleDelta > 0) muscleGainedCount++;
+
+          bodyEvolutionList.push({
+            athlete: a,
+            initialRecord: initial,
+            latestRecord: latest,
+            fatDelta,
+            muscleDelta,
+            weightDelta,
+            recordsCount: records.length,
+          });
+        }
+      }
+    });
+
+    const avgFatChange = athletesWithMultipleWeighIns > 0 ? parseFloat((totalFatDelta / athletesWithMultipleWeighIns).toFixed(1)) : 0;
+    const avgMuscleChange = athletesWithMultipleWeighIns > 0 ? parseFloat((totalMuscleDelta / athletesWithMultipleWeighIns).toFixed(1)) : 0;
+    const avgWeightChange = athletesWithMultipleWeighIns > 0 ? parseFloat((totalWeightDelta / athletesWithMultipleWeighIns).toFixed(1)) : 0;
+    const avgCurrentFat = currentFatCount > 0 ? parseFloat((currentFatSum / currentFatCount).toFixed(1)) : 0;
+    const avgCurrentWeight = currentWeightCount > 0 ? parseFloat((currentWeightSum / currentWeightCount).toFixed(1)) : 0;
+    const percentFatImproved = athletesWithMultipleWeighIns > 0 ? Math.round((fatImprovedCount / athletesWithMultipleWeighIns) * 100) : 0;
+
+    return {
+      totalAthletes,
+      activeCount,
+      expiringSoonCount,
+      suspendedCount,
+      expiredCount,
+      retentionRate,
+      cutoffBreakdown: {
+        cutoff5: cutoff5.length,
+        cutoff15: cutoff15.length,
+        cutoff20: cutoff20.length,
+        cutoff30: cutoff30.length,
+      },
+      evaluatedAthletesCount,
+      pendingEvaluationCount,
+      evaluationCoveragePercent,
+      totalEvaluationsLogged,
+      latestBoxEvalDate,
+      avg1RM: {
+        squats: squatCount > 0 ? Math.round(squatSum / squatCount) : 0,
+        deadlift: deadliftCount > 0 ? Math.round(deadliftSum / deadliftCount) : 0,
+        hipThrust: hipThrustCount > 0 ? Math.round(hipThrustSum / hipThrustCount) : 0,
+        press: pressCount > 0 ? Math.round(pressSum / pressCount) : 0,
+        row: rowCount > 0 ? Math.round(rowSum / rowCount) : 0,
+      },
+      athletesWithBodyRecords,
+      athletesWithMultipleWeighIns,
+      avgFatChange,
+      avgMuscleChange,
+      avgWeightChange,
+      avgCurrentFat,
+      avgCurrentWeight,
+      fatImprovedCount,
+      muscleGainedCount,
+      percentFatImproved,
+      bodyEvolutionList,
+    };
+  }, [users, evaluations, bodyCompRecords]);
+
   const dueSoonAthletes = users.filter(u => u.role === 'athlete' && isExpiringInNext3Days(u));
 
   const filteredAthletes = users.filter(u => {
@@ -751,9 +950,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
-    if (colorFilter === 'due_soon') return isExpiringInNext3Days(u);
-    if (colorFilter === 'all') return true;
-    return (u.membership?.billingDayOfMonth || 15) === colorFilter;
+
+    // Filtro por código de color o vencimiento
+    if (colorFilter === 'due_soon' && !isExpiringInNext3Days(u)) return false;
+    if (typeof colorFilter === 'number' && (u.membership?.billingDayOfMonth || 15) !== colorFilter) return false;
+
+    // Filtro por estado de evaluación física y pesaje
+    if (evalStatusFilter === 'evaluated') {
+      const hasEval = evaluations.some(e => e.userId === u.id);
+      if (!hasEval) return false;
+    } else if (evalStatusFilter === 'pending_eval') {
+      const hasEval = evaluations.some(e => e.userId === u.id);
+      if (hasEval) return false;
+    } else if (evalStatusFilter === 'with_body') {
+      const hasBody = bodyCompRecords.some(b => b.userId === u.id);
+      if (!hasBody) return false;
+    } else if (evalStatusFilter === 'pending_body') {
+      const hasBody = bodyCompRecords.some(b => b.userId === u.id);
+      if (hasBody) return false;
+    }
+
+    return true;
   });
 
   const handleSendBatchReminderToDueSoon = () => {
@@ -1279,6 +1496,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         >
           <Users className="w-4 h-4" />
           <span>👥 Alumnos & Membresías ({users.filter(u => u.role === 'athlete').length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStaffViewSection('analytics')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            staffViewSection === 'analytics'
+              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400/40'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-purple-300" />
+          <span>📈 Analíticas & Métricas</span>
         </button>
 
         <button
@@ -1957,9 +2187,654 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       )}
 
+      {/* SECCIÓN: BASE DE DATOS SUPABASE & RESPALDOS */}
+      {(staffViewSection === 'database') && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
+                  <span>Base de Datos en la Nube & Respaldos</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                    isSupabaseConfigured()
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      : 'bg-amber-950 text-amber-300 border border-amber-800'
+                  }`}>
+                    {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local Seguro'}
+                  </span>
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Respaldo automático permanente, sincronización en tiempo real y exportación de datos
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => setShowSupabaseModal(true)}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-emerald-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-emerald-400">Configurar Supabase</span>
+                <Cloud className="w-4 h-4 text-emerald-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Ver credenciales, probar conexión y ejecutar script SQL oficial.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-blue-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-blue-400">Exportar a Excel / CSV</span>
+                <FileSpreadsheet className="w-4 h-4 text-blue-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Descarga reporte completo con pesajes, asistencias y membresías.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadBackup}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-amber-500/50 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-amber-400">Descargar Copia JSON</span>
+                <Download className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Guarda una copia de seguridad local completa de tus atletas y marcas.
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECCIÓN: ANALÍTICAS & MÉTRICAS AGREGADAS DEL BOX KINETIX */}
+      {/* ========================================================================= */}
+      {(staffViewSection === 'analytics' || staffViewSection === 'all') && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Header de Analíticas */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-neutral-900 via-neutral-900 to-purple-950/40 border border-purple-500/30 shadow-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-purple-600/20 text-purple-400 border border-purple-500/40 flex items-center justify-center shrink-0">
+                  <BarChart3 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
+                    <span>Inteligencia de Negocio & Rendimiento Kinetix</span>
+                    <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2.5 py-0.5 rounded-full font-bold">
+                      Box Dashboard
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Métricas consolidadas de retención de atletas, evolución de grasa (Renpho) y benchmarks de fuerza 1RM.
+                  </p>
+                </div>
+              </div>
+
+              {/* Botón rápido para saltar a Sábana de Evaluación Masiva */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStaffViewSection('tests')}
+                  className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/25 active:scale-95 transition-all"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Sábana Masiva</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(true)}
+                  className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 font-bold text-xs flex items-center gap-1.5 transition-all"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Excel</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Aviso de Privacidad y Aislamiento de Coaches */}
+            <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] text-neutral-300 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong>Aislamiento Total:</strong> Estas métricas analizan estrictamente a los <strong>{boxAnalytics.totalAthletes} atletas</strong>. Las pruebas personales de los coaches (Leslie, Jorge, Gus) se mantienen 100% aisladas y no alteran las estadísticas del gimnasio.
+              </span>
+            </div>
+          </div>
+
+          {/* Fila de 3 Tarjetas KPI Principales */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {/* KPI 1: Active vs Expired & Retention */}
+            <div className="p-4 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <strong className="text-white text-xs block font-brand">Retención & Membresías</strong>
+                </div>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-black bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  {boxAnalytics.retentionRate}% Al Día
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-white font-mono tracking-tight">
+                    {boxAnalytics.activeCount}
+                  </span>
+                  <span className="text-xs text-neutral-400">
+                    atletas activos de {boxAnalytics.totalAthletes} alumnos
+                  </span>
+                </div>
+                {/* Progress bar visual */}
+                <div className="h-2.5 w-full bg-neutral-950 rounded-full overflow-hidden flex border border-neutral-800">
+                  <div 
+                    style={{ width: `${(boxAnalytics.activeCount / (boxAnalytics.totalAthletes || 1)) * 100}%` }} 
+                    className="bg-emerald-500 h-full transition-all"
+                    title={`Activos: ${boxAnalytics.activeCount}`}
+                  />
+                  <div 
+                    style={{ width: `${(boxAnalytics.expiringSoonCount / (boxAnalytics.totalAthletes || 1)) * 100}%` }} 
+                    className="bg-amber-500 h-full transition-all"
+                    title={`Vencen pronto: ${boxAnalytics.expiringSoonCount}`}
+                  />
+                  <div 
+                    style={{ width: `${((boxAnalytics.suspendedCount + boxAnalytics.expiredCount) / (boxAnalytics.totalAthletes || 1)) * 100}%` }} 
+                    className="bg-red-500 h-full transition-all"
+                    title={`Pausados/Vencidos: ${boxAnalytics.suspendedCount + boxAnalytics.expiredCount}`}
+                  />
+                </div>
+              </div>
+
+              {/* Status Breakdown Pills */}
+              <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                <div className="p-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/60">
+                  <span className="text-neutral-400 block">Activos</span>
+                  <strong className="text-emerald-300 text-xs font-mono">{boxAnalytics.activeCount}</strong>
+                </div>
+                <div className="p-1.5 rounded-lg bg-amber-950/50 border border-amber-800/60">
+                  <span className="text-neutral-400 block">Por Vencer</span>
+                  <strong className="text-amber-300 text-xs font-mono">{boxAnalytics.expiringSoonCount}</strong>
+                </div>
+                <div className="p-1.5 rounded-lg bg-red-950/50 border border-red-800/60">
+                  <span className="text-neutral-400 block">Pausa/Vencido</span>
+                  <strong className="text-red-300 text-xs font-mono">{boxAnalytics.suspendedCount + boxAnalytics.expiredCount}</strong>
+                </div>
+              </div>
+
+              {/* Breakdown by Cutoff Day */}
+              <div className="pt-2 border-t border-neutral-800 space-y-1.5 text-[11px]">
+                <span className="text-[10px] text-neutral-400 uppercase font-semibold block">Distribución por Cortes de Pago:</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="p-1.5 rounded-lg bg-sky-950/40 border border-sky-800/40 flex items-center justify-between">
+                    <span className="text-sky-300">🔵 Corte Día 5</span>
+                    <strong className="text-white font-mono">{boxAnalytics.cutoffBreakdown.cutoff5}</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-amber-950/40 border border-amber-800/40 flex items-center justify-between">
+                    <span className="text-amber-300">🟡 Corte Día 15</span>
+                    <strong className="text-white font-mono">{boxAnalytics.cutoffBreakdown.cutoff15}</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-between">
+                    <span className="text-emerald-300">🟢 Corte Día 20</span>
+                    <strong className="text-white font-mono">{boxAnalytics.cutoffBreakdown.cutoff20}</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-purple-950/40 border border-purple-800/40 flex items-center justify-between">
+                    <span className="text-purple-300">🟣 Corte Día 30</span>
+                    <strong className="text-white font-mono">{boxAnalytics.cutoffBreakdown.cutoff30}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI 2: Average Body Fat Change across all athletes */}
+            <div className="p-4 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <strong className="text-white text-xs block font-brand">Cambio Promedio de Grasa</strong>
+                </div>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-mono font-black ${
+                  boxAnalytics.avgFatChange < 0 
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                    : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                }`}>
+                  {boxAnalytics.avgFatChange < 0 ? `▼ ${Math.abs(boxAnalytics.avgFatChange)}% Grasa` : `${boxAnalytics.avgFatChange}% Grasa`}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-3xl font-black font-mono tracking-tight ${
+                    boxAnalytics.avgFatChange < 0 ? 'text-emerald-400' : 'text-white'
+                  }`}>
+                    {boxAnalytics.avgFatChange < 0 ? `-${Math.abs(boxAnalytics.avgFatChange)}%` : `${boxAnalytics.avgFatChange}%`}
+                  </span>
+                  <span className="text-xs text-neutral-400">
+                    reducción media de grasa en el box
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  {boxAnalytics.athletesWithMultipleWeighIns > 0
+                    ? `Comparando 1er pesaje vs el pesaje más reciente de cada alumno en báscula Renpho.`
+                    : `${boxAnalytics.athletesWithBodyRecords} atletas con pesaje inicial Renpho registrado.`}
+                </p>
+              </div>
+
+              {/* Body Metric Summary Badges */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
+                  <span className="text-[10px] text-neutral-400">Masa Muscular</span>
+                  <strong className="text-white block font-mono font-bold">
+                    {boxAnalytics.avgMuscleChange >= 0 ? `+${boxAnalytics.avgMuscleChange}%` : `${boxAnalytics.avgMuscleChange}%`}
+                  </strong>
+                  <span className="text-[9px] text-emerald-400">
+                    {boxAnalytics.muscleGainedCount} atletas ganaron músculo
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
+                  <span className="text-[10px] text-neutral-400">Tasa de Éxito Grasa</span>
+                  <strong className="text-emerald-400 block font-mono font-bold">
+                    {boxAnalytics.percentFatImproved}%
+                  </strong>
+                  <span className="text-[9px] text-neutral-400">
+                    {boxAnalytics.fatImprovedCount} alumnos bajaron grasa
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-[11px] text-neutral-400">
+                <span>Grasa Actual Promedio: <strong className="text-white font-mono">{boxAnalytics.avgCurrentFat}%</strong></span>
+                <span>Peso Promedio: <strong className="text-white font-mono">{boxAnalytics.avgCurrentWeight} kg</strong></span>
+              </div>
+            </div>
+
+            {/* KPI 3: Physical Evaluation Coverage & 1RM Benchmarks */}
+            <div className="p-4 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <strong className="text-white text-xs block font-brand">Cobertura de Tests Físicos</strong>
+                </div>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-mono font-black bg-blue-950 text-blue-300 border border-blue-800">
+                  {boxAnalytics.evaluationCoveragePercent}% Evaluados
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-white font-mono tracking-tight">
+                    {boxAnalytics.evaluatedAthletesCount}
+                  </span>
+                  <span className="text-xs text-neutral-400">
+                    evaluados de {boxAnalytics.totalAthletes} alumnos ({boxAnalytics.pendingEvaluationCount} pendientes)
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-2.5 w-full bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
+                  <div 
+                    style={{ width: `${boxAnalytics.evaluationCoveragePercent}%` }} 
+                    className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Benchmarks 1RM del Box (Pesos Promedio) */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] text-neutral-400 uppercase font-semibold block">
+                  Benchmarks 1RM Oficiales del Box (Promedio kg):
+                </span>
+                <div className="grid grid-cols-5 gap-1 text-center font-mono">
+                  <div className="p-1 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block">Sentadilla</span>
+                    <strong className="text-[11px] text-white font-black">{boxAnalytics.avg1RM.squats || '--'}</strong>
+                    <span className="text-[8px] text-neutral-500 block">kg</span>
+                  </div>
+                  <div className="p-1 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block">P. Muerto</span>
+                    <strong className="text-[11px] text-white font-black">{boxAnalytics.avg1RM.deadlift || '--'}</strong>
+                    <span className="text-[8px] text-neutral-500 block">kg</span>
+                  </div>
+                  <div className="p-1 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block">Hip Thrust</span>
+                    <strong className="text-[11px] text-white font-black">{boxAnalytics.avg1RM.hipThrust || '--'}</strong>
+                    <span className="text-[8px] text-neutral-500 block">kg</span>
+                  </div>
+                  <div className="p-1 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block">Press</span>
+                    <strong className="text-[11px] text-white font-black">{boxAnalytics.avg1RM.press || '--'}</strong>
+                    <span className="text-[8px] text-neutral-500 block">kg</span>
+                  </div>
+                  <div className="p-1 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-400 block">Remo</span>
+                    <strong className="text-[11px] text-white font-black">{boxAnalytics.avg1RM.row || '--'}</strong>
+                    <span className="text-[8px] text-neutral-500 block">kg</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-[11px] text-neutral-400">
+                <span>Último Test en Box: <strong className="text-white">{boxAnalytics.latestBoxEvalDate || 'Sin test'}</strong></span>
+                <span>Total Registros: <strong className="text-blue-400 font-mono">{boxAnalytics.totalEvaluationsLogged}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabla / Tarjetas de Evolución Individual de Grasa & Músculo */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-3.5 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-white font-brand flex items-center gap-2">
+                  <span>Transformación Individual por Alumno (Báscula Renpho)</span>
+                  <span className="text-[10px] bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded-full font-mono">
+                    {boxAnalytics.bodyEvolutionList.length} con seguimiento de ≥2 pesajes
+                  </span>
+                </h4>
+                <p className="text-xs text-neutral-400">
+                  Diferencia exacta entre el pesaje inicial (línea base) y la última medición registrada.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setStaffViewSection('athletes')}
+                className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 self-start sm:self-auto"
+              >
+                <span>Ver Todos los Alumnos</span>
+                <span>→</span>
+              </button>
+            </div>
+
+            {boxAnalytics.bodyEvolutionList.length === 0 ? (
+              <div className="p-6 rounded-2xl bg-neutral-950/60 border border-neutral-800/80 text-center space-y-2">
+                <Scale className="w-8 h-8 text-neutral-600 mx-auto" />
+                <p className="text-xs text-neutral-300 font-semibold">
+                  Aún no hay atletas con al menos 2 pesajes registrados para calcular el cambio de grasa.
+                </p>
+                <p className="text-[11px] text-neutral-500 max-w-md mx-auto">
+                  Registra un segundo pesaje a los alumnos desde la báscula Renpho para ver automáticamente quién ha reducido grasa y ganado músculo.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {boxAnalytics.bodyEvolutionList.map((evo) => (
+                  <div
+                    key={evo.athlete.id}
+                    className="p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800 hover:border-neutral-700 transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <UserAvatar
+                        name={evo.athlete.name}
+                        avatarUrl={evo.athlete.avatarUrl}
+                        sizeClassName="w-9 h-9"
+                      />
+                      <div className="min-w-0">
+                        <strong className="text-xs text-white block truncate">{evo.athlete.name}</strong>
+                        <span className="text-[10px] text-neutral-400 block truncate">
+                          {evo.initialRecord.recordedAt} ({evo.initialRecord.weightKg}kg) → {evo.latestRecord.recordedAt} ({evo.latestRecord.weightKg}kg)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Fat Delta Pill */}
+                      <span className={`text-[11px] font-mono font-bold px-2 py-1 rounded-xl border flex items-center gap-1 ${
+                        evo.fatDelta < 0
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                          : evo.fatDelta > 0
+                          ? 'bg-red-950 text-red-300 border-red-800'
+                          : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                      }`}>
+                        <span>{evo.fatDelta < 0 ? '▼' : evo.fatDelta > 0 ? '▲' : '='}</span>
+                        <span>{evo.fatDelta < 0 ? `${Math.abs(evo.fatDelta)}% G` : `${evo.fatDelta}% G`}</span>
+                      </span>
+
+                      {/* Muscle Delta Pill */}
+                      <span className={`text-[11px] font-mono font-bold px-2 py-1 rounded-xl border flex items-center gap-1 ${
+                        evo.muscleDelta > 0
+                          ? 'bg-blue-950 text-blue-300 border-blue-800'
+                          : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                      }`}>
+                        <span>{evo.muscleDelta > 0 ? `+${evo.muscleDelta}% M` : `${evo.muscleDelta}% M`}</span>
+                      </span>
+
+                      {onOpenBodyCompForUser && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenBodyCompForUser(evo.athlete)}
+                          className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
+                          title="Ver historial completo en báscula"
+                        >
+                          <Scale className="w-3.5 h-3.5 text-blue-400" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* SECCIÓN LISTA DE ALUMNOS (Visible en Alumnos, Pruebas y Ver Todo) */}
       {(staffViewSection === 'athletes' || staffViewSection === 'tests' || staffViewSection === 'all') && (
         <>
+          {/* ========================================================================= */}
+          {/* BANNER EJECUTIVO PLEGABLE DEL BOX (Anti-Clutter / Anti-Scroll Eterno) */}
+          {/* ========================================================================= */}
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-950 to-neutral-900 border border-neutral-800 shadow-md">
+            <button
+              type="button"
+              onClick={() => setIsExecutiveSummaryExpanded(!isExecutiveSummaryExpanded)}
+              className="w-full flex items-center justify-between text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span>📊 Resumen Ejecutivo del Box</span>
+                    <span className="text-[10px] text-purple-400 font-normal">({boxAnalytics.totalAthletes} atletas)</span>
+                  </span>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 text-[11px]">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold">
+                    👥 {boxAnalytics.retentionRate}% Al Día ({boxAnalytics.activeCount}/{boxAnalytics.totalAthletes})
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full border font-semibold ${
+                    boxAnalytics.avgFatChange < 0 ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                  }`}>
+                    ⚖️ {boxAnalytics.avgFatChange < 0 ? `${boxAnalytics.avgFatChange}% Grasa (Mejora)` : `${boxAnalytics.avgFatChange}% Grasa`}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-800 font-semibold">
+                    ⚡ {boxAnalytics.evaluationCoveragePercent}% Evaluados
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-white">
+                <span className="text-[11px]">{isExecutiveSummaryExpanded ? 'Plegar' : 'Ver Métricas'}</span>
+                {isExecutiveSummaryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
+            </button>
+
+            {/* Panel Plegable con las 3 Tarjetas Ejecutivas */}
+            {isExecutiveSummaryExpanded && (
+              <div className="mt-3 pt-3 border-t border-neutral-800 grid grid-cols-1 sm:grid-cols-3 gap-2.5 animate-fade-in">
+                {/* 1. Retención */}
+                <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-neutral-300 flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Retención de Membresías</span>
+                    </span>
+                    <span className="text-[11px] font-black text-emerald-400 font-mono">{boxAnalytics.retentionRate}%</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-white font-mono">{boxAnalytics.activeCount}</span>
+                    <span className="text-[10px] text-neutral-400">activos de {boxAnalytics.totalAthletes} alumnos</span>
+                  </div>
+                  <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden flex">
+                    <div style={{ width: `${(boxAnalytics.activeCount / (boxAnalytics.totalAthletes || 1)) * 100}%` }} className="bg-emerald-500 h-full" />
+                    <div style={{ width: `${(boxAnalytics.expiringSoonCount / (boxAnalytics.totalAthletes || 1)) * 100}%` }} className="bg-amber-500 h-full" />
+                    <div style={{ width: `${((boxAnalytics.suspendedCount + boxAnalytics.expiredCount) / (boxAnalytics.totalAthletes || 1)) * 100}%` }} className="bg-red-500 h-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
+                    <span className="text-emerald-400">✓ {boxAnalytics.activeCount} al día</span>
+                    <span className="text-amber-400">⚡ {boxAnalytics.expiringSoonCount} por vencer</span>
+                    <span className="text-red-400">⚠️ {boxAnalytics.suspendedCount + boxAnalytics.expiredCount} pausa/vencidos</span>
+                  </div>
+                </div>
+
+                {/* 2. Grasa Corporal */}
+                <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-neutral-300 flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Cambio Grasa Corporal</span>
+                    </span>
+                    <span className={`text-[11px] font-black font-mono ${boxAnalytics.avgFatChange < 0 ? 'text-emerald-400' : 'text-neutral-300'}`}>
+                      {boxAnalytics.avgFatChange < 0 ? `▼ ${Math.abs(boxAnalytics.avgFatChange)}%` : `${boxAnalytics.avgFatChange}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-xl font-black font-mono ${boxAnalytics.avgFatChange < 0 ? 'text-emerald-400' : 'text-white'}`}>
+                      {boxAnalytics.avgFatChange < 0 ? `-${Math.abs(boxAnalytics.avgFatChange)}%` : `${boxAnalytics.avgFatChange}%`}
+                    </span>
+                    <span className="text-[10px] text-neutral-400">cambio medio en el box</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
+                    <span>Músculo: <strong className="text-emerald-400">{boxAnalytics.avgMuscleChange >= 0 ? `+${boxAnalytics.avgMuscleChange}%` : `${boxAnalytics.avgMuscleChange}%`}</strong></span>
+                    <span>Peso: <strong className="text-white">{boxAnalytics.avgCurrentWeight} kg prom.</strong></span>
+                  </div>
+                </div>
+
+                {/* 3. Evaluaciones Físicas */}
+                <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-neutral-300 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Cobertura de Tests</span>
+                    </span>
+                    <span className="text-[11px] font-black text-blue-400 font-mono">{boxAnalytics.evaluationCoveragePercent}%</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-white font-mono">{boxAnalytics.evaluatedAthletesCount}</span>
+                    <span className="text-[10px] text-neutral-400">evaluados de {boxAnalytics.totalAthletes} alumnos</span>
+                  </div>
+                  <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
+                    <div style={{ width: `${boxAnalytics.evaluationCoveragePercent}%` }} className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full" />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
+                    <span className="text-blue-400">✓ {boxAnalytics.evaluatedAthletesCount} evaluados</span>
+                    <span className="text-amber-400">⏳ {boxAnalytics.pendingEvaluationCount} pendientes</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ========================================================================= */}
+          {/* CHIPS DE FILTRO RÁPIDO: EVALUADOS vs PENDIENTES (Anti-Scroll Eterno) */}
+          {/* ========================================================================= */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <span className="text-[10px] text-neutral-400 uppercase font-semibold shrink-0 pr-1">Filtro Estado:</span>
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap cursor-pointer ${
+                evalStatusFilter === 'all'
+                  ? 'bg-neutral-800 text-white border border-neutral-600 shadow-sm'
+                  : 'bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800'
+              }`}
+            >
+              Todos ({users.filter(u => u.role === 'athlete').length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter('evaluated')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'evaluated'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/40'
+                  : 'bg-neutral-950 text-blue-400 hover:bg-neutral-900 border border-neutral-800'
+              }`}
+              title="Ver únicamente atletas que ya tienen al menos 1 evaluación física oficial"
+            >
+              <span>✓ Con Test Físico</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.evaluatedAthletesCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter('pending_eval')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_eval'
+                  ? 'bg-amber-500 text-black font-extrabold shadow-md shadow-amber-500/30 ring-1 ring-amber-400/40'
+                  : 'bg-neutral-950 text-amber-400 hover:bg-neutral-900 border border-neutral-800'
+              }`}
+              title="Ver atletas a los que les falta realizar su test físico oficial"
+            >
+              <span>⏳ Sin Test Físico</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.pendingEvaluationCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter('with_body')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'with_body'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'bg-neutral-950 text-emerald-400 hover:bg-neutral-900 border border-neutral-800'
+              }`}
+              title="Atletas con registros en báscula Renpho"
+            >
+              <span>⚖️ Con Pesaje</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.athletesWithBodyRecords}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter('pending_body')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_body'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+                  : 'bg-neutral-950 text-neutral-400 hover:bg-neutral-900 border border-neutral-800'
+              }`}
+              title="Atletas sin ningún pesaje de bioimpedancia registrado"
+            >
+              <span>⚖️ Sin Pesaje</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.totalAthletes - boxAnalytics.athletesWithBodyRecords}
+              </span>
+            </button>
+          </div>
+
           {/* Search Input con botón de borrado rápido para celular */}
           <div className="relative">
         <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -2299,6 +3174,89 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   )}
                 </div>
               </div>
+
+              {/* Indicador de Estado de Evaluación Física y Pesaje Renpho */}
+              {(() => {
+                const athleteEvals = evaluations.filter(e => e.userId === athlete.id).sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate));
+                const latestEval = athleteEvals[0];
+
+                const athleteBodies = bodyCompRecords.filter(b => b.userId === athlete.id).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+                const latestBody = athleteBodies[0];
+
+                const completed1RMs = latestEval?.strengthRecords?.filter(s => s.status === 'completed' && s.weightKg > 0).length || 0;
+
+                return (
+                  <div className="pt-2 border-t border-neutral-800/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {/* Status de Test Físico Oficial */}
+                    <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+                      latestEval 
+                        ? 'bg-blue-950/20 border-blue-800/40 text-blue-200' 
+                        : 'bg-amber-950/20 border-amber-800/40 text-amber-300'
+                    }`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Zap className={`w-3.5 h-3.5 shrink-0 ${latestEval ? 'text-blue-400' : 'text-amber-400'}`} />
+                        <div className="min-w-0">
+                          <span className="font-bold block text-white text-[11px] truncate">
+                            {latestEval ? `✓ Test Físico: ${latestEval.evaluationDate}` : '⏳ Sin Test Físico'}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 block truncate">
+                            {latestEval
+                              ? `${completed1RMs}/5 1RM registradas`
+                              : 'Pendiente de evaluar en sábana oficial'}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onOpenTestEntryForUser(athlete)}
+                        className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                          latestEval 
+                            ? 'bg-blue-600/30 hover:bg-blue-600 text-blue-200 hover:text-white' 
+                            : 'bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black'
+                        }`}
+                        title="Ver o capturar evaluación física de este alumno"
+                      >
+                        {latestEval ? 'Ver Test' : '⚡ Evaluar'}
+                      </button>
+                    </div>
+
+                    {/* Status de Bioimpedancia Renpho */}
+                    <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+                      latestBody 
+                        ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200' 
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                    }`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Scale className={`w-3.5 h-3.5 shrink-0 ${latestBody ? 'text-emerald-400' : 'text-neutral-500'}`} />
+                        <div className="min-w-0">
+                          <span className="font-bold block text-white text-[11px] truncate">
+                            {latestBody ? `⚖️ Pesaje: ${latestBody.recordedAt}` : '⚖️ Sin Pesaje Renpho'}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 block truncate">
+                            {latestBody
+                              ? `${latestBody.weightKg} kg · ${latestBody.bodyFatPercent}% Grasa · ${latestBody.muscleMassPercent}% Músculo`
+                              : 'Sin registro en báscula de bioimpedancia'}
+                          </span>
+                        </div>
+                      </div>
+                      {onOpenBodyCompForUser && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenBodyCompForUser(athlete)}
+                          className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            latestBody 
+                              ? 'bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white' 
+                              : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                          }`}
+                          title="Registrar pesaje o consultar historial corporal"
+                        >
+                          {latestBody ? 'Historial' : '+ Pesar'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })
