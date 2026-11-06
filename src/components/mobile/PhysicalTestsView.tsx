@@ -10,7 +10,6 @@ import {
   EnduranceTimeTestRecord 
 } from '../../types';
 import { 
-  calculate1RM, 
   getCooperLevelInfo, 
   COOPER_LEVELS_CATALOG, 
   calculateRelativeStrengthRatio,
@@ -548,8 +547,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         exerciseId: 'squats',
         exerciseName: 'Sentadillas',
         weightKg: squatStatus === 'completed' ? squatWeight : 0,
-        reps: squatStatus === 'completed' ? squatReps : 0,
-        estimated1RMKg: squatStatus === 'completed' ? calculate1RM(squatWeight, squatReps) : 0,
+        reps: squatStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: squatStatus === 'completed' ? squatWeight : 0,
         weightUnit: 'kg',
         status: squatStatus,
         statusReason: squatReason || cooperReason || (squatStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
@@ -559,8 +558,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         exerciseId: 'deadlift',
         exerciseName: 'Peso Muerto',
         weightKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
-        reps: deadliftStatus === 'completed' ? deadliftReps : 0,
-        estimated1RMKg: deadliftStatus === 'completed' ? calculate1RM(deadliftWeight, deadliftReps) : 0,
+        reps: deadliftStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
         weightUnit: 'kg',
         status: deadliftStatus,
         statusReason: deadliftReason || cooperReason || (deadliftStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
@@ -570,8 +569,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         exerciseId: 'hip_thrust',
         exerciseName: 'Hip Thrust',
         weightKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
-        reps: hipThrustStatus === 'completed' ? hipThrustReps : 0,
-        estimated1RMKg: hipThrustStatus === 'completed' ? calculate1RM(hipThrustWeight, hipThrustReps) : 0,
+        reps: hipThrustStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
         weightUnit: 'kg',
         status: hipThrustStatus,
         statusReason: hipThrustReason || cooperReason || (hipThrustStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
@@ -581,8 +580,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         exerciseId: 'horizontal_press',
         exerciseName: 'Press Horizontal',
         weightKg: pressStatus === 'completed' ? pressWeight : 0,
-        reps: pressStatus === 'completed' ? pressReps : 0,
-        estimated1RMKg: pressStatus === 'completed' ? calculate1RM(pressWeight, pressReps) : 0,
+        reps: pressStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: pressStatus === 'completed' ? pressWeight : 0,
         weightUnit: 'kg',
         status: pressStatus,
         statusReason: pressReason || cooperReason || (pressStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
@@ -593,8 +592,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
         exerciseType: rowExerciseType,
         weightKg: rowStatus === 'completed' ? rowWeight : 0,
-        reps: rowStatus === 'completed' ? rowReps : 0,
-        estimated1RMKg: rowStatus === 'completed' ? calculate1RM(rowWeight, rowReps) : 0,
+        reps: rowStatus === 'completed' ? 1 : 0,
+        estimated1RMKg: rowStatus === 'completed' ? rowWeight : 0,
         weightUnit: 'kg',
         status: rowStatus,
         statusReason: rowReason || cooperReason || (rowStatus === 'na' ? 'Exento por nuevo ingreso o perfil de edad' : undefined),
@@ -794,14 +793,14 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       pullups_or_rows: expressRowType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
     };
 
-    const calculated1RM = expressStatus === 'completed' ? calculate1RM(expressWeight, expressReps) : 0;
+    const calculated1RM = expressStatus === 'completed' ? expressWeight : 0;
 
     const newRec: StrengthMaxRecord = {
       exerciseId: expressExerciseId,
       exerciseName: exerciseNameMap[expressExerciseId] || 'Fuerza',
       exerciseType: expressExerciseId === 'pullups_or_rows' ? expressRowType : undefined,
       weightKg: expressStatus === 'completed' ? expressWeight : 0,
-      reps: expressStatus === 'completed' ? expressReps : 0,
+      reps: expressStatus === 'completed' ? 1 : 0,
       estimated1RMKg: calculated1RM,
       weightUnit: 'kg',
       status: expressStatus,
@@ -3421,7 +3420,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         </div>
                         <div className="col-span-6 text-right">
                           <span className="text-[10px] text-neutral-400 font-mono">
-                            1RM: <strong className="text-white">{calculate1RM(squatWeight, squatReps)}kg</strong>
+                            1RM: <strong className="text-white">{squatWeight} kg</strong>
                           </span>
                         </div>
                       </div>
@@ -3483,7 +3482,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         </div>
                         <div className="col-span-6 text-right">
                           <span className="text-[10px] text-neutral-400 font-mono">
-                            1RM: <strong className="text-white">{calculate1RM(deadliftWeight, deadliftReps)}kg</strong>
+                            1RM: <strong className="text-white">{deadliftWeight} kg</strong>
                           </span>
                         </div>
                       </div>
@@ -3545,7 +3544,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         </div>
                         <div className="col-span-6 text-right">
                           <span className="text-[10px] text-neutral-400 font-mono">
-                            1RM: <strong className="text-white">{calculate1RM(hipThrustWeight, hipThrustReps)}kg</strong>
+                            1RM: <strong className="text-white">{hipThrustWeight} kg</strong>
                           </span>
                         </div>
                       </div>
@@ -3607,7 +3606,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         </div>
                         <div className="col-span-6 text-right">
                           <span className="text-[10px] text-neutral-400 font-mono">
-                            1RM: <strong className="text-white">{calculate1RM(pressWeight, pressReps)}kg</strong>
+                            1RM: <strong className="text-white">{pressWeight} kg</strong>
                           </span>
                         </div>
                       </div>
@@ -3700,7 +3699,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         </div>
                         <div className="col-span-3 text-right">
                           <span className="text-[10px] text-neutral-400 font-mono">
-                            1RM: <strong className="text-white">{calculate1RM(rowWeight, rowReps)}kg</strong>
+                            1RM: <strong className="text-white">{rowWeight} kg</strong>
                           </span>
                         </div>
                       </div>
@@ -4323,7 +4322,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           <span className="text-[11px] text-neutral-400">kg</span>
                         </div>
                         <span className="text-[11px] text-amber-400 font-mono font-bold">
-                          1RM: {calculate1RM(squatWeight, squatReps || 1)} kg
+                          1RM: {squatWeight} kg
                         </span>
                       </div>
                     ) : (
@@ -4392,7 +4391,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           <span className="text-[11px] text-neutral-400">kg</span>
                         </div>
                         <span className="text-[11px] text-amber-400 font-mono font-bold">
-                          1RM: {calculate1RM(deadliftWeight, deadliftReps || 1)} kg
+                          1RM: {deadliftWeight} kg
                         </span>
                       </div>
                     ) : (
@@ -4461,7 +4460,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           <span className="text-[11px] text-neutral-400">kg</span>
                         </div>
                         <span className="text-[11px] text-amber-400 font-mono font-bold">
-                          1RM: {calculate1RM(hipThrustWeight, hipThrustReps || 1)} kg
+                          1RM: {hipThrustWeight} kg
                         </span>
                       </div>
                     ) : (
@@ -4530,7 +4529,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           <span className="text-[11px] text-neutral-400">kg</span>
                         </div>
                         <span className="text-[11px] text-amber-400 font-mono font-bold">
-                          1RM: {calculate1RM(pressWeight, pressReps || 1)} kg
+                          1RM: {pressWeight} kg
                         </span>
                       </div>
                     ) : (
@@ -4599,7 +4598,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           <span className="text-[11px] text-neutral-400">kg</span>
                         </div>
                         <span className="text-[11px] text-amber-400 font-mono font-bold">
-                          1RM: {calculate1RM(rowWeight, rowReps || 1)} kg
+                          1RM: {rowWeight} kg
                         </span>
                       </div>
                     ) : (
@@ -4659,8 +4658,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             exerciseId: 'squats',
                             exerciseName: 'Sentadillas',
                             weightKg: squatStatus === 'completed' ? squatWeight : 0,
-                            reps: squatStatus === 'completed' ? (squatReps || 1) : 0,
-                            estimated1RMKg: squatStatus === 'completed' ? calculate1RM(squatWeight, squatReps || 1) : 0,
+                            reps: squatStatus === 'completed' ? 1 : 0,
+                            estimated1RMKg: squatStatus === 'completed' ? squatWeight : 0,
                             weightUnit: 'kg',
                             status: squatStatus,
                             statusReason: squatReason,
@@ -4669,8 +4668,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             exerciseId: 'deadlift',
                             exerciseName: 'Peso Muerto',
                             weightKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
-                            reps: deadliftStatus === 'completed' ? (deadliftReps || 1) : 0,
-                            estimated1RMKg: deadliftStatus === 'completed' ? calculate1RM(deadliftWeight, deadliftReps || 1) : 0,
+                            reps: deadliftStatus === 'completed' ? 1 : 0,
+                            estimated1RMKg: deadliftStatus === 'completed' ? deadliftWeight : 0,
                             weightUnit: 'kg',
                             status: deadliftStatus,
                             statusReason: deadliftReason,
@@ -4679,8 +4678,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             exerciseId: 'hip_thrust',
                             exerciseName: 'Hip Thrust',
                             weightKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
-                            reps: hipThrustStatus === 'completed' ? (hipThrustReps || 1) : 0,
-                            estimated1RMKg: hipThrustStatus === 'completed' ? calculate1RM(hipThrustWeight, hipThrustReps || 1) : 0,
+                            reps: hipThrustStatus === 'completed' ? 1 : 0,
+                            estimated1RMKg: hipThrustStatus === 'completed' ? hipThrustWeight : 0,
                             weightUnit: 'kg',
                             status: hipThrustStatus,
                             statusReason: hipThrustReason,
@@ -4689,8 +4688,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             exerciseId: 'horizontal_press',
                             exerciseName: 'Press Horizontal',
                             weightKg: pressStatus === 'completed' ? pressWeight : 0,
-                            reps: pressStatus === 'completed' ? (pressReps || 1) : 0,
-                            estimated1RMKg: pressStatus === 'completed' ? calculate1RM(pressWeight, pressReps || 1) : 0,
+                            reps: pressStatus === 'completed' ? 1 : 0,
+                            estimated1RMKg: pressStatus === 'completed' ? pressWeight : 0,
                             weightUnit: 'kg',
                             status: pressStatus,
                             statusReason: pressReason,
@@ -4700,8 +4699,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             exerciseName: rowExerciseType === 'remo' ? 'Remo con Barra' : 'Dominadas (Pull-ups)',
                             exerciseType: rowExerciseType,
                             weightKg: rowStatus === 'completed' ? rowWeight : 0,
-                            reps: rowStatus === 'completed' ? (rowReps || 1) : 0,
-                            estimated1RMKg: rowStatus === 'completed' ? calculate1RM(rowWeight, rowReps || 1) : 0,
+                            reps: rowStatus === 'completed' ? 1 : 0,
+                            estimated1RMKg: rowStatus === 'completed' ? rowWeight : 0,
                             weightUnit: 'kg',
                             status: rowStatus,
                             statusReason: rowReason,
@@ -5210,9 +5209,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Live 1RM Calculation & Training Percentages */}
+                {/* Live 1RM & Training Percentages */}
                 {(() => {
-                  const est1RM = calculate1RM(expressWeight, expressReps);
+                  const est1RM = expressWeight;
                   const p90 = Math.round(est1RM * 0.9);
                   const p80 = Math.round(est1RM * 0.8);
                   const p70 = Math.round(est1RM * 0.7);
@@ -5222,7 +5221,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
                           <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                          <span>1RM Oficial Estimado (Fórmula Brzycki)</span>
+                          <span>1RM Oficial Registrado</span>
                         </span>
                         <span className="text-xl font-extrabold text-white font-mono tracking-tight">
                           {est1RM} <span className="text-xs font-normal text-neutral-400">kg ({kgToLbs(est1RM)} lbs)</span>

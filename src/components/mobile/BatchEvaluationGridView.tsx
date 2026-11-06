@@ -8,7 +8,7 @@ import {
   CooperTestRecord,
   EnduranceTimeTestRecord
 } from '../../types';
-import { calculate1RM, COOPER_LEVELS_CATALOG } from '../../utils/fitnessCalculations';
+import { COOPER_LEVELS_CATALOG } from '../../utils/fitnessCalculations';
 import { UserAvatar } from '../common/UserAvatar';
 import { 
   X, 
@@ -474,7 +474,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         exerciseName: 'Sentadillas',
         weightKg: row.squatsStatus === 'completed' ? row.squatsWeight : 0,
         reps: row.squatsStatus === 'completed' ? 1 : 0,
-        estimated1RMKg: row.squatsStatus === 'completed' ? calculate1RM(row.squatsWeight, 1) : 0,
+        estimated1RMKg: row.squatsStatus === 'completed' ? row.squatsWeight : 0,
         weightUnit: 'kg',
         status: row.squatsStatus,
         statusReason: row.squatsReason || undefined,
@@ -484,7 +484,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         exerciseName: 'Peso Muerto',
         weightKg: row.deadliftStatus === 'completed' ? row.deadliftWeight : 0,
         reps: row.deadliftStatus === 'completed' ? 1 : 0,
-        estimated1RMKg: row.deadliftStatus === 'completed' ? calculate1RM(row.deadliftWeight, 1) : 0,
+        estimated1RMKg: row.deadliftStatus === 'completed' ? row.deadliftWeight : 0,
         weightUnit: 'kg',
         status: row.deadliftStatus,
         statusReason: row.deadliftReason || undefined,
@@ -494,7 +494,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         exerciseName: 'Hip Thrust',
         weightKg: row.hipThrustStatus === 'completed' ? row.hipThrustWeight : 0,
         reps: row.hipThrustStatus === 'completed' ? 1 : 0,
-        estimated1RMKg: row.hipThrustStatus === 'completed' ? calculate1RM(row.hipThrustWeight, 1) : 0,
+        estimated1RMKg: row.hipThrustStatus === 'completed' ? row.hipThrustWeight : 0,
         weightUnit: 'kg',
         status: row.hipThrustStatus,
         statusReason: row.hipThrustReason || undefined,
@@ -504,7 +504,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         exerciseName: 'Press Horizontal',
         weightKg: row.pressStatus === 'completed' ? row.pressWeight : 0,
         reps: row.pressStatus === 'completed' ? 1 : 0,
-        estimated1RMKg: row.pressStatus === 'completed' ? calculate1RM(row.pressWeight, 1) : 0,
+        estimated1RMKg: row.pressStatus === 'completed' ? row.pressWeight : 0,
         weightUnit: 'kg',
         status: row.pressStatus,
         statusReason: row.pressReason || undefined,
@@ -515,7 +515,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         exerciseType: row.pullupsOrRowsType,
         weightKg: row.pullupsOrRowsStatus === 'completed' ? row.pullupsOrRowsWeight : 0,
         reps: row.pullupsOrRowsStatus === 'completed' ? 1 : 0,
-        estimated1RMKg: row.pullupsOrRowsStatus === 'completed' ? calculate1RM(row.pullupsOrRowsWeight, 1) : 0,
+        estimated1RMKg: row.pullupsOrRowsStatus === 'completed' ? row.pullupsOrRowsWeight : 0,
         weightUnit: 'kg',
         status: row.pullupsOrRowsStatus,
         statusReason: row.pullupsOrRowsReason || undefined,

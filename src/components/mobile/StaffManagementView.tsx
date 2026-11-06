@@ -11,7 +11,6 @@ import {
   CooperTestRecord,
   EnduranceTimeTestRecord
 } from '../../types';
-import { calculate1RM } from '../../utils/fitnessCalculations';
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
@@ -598,7 +597,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         return;
       }
 
-      const calculated1RM = status === 'completed' ? calculate1RM(weight, reps) : 0;
+      const calculated1RM = status === 'completed' ? weight : 0;
       const newRec: StrengthMaxRecord = {
         exerciseId: expressExerciseId,
         exerciseName: exerciseNameMap[expressExerciseId] || 'Fuerza',
@@ -3830,14 +3829,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 1RM Calculated Preview */}
+                    {/* 1RM Directo */}
                     <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 to-amber-950/30 border border-amber-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Flame className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs text-neutral-300 font-medium">1RM Máximo Estimado (Fórmula Epley):</span>
+                        <span className="text-xs text-neutral-300 font-medium">1RM Registrado:</span>
                       </div>
                       <span className="text-base font-extrabold text-amber-400 font-mono">
-                        {calculate1RM(expressSingleWeight, expressSingleReps)} kg
+                        {expressSingleWeight} kg
                       </span>
                     </div>
                   </div>
@@ -4380,12 +4379,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                   <span className="text-neutral-400 text-[11px]">kg</span>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-neutral-500 font-mono">(1 rep máx)</span>
-                                  <div className="text-[11px] font-mono font-bold text-amber-400">
-                                    1RM: {calculate1RM(currentInput.weightKg, currentInput.reps)} kg
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-neutral-500 font-mono">(1RM directo)</span>
+                                    <div className="text-[11px] font-mono font-bold text-amber-400">
+                                      1RM: {currentInput.weightKg} kg
+                                    </div>
                                   </div>
-                                </div>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 pt-1 border-t border-neutral-900 text-xs">
