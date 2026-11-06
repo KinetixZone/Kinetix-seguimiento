@@ -74,7 +74,8 @@ import {
   saveSupabaseCredentials, 
   testSupabaseConnection, 
   syncAllToSupabase,
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  cleanSupabaseUrl
 } from '../../lib/supabase';
 
 interface StaffManagementViewProps {
@@ -4315,16 +4316,30 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                 <div className="space-y-2">
                   <div>
-                    <label className="text-[10px] font-mono text-neutral-400 block mb-1">
-                      URL del Proyecto Supabase (Project URL)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-mono text-neutral-400">
+                        URL del Proyecto Supabase (Project URL)
+                      </label>
+                      {supabaseUrlInput.includes('/rest/v1') && (
+                        <span className="text-[10px] text-amber-400 font-semibold animate-pulse">
+                          ⚡ Se corregirá automáticamente a la URL base
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={supabaseUrlInput}
                       onChange={(e) => setSupabaseUrlInput(e.target.value)}
-                      placeholder="https://xyzabcdefghijklmnop.supabase.co"
+                      onBlur={() => {
+                        const cleaned = cleanSupabaseUrl(supabaseUrlInput);
+                        if (cleaned !== supabaseUrlInput) setSupabaseUrlInput(cleaned);
+                      }}
+                      placeholder="https://igqztilcgcttasqappgo.supabase.co"
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white placeholder-neutral-600 outline-none focus:border-emerald-500 font-mono text-xs"
                     />
+                    <p className="text-[10px] text-neutral-500 mt-1">
+                      Nota: Debe ser la URL base (ej: <code className="text-emerald-400">https://igqztilcgcttasqappgo.supabase.co</code> sin <span className="line-through text-red-400">/rest/v1</span>).
+                    </p>
                   </div>
 
                   <div>
@@ -4334,7 +4349,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <input
                       type="password"
                       value={supabaseKeyInput}
-                      onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                      onChange={(e) => setSupabaseKeyInput(e.target.value.trim())}
                       placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-white placeholder-neutral-600 outline-none focus:border-emerald-500 font-mono text-xs"
                     />
@@ -4368,7 +4383,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     onClick={async () => {
                       setIsTestingSupabase(true);
                       setSupabaseTestStatus(null);
-                      saveSupabaseCredentials(supabaseUrlInput, supabaseKeyInput);
+                      const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
+                      setSupabaseUrlInput(cleanUrl);
+                      saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
                       const res = await testSupabaseConnection();
                       setSupabaseTestStatus(res);
                       setIsTestingSupabase(false);
@@ -4385,7 +4402,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     onClick={async () => {
                       setIsSyncingAll(true);
                       setSyncResult(null);
-                      saveSupabaseCredentials(supabaseUrlInput, supabaseKeyInput);
+                      const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
+                      setSupabaseUrlInput(cleanUrl);
+                      saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
                       const res = await syncAllToSupabase(users, bodyCompRecords, evaluations, []);
                       if (res.success) {
                         setSyncResult(`¡Sincronización completada! Subidos: ${res.syncedCount.users} atletas, ${res.syncedCount.bodyComp} pesajes, ${res.syncedCount.evals} tests.`);

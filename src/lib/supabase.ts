@@ -7,24 +7,34 @@ import {
   PrivacyConsentRecord 
 } from '../types';
 
+// Clean and normalize Supabase project URL (removes trailing slashes, /rest/v1, etc.)
+export function cleanSupabaseUrl(rawUrl: string): string {
+  let url = (rawUrl || '').trim();
+  url = url.replace(/\/+$/, '');
+  url = url.replace(/\/rest\/v1\/?$/i, '');
+  url = url.replace(/\/+$/, '');
+  return url;
+}
+
 // Retrieve credentials from localStorage first (for in-app configuration) or fallback to Vite env vars
 export function getSupabaseCredentials(): { url: string; key: string } {
   try {
     const storedUrl = localStorage.getItem('kinetix_supabase_url');
     const storedKey = localStorage.getItem('kinetix_supabase_anon_key');
     if (storedUrl && storedKey) {
-      return { url: storedUrl.trim(), key: storedKey.trim() };
+      return { url: cleanSupabaseUrl(storedUrl), key: storedKey.trim() };
     }
   } catch {}
 
   const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-  return { url: envUrl.trim(), key: envKey.trim() };
+  return { url: cleanSupabaseUrl(envUrl), key: envKey.trim() };
 }
 
 export function saveSupabaseCredentials(url: string, key: string) {
   try {
-    localStorage.setItem('kinetix_supabase_url', url.trim());
+    const cleanedUrl = cleanSupabaseUrl(url);
+    localStorage.setItem('kinetix_supabase_url', cleanedUrl);
     localStorage.setItem('kinetix_supabase_anon_key', key.trim());
   } catch {}
 }
