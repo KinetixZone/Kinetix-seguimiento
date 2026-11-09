@@ -1,6 +1,6 @@
 export type UserRole = 'athlete' | 'staff' | 'admin';
 
-export type StaffRole = 'owner' | 'coach'; // 'owner': Leslie & Jorge (Control Total) | 'coach': Gus (Evaluador & Seguimiento)
+export type StaffRole = 'owner' | 'coach' | 'nutritionist'; // 'owner': Leslie & Jorge (Control Total) | 'coach': Gus (Evaluador) | 'nutritionist': Nutrióloga (Sin cortes, Bioimpedancia y Dietética)
 
 export type MembershipStatus = 'active' | 'expiring_soon' | 'expired' | 'suspended' | 'canceled';
 

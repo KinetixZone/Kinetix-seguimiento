@@ -57,11 +57,14 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 
   // Color theme according to role
   const isOwner = staffRole === 'owner' || role === 'owner';
-  const isCoach = role === 'staff' && !isOwner;
+  const isNutritionist = staffRole === 'nutritionist';
+  const isCoach = role === 'staff' && !isOwner && !isNutritionist;
 
   let colorClasses = 'bg-gradient-to-br from-neutral-900 to-neutral-800 text-blue-400 border-neutral-700/80';
   if (isOwner) {
     colorClasses = 'bg-gradient-to-br from-neutral-900 via-neutral-900 to-red-950/80 text-red-400 border-red-800/50';
+  } else if (isNutritionist) {
+    colorClasses = 'bg-gradient-to-br from-neutral-900 via-neutral-900 to-emerald-950/80 text-emerald-400 border-emerald-800/50';
   } else if (isCoach) {
     colorClasses = 'bg-gradient-to-br from-neutral-900 via-neutral-900 to-amber-950/80 text-amber-400 border-amber-800/50';
   }

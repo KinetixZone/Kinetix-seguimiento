@@ -2905,8 +2905,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('outside');
-                                setCooperMetersPerLap(400);
-                                const dist = cooperLapsCount * 400;
+                                const m = cooperMetersPerLap > 0 ? cooperMetersPerLap : 400;
+                                setCooperMetersPerLap(m);
+                                const dist = Math.round(cooperLapsCount * m);
                                 setOptionalDistance(dist);
                                 setSelectedCooperLevel(getLevelFromDistance(dist));
                               }}
@@ -2917,15 +2918,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               }`}
                             >
                               <span>🌳 Afuera</span>
-                              <span className="text-[10px] font-normal opacity-80">(Calle / Manzana / 400m)</span>
+                              <span className="text-[10px] font-normal opacity-80">(Circuito exterior)</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('inside');
-                                setCooperMetersPerLap(250);
-                                const dist = cooperLapsCount * 250;
+                                const m = cooperMetersPerLap > 0 ? cooperMetersPerLap : 250;
+                                setCooperMetersPerLap(m);
+                                const dist = Math.round(cooperLapsCount * m);
                                 setOptionalDistance(dist);
                                 setSelectedCooperLevel(getLevelFromDistance(dist));
                               }}
@@ -2936,7 +2938,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               }`}
                             >
                               <span>🏢 Adentro</span>
-                              <span className="text-[10px] font-normal opacity-80">(Circuito interior Box / 250m)</span>
+                              <span className="text-[10px] font-normal opacity-80">(Circuito interior Box)</span>
                             </button>
                           </div>
                         </div>
@@ -3977,8 +3979,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('outside');
-                                setCooperMetersPerLap(400);
-                                setOptionalDistance(Math.round(cooperLapsCount * 400));
+                                const m = cooperMetersPerLap > 0 ? cooperMetersPerLap : 400;
+                                setCooperMetersPerLap(m);
+                                setOptionalDistance(Math.round(cooperLapsCount * m));
                               }}
                               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
                                 cooperLapLocation === 'outside' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
@@ -3990,8 +3993,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                               type="button"
                               onClick={() => {
                                 setCooperLapLocation('inside');
-                                setCooperMetersPerLap(250);
-                                setOptionalDistance(Math.round(cooperLapsCount * 250));
+                                const m = cooperMetersPerLap > 0 ? cooperMetersPerLap : 250;
+                                setCooperMetersPerLap(m);
+                                setOptionalDistance(Math.round(cooperLapsCount * m));
                               }}
                               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
                                 cooperLapLocation === 'inside' ? 'bg-blue-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'

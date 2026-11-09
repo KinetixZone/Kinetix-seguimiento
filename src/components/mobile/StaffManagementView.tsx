@@ -85,7 +85,7 @@ interface StaffManagementViewProps {
   onSelectUserToInspect: (user: UserProfile) => void;
   onCreateUserByEmail: (newUser: { 
     name: string; 
-    email: string; 
+    email?: string; 
     planName: KinetixPlanName; 
     gender: 'male' | 'female'; 
     heightCm: number;
@@ -98,7 +98,7 @@ interface StaffManagementViewProps {
     name: string;
     email: string;
     password: string;
-    staffRole: 'owner' | 'coach';
+    staffRole: 'owner' | 'coach' | 'nutritionist';
   }) => void;
   onDeleteStaffMember?: (staffId: string) => void;
   onOpenTestEntryForUser: (user: UserProfile) => void;
@@ -157,7 +157,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('kinetix2026');
-  const [newStaffRole, setNewStaffRole] = useState<'owner' | 'coach'>('coach');
+  const [newStaffRole, setNewStaffRole] = useState<'owner' | 'coach' | 'nutritionist'>('coach');
   const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -196,7 +196,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [editBillingDay, setEditBillingDay] = useState<number>(15);
   const [editName, setEditName] = useState<string>('');
   const [editUsername, setEditUsername] = useState<string>('');
-  const [editStaffRole, setEditStaffRole] = useState<'owner' | 'coach'>('coach');
+  const [editStaffRole, setEditStaffRole] = useState<'owner' | 'coach' | 'nutritionist'>('coach');
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
@@ -1289,26 +1289,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       return;
     }
 
-    if (!cleanEmail) {
-      setCreateError('Por favor ingresa el correo electrónico del atleta.');
-      return;
-    }
-
     // Check duplicate name
     const nameExists = users.some(
       u => u.name.trim().toLowerCase() === cleanName.toLowerCase()
     );
     if (nameExists) {
       setCreateError(`Ya existe un atleta registrado con el nombre "${cleanName}". Por favor agrega un apellido o identificador para evitar perfiles duplicados.`);
-      return;
-    }
-
-    // Check duplicate email
-    const emailExists = users.some(
-      u => u.email.trim().toLowerCase() === cleanEmail
-    );
-    if (emailExists) {
-      setCreateError(`El correo "${cleanEmail}" ya está registrado en Kinetix. Cada alumno debe tener un correo único.`);
       return;
     }
 
@@ -1322,12 +1308,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       }
     }
 
+    // Correo opcional: si el alumno no proporciona correo, generamos un identificador interno seguro
+    const cleanNameSlug = cleanName.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '') || 'atleta';
+    const finalEmail = cleanEmail || `${cleanUser || cleanNameSlug}_${Date.now().toString().slice(-4)}@kinetix.fit`;
+
+    // Validar duplicado de correo únicamente si el usuario ingresó un correo real
+    if (cleanEmail) {
+      const emailExists = users.some(
+        u => u.email.trim().toLowerCase() === cleanEmail
+      );
+      if (emailExists) {
+        setCreateError(`El correo "${cleanEmail}" ya está registrado en Kinetix. Cada alumno debe tener un correo único.`);
+        return;
+      }
+    }
+
     const expiry = calculateNextExpiryFromDay(billingDay);
     const pass = initialPassword.trim() || 'kinetix123';
 
     onCreateUserByEmail({
       name: cleanName,
-      email: cleanEmail,
+      email: finalEmail,
       gender,
       heightCm,
       planName,
@@ -1724,6 +1725,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
                     isStaffOwner 
                       ? 'bg-red-950/90 text-red-400 border border-red-800' 
+                      : staff.staffRole === 'nutritionist'
+                      ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-700'
                       : 'bg-amber-950/90 text-amber-400 border border-amber-800'
                   }`}>
                     {staff.name.includes('Leslie') 
@@ -1732,6 +1735,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       ? 'Head Coach & Dir.' 
                       : isStaffOwner 
                       ? 'Dirección' 
+                      : staff.staffRole === 'nutritionist'
+                      ? '🥗 Nutrióloga'
                       : 'Coach'}
                   </span>
                 </div>
@@ -3329,15 +3334,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Correo Electrónico (Para Login)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-neutral-300 font-medium block">Correo Electrónico (Opcional)</label>
+                    <span className="text-[10px] text-neutral-400 font-mono">No obligatorio</span>
+                  </div>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="rodrigo.silva@gmail.com"
+                    placeholder="alumno@ejemplo.com (Opcional: Si no tiene, se genera automático)"
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
-                    required
                   />
+                  <p className="text-[10px] text-neutral-400 mt-1">
+                    💡 Si el alumno no tiene o no desea dar correo, déjalo vacío. La app le creará un acceso interno automático.
+                  </p>
                 </div>
 
                 <div>
@@ -3822,11 +3832,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         <label className="text-neutral-300 font-medium block mb-1">Rol de Permisos en Kinetix</label>
                         <select
                           value={editStaffRole}
-                          onChange={(e) => setEditStaffRole(e.target.value as 'owner' | 'coach')}
+                          onChange={(e) => setEditStaffRole(e.target.value as 'owner' | 'coach' | 'nutritionist')}
                           className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                         >
                           <option value="owner">Dueño/a (Control Total: Finanzas, Base de Datos, Atletas y Coaches)</option>
                           <option value="coach">Entrenador/a (Gestión de Tests Físicos, 1RM y Pesajes)</option>
+                          <option value="nutritionist">Nutrióloga/o (Sin Cortes de Membresía, Bioimpedancia Renpho y Dietética)</option>
                         </select>
                       </div>
                     )}
@@ -4184,15 +4195,15 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
 
               <div>
-                <label className="text-neutral-300 font-medium block mb-1">Nivel de Permisos / Rol</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-neutral-300 font-medium block mb-1">Nivel de Permisos / Rol en Kinetix</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setNewStaffRole('coach')}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       newStaffRole === 'coach'
                         ? 'bg-amber-600/20 border-amber-500 text-white ring-1 ring-amber-500'
-                        : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                     }`}
                   >
                     <strong className="block text-xs">🏋️ Profe / Coach</strong>
@@ -4201,15 +4212,29 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                   <button
                     type="button"
+                    onClick={() => setNewStaffRole('nutritionist')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      newStaffRole === 'nutritionist'
+                        ? 'bg-emerald-600/20 border-emerald-500 text-white ring-1 ring-emerald-500'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <strong className="block text-xs">🥗 Nutrióloga / Nutrición</strong>
+                    <span className="text-[10px] text-emerald-400 font-semibold">Sin cortes de membresía</span>
+                    <span className="text-[9px] text-neutral-400 block">Bioimpedancia y dietética</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setNewStaffRole('owner')}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       newStaffRole === 'owner'
                         ? 'bg-red-600/20 border-red-500 text-white ring-1 ring-red-500'
-                        : 'bg-neutral-950 border-neutral-800 text-neutral-400'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                     }`}
                   >
                     <strong className="block text-xs">👑 Dueño/a Kinetix</strong>
-                    <span className="text-[10px] text-neutral-400">Control total, finanzas y bajas</span>
+                    <span className="text-[10px] text-neutral-400">Control total y finanzas</span>
                   </button>
                 </div>
               </div>
@@ -5764,8 +5789,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setQuickCooperTrackType('afuera');
-                                  setQuickCooperMetersPerLap(400);
-                                  setQuickCooperDistance(Math.round(quickCooperLaps * 400));
+                                  const m = quickCooperMetersPerLap > 0 ? quickCooperMetersPerLap : 400;
+                                  setQuickCooperMetersPerLap(m);
+                                  setQuickCooperDistance(Math.round(quickCooperLaps * m));
                                 }}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                                   quickCooperTrackType === 'afuera' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'
@@ -5777,8 +5803,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setQuickCooperTrackType('adentro');
-                                  setQuickCooperMetersPerLap(250);
-                                  setQuickCooperDistance(Math.round(quickCooperLaps * 250));
+                                  const m = quickCooperMetersPerLap > 0 ? quickCooperMetersPerLap : 250;
+                                  setQuickCooperMetersPerLap(m);
+                                  setQuickCooperDistance(Math.round(quickCooperLaps * m));
                                 }}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                                   quickCooperTrackType === 'adentro' ? 'bg-blue-600 text-white shadow-sm' : 'bg-neutral-800 text-neutral-400'

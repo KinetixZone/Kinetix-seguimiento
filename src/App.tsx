@@ -530,7 +530,7 @@ export default function App() {
   // Create User by Email (Staff feature)
   const handleCreateUserByEmail = (newUser: {
     name: string;
-    email: string;
+    email?: string;
     planName: KinetixPlanName;
     gender: 'male' | 'female';
     heightCm: number;
@@ -546,11 +546,14 @@ export default function App() {
       : 79.99;
     const billDay = newUser.billingDayOfMonth || 15;
     const defaultExpiry = newUser.expiryDate || `2024-05-${billDay.toString().padStart(2, '0')}`;
+    const autoUsername = generateUniqueUsername(newUser.name, users);
+    const finalEmail = newUser.email?.trim() || `${autoUsername}@kinetix.fit`;
 
     const createdUser: UserProfile = {
       id: `user-${Date.now()}`,
       name: newUser.name,
-      email: newUser.email,
+      email: finalEmail,
+      username: autoUsername,
       role: 'athlete',
       phone: '+52 (55) 0000-0000',
       avatarUrl: '',
@@ -582,7 +585,6 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().split('T')[0],
-      username: generateUniqueUsername(newUser.name, users),
     };
 
     // Save initial password in localStorage
@@ -714,7 +716,7 @@ export default function App() {
     name: string;
     email: string;
     password: string;
-    staffRole: 'owner' | 'coach';
+    staffRole: 'owner' | 'coach' | 'nutritionist';
   }) => {
     const newStaff: UserProfile = {
       id: `user-staff-${Date.now()}`,

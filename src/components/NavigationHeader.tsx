@@ -134,7 +134,7 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
               <span className={`text-[9px] font-semibold uppercase block ${
                 isStaff ? 'text-red-400' : 'text-blue-400'
               }`}>
-                {isStaff ? (currentUser.staffRole === 'owner' ? 'Dueño/a & Coach' : 'Coach') : 'Atleta'}
+                {isStaff ? (currentUser.staffRole === 'owner' ? 'Dueño/a & Coach' : currentUser.staffRole === 'nutritionist' ? 'Nutrióloga' : 'Coach') : 'Atleta'}
               </span>
             </div>
           </button>

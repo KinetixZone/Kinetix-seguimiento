@@ -46,7 +46,7 @@ interface MobileAppSimulatorProps {
   onUpdateMembershipStatus: (status: MembershipStatus, daysUntilExpiry: number) => void;
   onCreateUserByEmail: (newUser: { 
     name: string; 
-    email: string; 
+    email?: string; 
     planName: KinetixPlanName; 
     gender: 'male' | 'female'; 
     heightCm: number;

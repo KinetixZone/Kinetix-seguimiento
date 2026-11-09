@@ -54,7 +54,7 @@ interface KinetixResponsiveAppProps {
   onUpdateMembershipStatus: (status: MembershipStatus, daysUntilExpiry: number) => void;
   onCreateUserByEmail: (newUser: { 
     name: string; 
-    email: string; 
+    email?: string; 
     planName: KinetixPlanName; 
     gender: 'male' | 'female'; 
     heightCm: number;
@@ -65,7 +65,7 @@ interface KinetixResponsiveAppProps {
     name: string;
     email: string;
     password: string;
-    staffRole: 'owner' | 'coach';
+    staffRole: 'owner' | 'coach' | 'nutritionist';
   }) => void;
   onDeleteStaffMember?: (staffId: string) => void;
   onOpenNotifications: () => void;

@@ -1070,25 +1070,31 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
-                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: 400 })}
-                                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                                            row.cooperTrack === 'afuera' && row.cooperMetersPerLap === 400
+                                          onClick={() => {
+                                            const meters = (row.cooperMetersPerLap && row.cooperMetersPerLap > 0) ? row.cooperMetersPerLap : 400;
+                                            updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: meters });
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                            row.cooperTrack === 'afuera'
                                               ? 'bg-emerald-600 text-white shadow-sm'
                                               : 'bg-neutral-900 text-neutral-400 hover:text-white'
                                           }`}
                                         >
-                                          Afuera (400m)
+                                          Afuera
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: 250 })}
-                                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                                            row.cooperTrack === 'adentro' && row.cooperMetersPerLap === 250
+                                          onClick={() => {
+                                            const meters = (row.cooperMetersPerLap && row.cooperMetersPerLap > 0) ? row.cooperMetersPerLap : 250;
+                                            updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: meters });
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                            row.cooperTrack === 'adentro'
                                               ? 'bg-blue-600 text-white shadow-sm'
                                               : 'bg-neutral-900 text-neutral-400 hover:text-white'
                                           }`}
                                         >
-                                          Adentro (250m)
+                                          Adentro
                                         </button>
                                       </div>
                                     </div>
@@ -1121,8 +1127,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
                                             updateRow(athlete.id, { 
-                                              cooperMetersPerLap: isNaN(val) ? 0 : val,
-                                              cooperTrack: val === 400 ? 'afuera' : val === 250 ? 'adentro' : 'personalizado'
+                                              cooperMetersPerLap: isNaN(val) ? 0 : val
                                             });
                                           }}
                                           className="w-full bg-transparent text-center font-mono font-bold text-amber-300 text-xs outline-none"
@@ -1185,17 +1190,23 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
-                                            onClick={() => updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: 400 })}
+                                            onClick={() => {
+                                              const m = (row.cooperMetersPerLap && row.cooperMetersPerLap > 0) ? row.cooperMetersPerLap : 400;
+                                              updateRow(athlete.id, { cooperTrack: 'afuera', cooperMetersPerLap: m });
+                                            }}
                                             className={`px-1.5 py-0.2 rounded font-bold ${row.cooperTrack === 'afuera' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
                                           >
-                                            Afuera 400m
+                                            Afuera
                                           </button>
                                           <button
                                             type="button"
-                                            onClick={() => updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: 250 })}
+                                            onClick={() => {
+                                              const m = (row.cooperMetersPerLap && row.cooperMetersPerLap > 0) ? row.cooperMetersPerLap : 250;
+                                              updateRow(athlete.id, { cooperTrack: 'adentro', cooperMetersPerLap: m });
+                                            }}
                                             className={`px-1.5 py-0.2 rounded font-bold ${row.cooperTrack === 'adentro' ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-400'}`}
                                           >
-                                            Adentro 250m
+                                            Adentro
                                           </button>
                                         </div>
                                       </div>
