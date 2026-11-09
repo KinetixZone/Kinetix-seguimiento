@@ -12,7 +12,7 @@ import {
   EnduranceTimeTestRecord
 } from '../../types';
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
-import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode } from '../../utils/paymentColorCodes';
+import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode, NO_CUTOFF_CONFIG } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { BatchEvaluationGridView } from './BatchEvaluationGridView';
@@ -232,8 +232,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Payment color filter state: 'all' | 5 | 15 | 20 | 30 | 'due_soon'
-  const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30 | 'due_soon'>('all');
+  // Payment color filter state: 'all' | 0 | 5 | 15 | 20 | 30 | 'due_soon'
+  const [colorFilter, setColorFilter] = useState<'all' | 0 | 5 | 15 | 20 | 30 | 'due_soon'>('all');
   const [batchSentSuccess, setBatchSentSuccess] = useState<boolean>(false);
   const [isBatchSending, setIsBatchSending] = useState<boolean>(false);
 
@@ -732,6 +732,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const isExpiringInNext3Days = (athlete: UserProfile): boolean => {
     if (athlete.role !== 'athlete') return false;
 
+    // Familia & Amigos, Cortesías y membresías sin corte nunca expiran
+    if (
+      athlete.membership?.billingDayOfMonth === 0 ||
+      athlete.membership?.expiryDate === 'Permanente' ||
+      athlete.membership?.planName === 'Familia & Amigos (Sin Corte)' ||
+      athlete.membership?.planName === 'Cortesía / Beca (Sin Corte)'
+    ) {
+      return false;
+    }
+
     // Check if membership is expired or marked expiring soon
     if (athlete.membership?.status === 'expired' || athlete.membership?.status === 'expiring_soon') {
       return true;
@@ -954,7 +964,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
     // Filtro por código de color o vencimiento
     if (colorFilter === 'due_soon' && !isExpiringInNext3Days(u)) return false;
-    if (typeof colorFilter === 'number' && (u.membership?.billingDayOfMonth || 15) !== colorFilter) return false;
+    if (typeof colorFilter === 'number') {
+      if (colorFilter === 0) {
+        const isNoCutoff = (
+          u.membership?.billingDayOfMonth === 0 || 
+          u.membership?.expiryDate === 'Permanente' ||
+          u.membership?.planName === 'Familia & Amigos (Sin Corte)' ||
+          u.membership?.planName === 'Cortesía / Beca (Sin Corte)'
+        );
+        if (!isNoCutoff) return false;
+      } else {
+        const day = u.membership?.billingDayOfMonth ?? 15;
+        if (day !== colorFilter || u.membership?.billingDayOfMonth === 0) return false;
+      }
+    }
 
     // Filtro por estado de evaluación física y pesaje
     if (evalStatusFilter === 'evaluated') {
@@ -1941,7 +1964,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           </button>
 
           {OFFICIAL_COLORS.map(c => {
-            const count = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth || 15) === c.day).length;
+            const count = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth ?? 15) === c.day && u.membership?.billingDayOfMonth !== 0).length;
             const isSelected = colorFilter === c.day;
             return (
               <button
@@ -1962,6 +1985,35 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </button>
             );
           })}
+
+          {/* Botón Sin Corte (Familia & Amigos) */}
+          {(() => {
+            const noCutoffCount = users.filter(u => u.role === 'athlete' && (
+              u.membership?.billingDayOfMonth === 0 ||
+              u.membership?.expiryDate === 'Permanente' ||
+              u.membership?.planName === 'Familia & Amigos (Sin Corte)' ||
+              u.membership?.planName === 'Cortesía / Beca (Sin Corte)'
+            )).length;
+            const isSelected = colorFilter === 0;
+            return (
+              <button
+                key="no-cutoff-filter"
+                onClick={() => setColorFilter(0)}
+                className={`py-2 px-2 rounded-xl text-center border font-semibold transition-all flex items-center justify-between gap-1 text-[11px] ${
+                  isSelected ? NO_CUTOFF_CONFIG.btnActive : NO_CUTOFF_CONFIG.btnInactive
+                }`}
+                title="Ver alumnos de cortesía, familiares y amigos con membresía permanente sin cortes"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span>{NO_CUTOFF_CONFIG.emoji}</span>
+                  <span className="font-semibold">Sin Corte (Familia)</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/50 font-mono font-bold">
+                  {noCutoffCount}
+                </span>
+              </button>
+            );
+          })()}
         </div>
         <div className="text-[10px] text-neutral-400 pt-1 flex items-center gap-1.5 border-t border-neutral-800/60">
           <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
@@ -2947,7 +2999,13 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           </div>
         ) : (
           filteredAthletes.map((athlete) => {
-          const pg = getPaymentGroup(athlete.membership.billingDayOfMonth);
+          const isNoCutoff = (
+            athlete.membership.billingDayOfMonth === 0 ||
+            athlete.membership.expiryDate === 'Permanente' ||
+            athlete.membership.planName === 'Familia & Amigos (Sin Corte)' ||
+            athlete.membership.planName === 'Cortesía / Beca (Sin Corte)'
+          );
+          const pg = getPaymentGroup(isNoCutoff ? 0 : athlete.membership.billingDayOfMonth);
           const isSuspended = athlete.membership.status === 'suspended';
           const isExpiringSoon = athlete.membership.status === 'expiring_soon';
 
@@ -2985,17 +3043,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pg.badgeBg} ${pg.badgeBorder} ${pg.badgeText}`}>
                     <span>{pg.dotEmoji}</span>
-                    <span>{pg.colorName} · Corte Día {athlete.membership.billingDayOfMonth || 15}</span>
+                    <span>{isNoCutoff ? 'Sin Corte · Permanente' : `${pg.colorName} · Corte Día ${athlete.membership.billingDayOfMonth ?? 15}`}</span>
                   </span>
 
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                     isSuspended 
                       ? 'bg-red-950 text-red-400 border border-red-800'
+                      : isNoCutoff
+                      ? 'bg-purple-950 text-purple-300 border border-purple-800'
                       : isExpiringSoon 
                       ? 'bg-amber-950 text-amber-400 border border-amber-800'
                       : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                   }`}>
-                    {isSuspended ? 'Acceso Pausado' : isExpiringSoon ? 'Vence Pronto' : 'Al Día'}
+                    {isSuspended ? 'Acceso Pausado' : isNoCutoff ? 'Vitalicio' : isExpiringSoon ? 'Vence Pronto' : 'Al Día'}
                   </span>
                 </div>
               </div>
@@ -3018,10 +3078,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </div>
                   <div className="text-[10px] text-neutral-400 flex items-center gap-1.5 flex-wrap">
                     <span>Pago vence:</span>
-                    <strong className="text-white font-mono">{athlete.membership.expiryDate}</strong>
+                    <strong className="text-white font-mono">{isNoCutoff ? 'Permanente' : athlete.membership.expiryDate}</strong>
                     <span>·</span>
-                    <span className={`${pg.badgeText} font-semibold`}>Corte Día {athlete.membership.billingDayOfMonth || 15} de cada mes</span>
-                    {isExpiringInNext3Days(athlete) && (
+                    <span className={`${pg.badgeText} font-semibold`}>
+                      {isNoCutoff ? 'Sin fecha de corte (Familia & Amigos)' : `Corte Día ${athlete.membership.billingDayOfMonth ?? 15} de cada mes`}
+                    </span>
+                    {!isNoCutoff && isExpiringInNext3Days(athlete) && (
                       <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 animate-pulse">
                         <Clock className="w-3 h-3 text-amber-400" />
                         <span>Vence en ≤ 3 días</span>
@@ -3397,12 +3459,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <label className="text-neutral-300 font-medium block mb-1">Plan Oficial Kinetix</label>
                   <select
                     value={planName}
-                    onChange={(e) => setPlanName(e.target.value as KinetixPlanName)}
+                    onChange={(e) => {
+                      const p = e.target.value as KinetixPlanName;
+                      setPlanName(p);
+                      if (p === 'Familia & Amigos (Sin Corte)' || p === 'Cortesía / Beca (Sin Corte)') {
+                        setBillingDay(0);
+                      }
+                    }}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
                   >
                     <option value="Kinetix">Kinetix · Funcional & Fuerza</option>
                     <option value="Kinetix con Nutrición">Kinetix con Nutrición · Asesoría Nutricional Incluida</option>
                     <option value="Entrenos Personalizados (Coach Jorge)">Entrenos Personalizados (Coach Jorge) · 1 a 1 + Nutrición</option>
+                    <option value="Familia & Amigos (Sin Corte)">⭐ Familia & Amigos (Sin Corte / Permanente / $0)</option>
+                    <option value="Cortesía / Beca (Sin Corte)">🎁 Cortesía / Beca Especial (Sin Corte / Permanente / $0)</option>
                   </select>
                 </div>
 
@@ -3411,7 +3481,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <label className="text-neutral-300 font-medium block mb-1.5 flex items-center justify-between">
                     <span>Horario de Pago · Código de Color:</span>
                     <span className="text-[10px] text-blue-400 font-semibold font-mono">
-                      Seleccionado: Día {billingDay} ({getPaymentGroup(billingDay).colorName})
+                      {billingDay === 0 ? '⭐ Sin Corte (Permanente)' : `Día ${billingDay} (${getPaymentGroup(billingDay).colorName})`}
                     </span>
                   </label>
 
@@ -3437,6 +3507,26 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         </button>
                       );
                     })}
+
+                    {/* Botón Sin Corte (Familia & Amigos) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBillingDay(0);
+                        if (planName === 'Kinetix') setPlanName('Familia & Amigos (Sin Corte)');
+                      }}
+                      className={`col-span-2 p-2.5 rounded-xl border text-left transition-all ${
+                        billingDay === 0 ? NO_CUTOFF_CONFIG.btnActive : NO_CUTOFF_CONFIG.btnInactive
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span>{NO_CUTOFF_CONFIG.emoji}</span>
+                        <span>{NO_CUTOFF_CONFIG.desc}</span>
+                      </div>
+                      <span className="text-[10px] opacity-80 block mt-0.5">
+                        Sin fecha de corte mensual, sin cobro, acceso vitalicio para familiares y amigos
+                      </span>
+                    </button>
                   </div>
 
                   <p className="text-[10px] text-neutral-500 leading-tight">
@@ -3646,11 +3736,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           Horario de Pago · Código de Color Asignado:
                         </label>
                         <span className="text-[10px] font-mono text-neutral-400 font-bold">
-                          Día {editBillingDay} ({getPaymentGroup(editBillingDay).colorName})
+                          {editBillingDay === 0 ? '⭐ Sin Corte (Permanente)' : `Día ${editBillingDay} (${getPaymentGroup(editBillingDay).colorName})`}
                         </span>
                       </div>
 
-                      {/* 4 Official Color Buttons */}
+                      {/* 4 Official Color Buttons + Sin Corte */}
                       <div className="grid grid-cols-2 gap-2">
                         {OFFICIAL_COLORS.map(c => {
                           const isSelected = editBillingDay === c.day;
@@ -3677,6 +3767,27 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                             </button>
                           );
                         })}
+
+                        {/* Botón Sin Corte (Familia & Amigos) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditBillingDay(0);
+                            setEditExpiryDate('Permanente');
+                            if (editPlan === 'Kinetix') setEditPlan('Familia & Amigos (Sin Corte)');
+                          }}
+                          className={`col-span-2 p-2.5 rounded-xl border text-left transition-all ${
+                            editBillingDay === 0 ? NO_CUTOFF_CONFIG.btnActive : NO_CUTOFF_CONFIG.btnInactive
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <span>{NO_CUTOFF_CONFIG.emoji}</span>
+                            <span>{NO_CUTOFF_CONFIG.desc}</span>
+                          </div>
+                          <div className="text-[10px] opacity-80 mt-0.5">
+                            Sin cobros ni cortes mensuales · Acceso permanente vitalicio
+                          </div>
+                        </button>
                       </div>
                     </div>
 
@@ -3685,12 +3796,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       <label className="text-neutral-300 font-medium block mb-1">Plan Oficial Asignado:</label>
                       <select
                         value={editPlan}
-                        onChange={(e) => setEditPlan(e.target.value as KinetixPlanName)}
+                        onChange={(e) => {
+                          const p = e.target.value as KinetixPlanName;
+                          setEditPlan(p);
+                          if (p === 'Familia & Amigos (Sin Corte)' || p === 'Cortesía / Beca (Sin Corte)') {
+                            setEditBillingDay(0);
+                            setEditExpiryDate('Permanente');
+                          }
+                        }}
                         className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-medium text-xs focus:border-red-500 outline-none"
                       >
                         <option value="Kinetix">Kinetix · Funcional & Fuerza</option>
                         <option value="Kinetix con Nutrición">Kinetix con Nutrición · Asesoría Nutricional Incluida</option>
                         <option value="Entrenos Personalizados (Coach Jorge)">Entrenos Personalizados (Coach Jorge) · 1 a 1 + Nutrición</option>
+                        <option value="Familia & Amigos (Sin Corte)">⭐ Familia & Amigos (Sin Corte / Permanente / $0)</option>
+                        <option value="Cortesía / Beca (Sin Corte)">🎁 Cortesía / Beca Especial (Sin Corte / Permanente / $0)</option>
                       </select>
                     </div>
 
@@ -3698,27 +3818,49 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <div className="p-3 rounded-2xl bg-neutral-950/60 border border-neutral-800 space-y-2">
                       <label className="text-neutral-300 font-medium block">Fecha Límite de Pago en Calendario:</label>
                       <div className="flex gap-2 items-center">
-                        <input
-                          type="date"
-                          value={editExpiryDate}
-                          onChange={(e) => setEditExpiryDate(e.target.value)}
-                          className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const d = new Date();
-                            d.setDate(d.getDate() + 30);
-                            setEditExpiryDate(d.toISOString().slice(0, 10));
-                            setEditStatus('active');
-                          }}
-                          className="py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all whitespace-nowrap"
-                        >
-                          +30 Días
-                        </button>
+                        {editExpiryDate === 'Permanente' ? (
+                          <div className="flex-1 bg-neutral-950 border border-purple-500/40 rounded-xl px-3 py-2 text-purple-300 font-mono text-xs font-bold flex items-center justify-between">
+                            <span>⭐ Permanente (Sin Corte)</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date();
+                                d.setDate(d.getDate() + 30);
+                                setEditExpiryDate(d.toISOString().slice(0, 10));
+                                setEditBillingDay(15);
+                              }}
+                              className="text-[10px] text-neutral-400 hover:text-white underline ml-2"
+                            >
+                              Cambiar a fecha fija
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              type="date"
+                              value={editExpiryDate}
+                              onChange={(e) => setEditExpiryDate(e.target.value)}
+                              className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date();
+                                d.setDate(d.getDate() + 30);
+                                setEditExpiryDate(d.toISOString().slice(0, 10));
+                                setEditStatus('active');
+                              }}
+                              className="py-2 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 font-semibold text-xs transition-all whitespace-nowrap"
+                            >
+                              +30 Días
+                            </button>
+                          </>
+                        )}
                       </div>
                       <p className="text-[10px] text-neutral-500">
-                        Esta fecha se muestra en el widget permanente de la app del atleta.
+                        {editExpiryDate === 'Permanente' 
+                          ? 'Membresía vitalicia sin cortes ni recordatorios de pago para este atleta.' 
+                          : 'Esta fecha se muestra en el widget permanente de la app del atleta.'}
                       </p>
                     </div>
 
@@ -4705,7 +4847,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     <optgroup label="Alumnos del Gimnasio">
                       {users.filter(u => u.role === 'athlete').map((ath) => (
                         <option key={ath.id} value={ath.id}>
-                          {ath.name} ({ath.membership.planName}) · Corte Día {ath.membership.billingDayOfMonth || 15}
+                          {ath.name} ({ath.membership.planName}) · {ath.membership.billingDayOfMonth === 0 || ath.membership.expiryDate === 'Permanente' ? 'Sin Corte (Permanente)' : `Corte Día ${ath.membership.billingDayOfMonth || 15}`}
                         </option>
                       ))}
                     </optgroup>
@@ -5003,7 +5145,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         key={day}
                         type="button"
                         onClick={() => {
-                          const groupIds = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth || 15) === day).map(a => a.id);
+                          const groupIds = users.filter(u => u.role === 'athlete' && (u.membership?.billingDayOfMonth ?? 15) === day && u.membership?.billingDayOfMonth !== 0).map(a => a.id);
                           setSelectedAthleteIdsForExpress(groupIds);
                         }}
                         className="px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-[11px] font-mono border border-neutral-800 transition-all"
@@ -5011,6 +5153,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         Corte {day}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const groupIds = users.filter(u => u.role === 'athlete' && (
+                          u.membership?.billingDayOfMonth === 0 ||
+                          u.membership?.expiryDate === 'Permanente' ||
+                          u.membership?.planName === 'Familia & Amigos (Sin Corte)' ||
+                          u.membership?.planName === 'Cortesía / Beca (Sin Corte)'
+                        )).map(a => a.id);
+                        setSelectedAthleteIdsForExpress(groupIds);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-purple-300 text-[11px] font-mono border border-purple-800/40 transition-all"
+                    >
+                      ⭐ Sin Corte
+                    </button>
                   </div>
 
                   {/* Lista de Checkboxes interactivos de Atletas */}

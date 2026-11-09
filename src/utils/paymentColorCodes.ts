@@ -15,6 +15,19 @@ export interface PaymentGroupConfig {
 }
 
 export const PAYMENT_COLOR_GROUPS: Record<number, PaymentGroupConfig> = {
+  0: {
+    day: 0,
+    colorName: 'Sin Corte',
+    code: 'custom',
+    label: 'Sin Corte · Permanente (Familia & Amigos)',
+    shortLabel: 'Sin Corte (Familia)',
+    dotEmoji: '⭐',
+    badgeBg: 'bg-purple-500/15',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-300',
+    dotColor: 'bg-purple-500',
+    activeBtnClass: 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-500/30',
+  },
   5: {
     day: 5,
     colorName: 'Azul',
@@ -70,12 +83,12 @@ export const PAYMENT_COLOR_GROUPS: Record<number, PaymentGroupConfig> = {
 };
 
 export function getPaymentGroup(day?: number): PaymentGroupConfig {
-  if (day && PAYMENT_COLOR_GROUPS[day]) {
+  if (day !== undefined && PAYMENT_COLOR_GROUPS[day]) {
     return PAYMENT_COLOR_GROUPS[day];
   }
 
   // Fallback for custom or undefined day
-  const effectiveDay = day || 15;
+  const effectiveDay = day === undefined ? 15 : day;
   if (PAYMENT_COLOR_GROUPS[effectiveDay]) {
     return PAYMENT_COLOR_GROUPS[effectiveDay];
   }
@@ -101,4 +114,14 @@ export const OFFICIAL_COLORS = [
   { day: 20, colorName: 'Rosa', emoji: '🌸', code: 'pink', desc: 'Pago día 20 de cada mes', btnActive: 'bg-pink-600 text-white border-pink-400 ring-2 ring-pink-500/50', btnInactive: 'bg-neutral-900 text-neutral-300 border-pink-500/30 hover:border-pink-500/60' },
   { day: 30, colorName: 'Verde', emoji: '🟢', code: 'green', desc: 'Pago día 30 de cada mes', btnActive: 'bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-500/50', btnInactive: 'bg-neutral-900 text-neutral-300 border-emerald-500/30 hover:border-emerald-500/60' },
 ];
+
+export const NO_CUTOFF_CONFIG = {
+  day: 0,
+  colorName: 'Sin Corte',
+  emoji: '⭐',
+  code: 'custom' as const,
+  desc: 'Familia & Amigos (Permanente / Sin Corte)',
+  btnActive: 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-500/50 shadow-md shadow-purple-500/30',
+  btnInactive: 'bg-neutral-900 text-purple-300 border-purple-500/30 hover:border-purple-500/60',
+};
 

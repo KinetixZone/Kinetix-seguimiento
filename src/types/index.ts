@@ -32,7 +32,9 @@ export interface UserProfile {
 export type KinetixPlanName = 
   | 'Kinetix' 
   | 'Kinetix con Nutrición' 
-  | 'Entrenos Personalizados (Coach Jorge)';
+  | 'Entrenos Personalizados (Coach Jorge)'
+  | 'Familia & Amigos (Sin Corte)'
+  | 'Cortesía / Beca (Sin Corte)';
 
 export interface MembershipInfo {
   id: string;

@@ -457,23 +457,29 @@ export default function App() {
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
         const plan = newPlanName || u.membership.planName;
-        const fee = plan === 'Entrenos Personalizados (Coach Jorge)' 
+        const isFreeOrFamily = plan === 'Familia & Amigos (Sin Corte)' || plan === 'Cortesía / Beca (Sin Corte)' || billingDayOfMonth === 0;
+        const fee = isFreeOrFamily
+          ? 0
+          : plan === 'Entrenos Personalizados (Coach Jorge)' 
           ? 149.99 
           : plan === 'Kinetix con Nutrición' 
           ? 99.99 
           : 79.99;
-        const billDay = billingDayOfMonth ?? u.membership.billingDayOfMonth ?? 15;
-        const expiry = newExpiryDate || (status === 'active' ? `2024-05-${billDay.toString().padStart(2, '0')}` : u.membership.expiryDate);
+        const billDay = isFreeOrFamily ? 0 : (billingDayOfMonth ?? u.membership.billingDayOfMonth ?? 15);
+        const expiry = isFreeOrFamily
+          ? 'Permanente'
+          : (newExpiryDate || (status === 'active' ? `2024-05-${billDay.toString().padStart(2, '0')}` : u.membership.expiryDate));
+        const daysUntilExpiry = isFreeOrFamily ? 99999 : (status === 'suspended' ? 0 : 25);
 
         return {
           ...u,
           membership: {
             ...u.membership,
-            status,
+            status: isFreeOrFamily ? 'active' : status,
             planName: plan,
             monthlyFee: fee,
             expiryDate: expiry,
-            daysUntilExpiry: status === 'suspended' ? 0 : 25,
+            daysUntilExpiry,
             billingDayOfMonth: billDay,
             hasNutritionPlan: plan !== 'Kinetix',
             personalCoach: plan === 'Entrenos Personalizados (Coach Jorge)' ? 'Coach Jorge' : undefined,
@@ -539,13 +545,16 @@ export default function App() {
     password?: string;
     switchToCreatedUser?: boolean;
   }) => {
-    const fee = newUser.planName === 'Entrenos Personalizados (Coach Jorge)' 
+    const isFreeOrFamily = newUser.planName === 'Familia & Amigos (Sin Corte)' || newUser.planName === 'Cortesía / Beca (Sin Corte)' || newUser.billingDayOfMonth === 0;
+    const fee = isFreeOrFamily
+      ? 0
+      : newUser.planName === 'Entrenos Personalizados (Coach Jorge)' 
       ? 149.99 
       : newUser.planName === 'Kinetix con Nutrición' 
       ? 99.99 
       : 79.99;
-    const billDay = newUser.billingDayOfMonth || 15;
-    const defaultExpiry = newUser.expiryDate || `2024-05-${billDay.toString().padStart(2, '0')}`;
+    const billDay = isFreeOrFamily ? 0 : (newUser.billingDayOfMonth ?? 15);
+    const defaultExpiry = isFreeOrFamily ? 'Permanente' : (newUser.expiryDate || `2024-05-${billDay.toString().padStart(2, '0')}`);
     const autoUsername = generateUniqueUsername(newUser.name, users);
     const finalEmail = newUser.email?.trim() || `${autoUsername}@kinetix.fit`;
 
@@ -576,7 +585,7 @@ export default function App() {
         currency: 'USD',
         autoRenew: true,
         gracePeriodDays: 5,
-        daysUntilExpiry: 30,
+        daysUntilExpiry: isFreeOrFamily ? 99999 : 30,
         lastPaymentDate: '2024-04-01',
         nextPaymentDate: defaultExpiry,
         billingDayOfMonth: billDay,
