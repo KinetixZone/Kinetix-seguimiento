@@ -23,7 +23,9 @@ import {
   ArrowLeft,
   HelpCircle,
   Activity,
-  Sparkles
+  Sparkles,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 
 interface BodyCompositionViewProps {
@@ -56,7 +58,52 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRenphoGuide, setShowRenphoGuide] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<BodyCompositionRecord | null>(null);
+  const [recordToEdit, setRecordToEdit] = useState<BodyCompositionRecord | null>(null);
+  const [editWeight, setEditWeight] = useState<number | ''>('');
+  const [editMuscle, setEditMuscle] = useState<number | ''>('');
+  const [editBodyFat, setEditBodyFat] = useState<number | ''>('');
+  const [editVisceralFat, setEditVisceralFat] = useState<number>(3);
+  const [editRecordedDate, setEditRecordedDate] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [editSuccessToast, setEditSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
+
+  const handleOpenEditModal = (rec: BodyCompositionRecord) => {
+    setRecordToEdit(rec);
+    setEditWeight(rec.weightKg);
+    setEditMuscle(rec.muscleMassPercent);
+    setEditBodyFat(rec.bodyFatPercent);
+    setEditVisceralFat(rec.visceralFatLevel || 3);
+    setEditRecordedDate(rec.recordedAt);
+    setEditNotes(rec.notes || '');
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recordToEdit || !editWeight || !onUpdateRecord) return;
+
+    const numWeight = Number(editWeight);
+    const numMuscle = Number(editMuscle) || 0;
+    const numBodyFat = Number(editBodyFat) || 0;
+    const numVisceral = Number(editVisceralFat) || 1;
+    const updatedBmi = calculateBMI(numWeight, currentUser.heightCm);
+    const updatedBmiCategory = getBMICategory(updatedBmi);
+
+    onUpdateRecord(recordToEdit.id, {
+      weightKg: numWeight,
+      muscleMassPercent: numMuscle,
+      bodyFatPercent: numBodyFat,
+      visceralFatLevel: numVisceral,
+      recordedAt: editRecordedDate || recordToEdit.recordedAt,
+      bmi: updatedBmi,
+      bmiCategory: updatedBmiCategory,
+      notes: editNotes.trim(),
+    });
+
+    setRecordToEdit(null);
+    setEditSuccessToast('¡Registro de peso corregido exitosamente!');
+    setTimeout(() => setEditSuccessToast(null), 3000);
+  };
 
   useEffect(() => {
     if (initialOpenAddModal) {
@@ -627,10 +674,16 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 <div className="bg-neutral-950/50 p-2 rounded-xl">
                   <div className="text-[10px] text-neutral-500 font-sans">Músculo</div>
                   <div className="font-bold text-emerald-400 text-sm">{rec.muscleMassPercent}%</div>
+                  <div className="text-[9px] text-emerald-500/80 font-mono">
+                    {((rec.weightKg * rec.muscleMassPercent) / 100).toFixed(1)}kg
+                  </div>
                 </div>
                 <div className="bg-neutral-950/50 p-2 rounded-xl">
                   <div className="text-[10px] text-neutral-500 font-sans">Grasa</div>
                   <div className="font-bold text-purple-400 text-sm">{rec.bodyFatPercent}%</div>
+                  <div className="text-[9px] text-purple-400/80 font-mono">
+                    {((rec.weightKg * rec.bodyFatPercent) / 100).toFixed(1)}kg
+                  </div>
                 </div>
                 <div className="bg-neutral-950/50 p-2 rounded-xl">
                   <div className="text-[10px] text-neutral-500 font-sans">IMC</div>
@@ -644,16 +697,30 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </p>
               )}
 
-              {onDeleteRecord && (isStaffActing || rec.recordedByRole !== 'staff') && (
-                <div className="flex justify-end pt-1 border-t border-neutral-800/40">
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-800/40">
+                {onUpdateRecord && (
                   <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(rec)}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/40 border border-blue-800/40 transition-colors font-semibold"
+                    title="Editar y corregir este pesaje si hubo una equivocación"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Editar pesaje</span>
+                  </button>
+                )}
+
+                {onDeleteRecord && (isStaffActing || rec.recordedByRole !== 'staff') && (
+                  <button
+                    type="button"
                     onClick={() => setRecordToDelete(rec)}
                     className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-950/40 border border-red-800/30 transition-colors"
                   >
-                    <span>Eliminar registro</span>
+                    <Trash2 className="w-3 h-3" />
+                    <span>Eliminar</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )))
         }
@@ -687,6 +754,159 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 Sí, Eliminar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Éxito al Editar */}
+      {editSuccessToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-semibold text-xs shadow-xl flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+          <span>{editSuccessToast}</span>
+        </div>
+      )}
+
+      {/* Edit Record Modal (Permite corregir si se equivocaron al capturar peso, grasa o fecha) */}
+      {recordToEdit && onUpdateRecord && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                  <Scale className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Corregir Registro de Peso</h3>
+                  <p className="text-[10px] text-neutral-400">Corrige cualquier valor si hubo un error al capturar</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordToEdit(null)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">Peso Corporal (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="20"
+                    max="300"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 70.5"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-sm font-bold font-mono focus:border-blue-500 outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">Masa Muscular (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="5"
+                    max="70"
+                    value={editMuscle}
+                    onChange={(e) => setEditMuscle(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 42.0"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-sm font-bold font-mono focus:border-emerald-500 outline-none"
+                  />
+                  {editWeight && editMuscle ? (
+                    <span className="text-[9px] text-emerald-400 font-mono block mt-0.5">
+                      ≈ {((Number(editWeight) * Number(editMuscle)) / 100).toFixed(1)} kg de músculo
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">Grasa Corporal (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="3"
+                    max="60"
+                    value={editBodyFat}
+                    onChange={(e) => setEditBodyFat(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 18.5"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-sm font-bold font-mono focus:border-purple-500 outline-none"
+                  />
+                  {editWeight && editBodyFat ? (
+                    <span className="text-[9px] text-purple-400 font-mono block mt-0.5">
+                      ≈ {((Number(editWeight) * Number(editBodyFat)) / 100).toFixed(1)} kg de grasa
+                    </span>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className="text-neutral-300 font-medium block mb-1">Grasa Visceral (1 - 59)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="59"
+                    value={editVisceralFat}
+                    onChange={(e) => setEditVisceralFat(parseInt(e.target.value) || 3)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-sm font-bold font-mono focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Fecha de Medición</label>
+                <input
+                  type="date"
+                  value={editRecordedDate}
+                  onChange={(e) => setEditRecordedDate(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-blue-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1">Notas de la Sesión</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Ej. Pesaje en ayunas, pre-entreno, etc."
+                  rows={2}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-blue-500 outline-none resize-none"
+                />
+              </div>
+
+              {editWeight ? (
+                <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 flex items-center justify-between text-xs">
+                  <span className="text-neutral-400">IMC Recalculado:</span>
+                  <span className="font-mono font-bold text-white">
+                    {calculateBMI(Number(editWeight), currentUser.heightCm)} ({getBMICategory(calculateBMI(Number(editWeight), currentUser.heightCm))})
+                  </span>
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setRecordToEdit(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-colors shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Guardar Corrección</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

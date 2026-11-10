@@ -96,9 +96,10 @@ interface StaffManagementViewProps {
   }) => void;
   onCreateStaffMember?: (staffData: {
     name: string;
-    email: string;
-    password: string;
+    email?: string;
+    password?: string;
     staffRole: 'owner' | 'coach' | 'nutritionist';
+    username?: string;
   }) => void;
   onDeleteStaffMember?: (staffId: string) => void;
   onOpenTestEntryForUser: (user: UserProfile) => void;
@@ -156,6 +157,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [copiedSql, setCopiedSql] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffUsername, setNewStaffUsername] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('kinetix2026');
   const [newStaffRole, setNewStaffRole] = useState<'owner' | 'coach' | 'nutritionist'>('coach');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -4281,17 +4283,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!newStaffName.trim() || !newStaffEmail.trim()) return;
+                if (!newStaffName.trim()) return;
                 if (onCreateStaffMember) {
                   onCreateStaffMember({
                     name: newStaffName.trim(),
-                    email: newStaffEmail.trim(),
+                    email: newStaffEmail.trim() || undefined,
                     password: newStaffPassword.trim() || 'kinetix2026',
                     staffRole: newStaffRole,
+                    username: newStaffUsername.trim() || undefined,
                   });
                 }
                 setNewStaffName('');
                 setNewStaffEmail('');
+                setNewStaffUsername('');
                 setNewStaffPassword('kinetix2026');
                 setShowCreateStaffModal(false);
               }}
@@ -4310,15 +4314,37 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
 
               <div>
-                <label className="text-neutral-300 font-medium block mb-1">Correo Electrónico (Para Iniciar Sesión)</label>
+                <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                  <span>Nombre de Usuario (Opcional)</span>
+                  <span className="text-[10px] text-neutral-500 font-mono">Autogenerado único si está vacío</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">@</span>
+                  <input
+                    type="text"
+                    value={newStaffUsername}
+                    onChange={(e) => setNewStaffUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder={newStaffName.trim() ? newStaffName.trim().split(' ')[0].toLowerCase().replace(/[^a-z0-9_]/g, '') : 'coach'}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-7 pr-3 py-2 text-white font-mono text-xs focus:border-red-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-neutral-300 font-medium block mb-1 flex items-center justify-between">
+                  <span>Correo Electrónico (Opcional)</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">No obligatorio</span>
+                </label>
                 <input
                   type="email"
                   value={newStaffEmail}
                   onChange={(e) => setNewStaffEmail(e.target.value)}
-                  placeholder="gus.coach@kinetix.com"
+                  placeholder="ej. coach@kinetix.fit (opcional)"
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs focus:border-red-500 outline-none"
-                  required
                 />
+                <span className="text-[10px] text-neutral-500 block mt-0.5">
+                  Si no tiene correo, podrá iniciar sesión directamente con su <strong>nombre de usuario</strong>.
+                </span>
               </div>
 
               <div>
@@ -4332,7 +4358,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   required
                 />
                 <span className="text-[10px] text-neutral-500 block mt-0.5">
-                  Podrá iniciar sesión con este correo y contraseña de inmediato.
+                  Podrá iniciar sesión con su usuario o correo y esta contraseña de inmediato.
                 </span>
               </div>
 

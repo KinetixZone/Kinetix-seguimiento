@@ -63,9 +63,10 @@ interface KinetixResponsiveAppProps {
   }) => void;
   onCreateStaffMember?: (staffData: {
     name: string;
-    email: string;
-    password: string;
+    email?: string;
+    password?: string;
     staffRole: 'owner' | 'coach' | 'nutritionist';
+    username?: string;
   }) => void;
   onDeleteStaffMember?: (staffId: string) => void;
   onOpenNotifications: () => void;

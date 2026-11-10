@@ -373,7 +373,14 @@ export default function App() {
 
   // Update Body Comp Record
   const handleUpdateBodyCompRecord = (recordId: string, updates: Partial<BodyCompositionRecord>) => {
-    setBodyCompRecords(prev => prev.map(b => b.id === recordId ? { ...b, ...updates } : b));
+    setBodyCompRecords(prev => {
+      const next = prev.map(b => b.id === recordId ? { ...b, ...updates } : b);
+      const updated = next.find(b => b.id === recordId);
+      if (updated) {
+        syncBodyCompToSupabase(updated);
+      }
+      return next;
+    });
   };
 
   // Add Physical Evaluation
@@ -723,15 +730,18 @@ export default function App() {
 
   const handleCreateStaffMember = (staffData: {
     name: string;
-    email: string;
-    password: string;
+    email?: string;
+    password?: string;
     staffRole: 'owner' | 'coach' | 'nutritionist';
+    username?: string;
   }) => {
+    const autoUsername = staffData.username?.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || generateUniqueUsername(staffData.name, users);
+    const finalEmail = staffData.email?.trim().toLowerCase() || `${autoUsername}@kinetix.fit`;
     const newStaff: UserProfile = {
       id: `user-staff-${Date.now()}`,
       name: staffData.name,
-      email: staffData.email.toLowerCase().trim(),
-      password: staffData.password,
+      email: finalEmail,
+      password: staffData.password || 'kinetix2026',
       role: 'staff',
       staffRole: staffData.staffRole,
       phone: '55 1234 5678',
@@ -761,7 +771,7 @@ export default function App() {
         paymentReminderSent: false,
       },
       createdAt: new Date().toISOString().slice(0, 10),
-      username: generateUniqueUsername(staffData.name, users),
+      username: autoUsername,
     };
     setUsers(prev => [...prev, newStaff]);
     syncUserToSupabase(newStaff);
