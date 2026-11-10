@@ -351,6 +351,63 @@ export function getRenphoBmiInfo(bmi: number): RenphoBmiInfo {
   };
 }
 
+export interface RenphoMuscleInfo {
+  muscleKg: number;
+  category: 'Por debajo del promedio' | 'Promedio' | 'Excelente';
+  rangeLabel: string;
+  colorHex: string;
+  badgeBg: string;
+  badgeText: string;
+}
+
+/**
+ * Official RENPHO Smart Scale thresholds for Muscle Mass (kg) as shown in the RENPHO Health app:
+ * For Males:
+ * - < 32.90 kg: Por debajo del promedio (Azul)
+ * - 32.90 kg – 37.50 kg: Promedio (Verde claro)
+ * - > 37.50 kg: Excelente (Verde esmeralda)
+ * For Females:
+ * - < 25.50 kg: Por debajo del promedio (Azul)
+ * - 25.50 kg – 30.00 kg: Promedio (Verde claro)
+ * - > 30.00 kg: Excelente (Verde esmeralda)
+ */
+export function getRenphoMuscleInfo(muscleKg: number, gender: Gender = 'male'): RenphoMuscleInfo {
+  const isFemale = gender === 'female';
+  const lowThreshold = isFemale ? 25.50 : 32.90;
+  const highThreshold = isFemale ? 30.00 : 37.50;
+
+  if (muscleKg < lowThreshold) {
+    return {
+      muscleKg,
+      category: 'Por debajo del promedio',
+      rangeLabel: `< ${lowThreshold.toFixed(2)} kg`,
+      colorHex: '#38bdf8',
+      badgeBg: 'bg-sky-950/80 border border-sky-800',
+      badgeText: 'text-sky-300',
+    };
+  }
+
+  if (muscleKg <= highThreshold) {
+    return {
+      muscleKg,
+      category: 'Promedio',
+      rangeLabel: `${lowThreshold.toFixed(2)} – ${highThreshold.toFixed(2)} kg`,
+      colorHex: '#22c55e',
+      badgeBg: 'bg-emerald-950/80 border border-emerald-800',
+      badgeText: 'text-emerald-300',
+    };
+  }
+
+  return {
+    muscleKg,
+    category: 'Excelente',
+    rangeLabel: `> ${highThreshold.toFixed(2)} kg`,
+    colorHex: '#10b981',
+    badgeBg: 'bg-emerald-900/90 border border-emerald-600',
+    badgeText: 'text-emerald-200',
+  };
+}
+
 /**
  * Estimated VO2Max from Cooper Test (12 minutes run in meters)
  * Formula: VO2Max (ml/kg/min) = (Distance in meters - 504.9) / 44.73

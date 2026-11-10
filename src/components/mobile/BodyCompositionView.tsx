@@ -4,7 +4,8 @@ import {
   calculateBMI, 
   getBMICategory, 
   getRenphoVisceralFatInfo, 
-  getRenphoBmiInfo 
+  getRenphoBmiInfo,
+  getRenphoMuscleInfo
 } from '../../utils/fitnessCalculations';
 import { PrivateProgressPhotosView } from './PrivateProgressPhotosView';
 import { 
@@ -25,7 +26,8 @@ import {
   Activity,
   Sparkles,
   Edit2,
-  Trash2
+  Trash2,
+  Flame
 } from 'lucide-react';
 
 interface BodyCompositionViewProps {
@@ -60,7 +62,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const [recordToDelete, setRecordToDelete] = useState<BodyCompositionRecord | null>(null);
   const [recordToEdit, setRecordToEdit] = useState<BodyCompositionRecord | null>(null);
   const [editWeight, setEditWeight] = useState<number | ''>('');
-  const [editMuscle, setEditMuscle] = useState<number | ''>('');
+  const [editMuscleKg, setEditMuscleKg] = useState<number | ''>('');
   const [editBodyFat, setEditBodyFat] = useState<number | ''>('');
   const [editVisceralFat, setEditVisceralFat] = useState<number>(3);
   const [editRecordedDate, setEditRecordedDate] = useState<string>('');
@@ -71,7 +73,8 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const handleOpenEditModal = (rec: BodyCompositionRecord) => {
     setRecordToEdit(rec);
     setEditWeight(rec.weightKg);
-    setEditMuscle(rec.muscleMassPercent);
+    const initialMuscleKg = rec.muscleMassKg ?? (rec.weightKg && rec.muscleMassPercent ? parseFloat(((rec.weightKg * rec.muscleMassPercent) / 100).toFixed(2)) : '');
+    setEditMuscleKg(initialMuscleKg);
     setEditBodyFat(rec.bodyFatPercent);
     setEditVisceralFat(rec.visceralFatLevel || 3);
     setEditRecordedDate(rec.recordedAt);
@@ -83,16 +86,26 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
     if (!recordToEdit || !editWeight || !onUpdateRecord) return;
 
     const numWeight = Number(editWeight);
-    const numMuscle = Number(editMuscle) || 0;
+    const numMuscleKg = Number(editMuscleKg) || 0;
+    const computedMusclePercent = (numWeight > 0 && numMuscleKg > 0)
+      ? parseFloat(((numMuscleKg / numWeight) * 100).toFixed(1))
+      : (recordToEdit.muscleMassPercent || 0);
+
     const numBodyFat = Number(editBodyFat) || 0;
+    const computedBodyFatKg = (numWeight > 0 && numBodyFat > 0)
+      ? parseFloat(((numWeight * numBodyFat) / 100).toFixed(2))
+      : undefined;
+
     const numVisceral = Number(editVisceralFat) || 1;
     const updatedBmi = calculateBMI(numWeight, currentUser.heightCm);
     const updatedBmiCategory = getBMICategory(updatedBmi);
 
     onUpdateRecord(recordToEdit.id, {
       weightKg: numWeight,
-      muscleMassPercent: numMuscle,
+      muscleMassKg: numMuscleKg > 0 ? numMuscleKg : undefined,
+      muscleMassPercent: computedMusclePercent,
       bodyFatPercent: numBodyFat,
+      bodyFatKg: computedBodyFatKg,
       visceralFatLevel: numVisceral,
       recordedAt: editRecordedDate || recordToEdit.recordedAt,
       bmi: updatedBmi,
@@ -116,7 +129,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
 
   // New Record Form State (Initialized clean to prevent cross-account cache leakage)
   const [weight, setWeight] = useState<number | ''>('');
-  const [muscle, setMuscle] = useState<number | ''>('');
+  const [muscleKg, setMuscleKg] = useState<number | ''>('');
   const [bodyFat, setBodyFat] = useState<number | ''>('');
   const [visceralFat, setVisceralFat] = useState<number>(3);
   const [recordedDate, setRecordedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -138,12 +151,13 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
     if (userRecords.length > 0) {
       const last = userRecords[userRecords.length - 1];
       setWeight(last.weightKg);
-      setMuscle(last.muscleMassPercent);
+      const mKg = last.muscleMassKg ?? (last.weightKg && last.muscleMassPercent ? parseFloat(((last.weightKg * last.muscleMassPercent) / 100).toFixed(2)) : '');
+      setMuscleKg(mKg);
       setBodyFat(last.bodyFatPercent);
       setVisceralFat(last.visceralFatLevel || 3);
     } else {
       setWeight('');
-      setMuscle('');
+      setMuscleKg('');
       setBodyFat('');
       setVisceralFat(3);
     }
@@ -166,12 +180,26 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!weight) return;
+
+    const numWeight = Number(weight);
+    const numMuscleKg = Number(muscleKg) || 0;
+    const computedMusclePercent = (numWeight > 0 && numMuscleKg > 0)
+      ? parseFloat(((numMuscleKg / numWeight) * 100).toFixed(1))
+      : 0;
+
+    const numBodyFat = Number(bodyFat) || 0;
+    const computedBodyFatKg = (numWeight > 0 && numBodyFat > 0)
+      ? parseFloat(((numWeight * numBodyFat) / 100).toFixed(2))
+      : undefined;
+
     onAddRecord({
       userId: currentUser.id,
       recordedAt: recordedDate,
-      weightKg: Number(weight),
-      muscleMassPercent: Number(muscle) || 0,
-      bodyFatPercent: Number(bodyFat) || 0,
+      weightKg: numWeight,
+      muscleMassKg: numMuscleKg > 0 ? numMuscleKg : undefined,
+      muscleMassPercent: computedMusclePercent,
+      bodyFatPercent: numBodyFat,
+      bodyFatKg: computedBodyFatKg,
       visceralFatLevel: Number(visceralFat) || 1,
       bmi: liveBmi,
       bmiCategory: liveBmiCategory,
@@ -187,12 +215,25 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       return;
     }
 
+    const numWeight = Number(weight);
+    const numMuscleKg = Number(muscleKg) || 0;
+    const computedMusclePercent = (numWeight > 0 && numMuscleKg > 0)
+      ? parseFloat(((numMuscleKg / numWeight) * 100).toFixed(1))
+      : 0;
+
+    const numBodyFat = Number(bodyFat) || 0;
+    const computedBodyFatKg = (numWeight > 0 && numBodyFat > 0)
+      ? parseFloat(((numWeight * numBodyFat) / 100).toFixed(2))
+      : undefined;
+
     onAddRecord({
       userId: currentUser.id,
       recordedAt: recordedDate,
-      weightKg: Number(weight),
-      muscleMassPercent: Number(muscle) || 0,
-      bodyFatPercent: Number(bodyFat) || 0,
+      weightKg: numWeight,
+      muscleMassKg: numMuscleKg > 0 ? numMuscleKg : undefined,
+      muscleMassPercent: computedMusclePercent,
+      bodyFatPercent: numBodyFat,
+      bodyFatKg: computedBodyFatKg,
       visceralFatLevel: Number(visceralFat) || 1,
       bmi: liveBmi,
       bmiCategory: liveBmiCategory,
@@ -206,7 +247,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
 
       // Reset fields for the next athlete so no cache leaks
       setWeight('');
-      setMuscle('');
+      setMuscleKg('');
       setBodyFat('');
       setVisceralFat(3);
       setNotes('');
@@ -672,10 +713,15 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <div className="font-bold text-white text-sm">{rec.weightKg}kg</div>
                 </div>
                 <div className="bg-neutral-950/50 p-2 rounded-xl">
-                  <div className="text-[10px] text-neutral-500 font-sans">Músculo</div>
-                  <div className="font-bold text-emerald-400 text-sm">{rec.muscleMassPercent}%</div>
-                  <div className="text-[9px] text-emerald-500/80 font-mono">
-                    {((rec.weightKg * rec.muscleMassPercent) / 100).toFixed(1)}kg
+                  <div className="text-[10px] text-neutral-500 font-sans flex items-center justify-center gap-0.5">
+                    <span>Músculo</span>
+                    <span className="text-[8px] text-emerald-400 font-bold">Renpho</span>
+                  </div>
+                  <div className="font-bold text-emerald-400 text-sm">
+                    {rec.muscleMassKg ? `${rec.muscleMassKg}kg` : `${((rec.weightKg * rec.muscleMassPercent) / 100).toFixed(1)}kg`}
+                  </div>
+                  <div className="text-[9px] text-neutral-400 font-mono">
+                    {rec.muscleMassPercent}%
                   </div>
                 </div>
                 <div className="bg-neutral-950/50 p-2 rounded-xl">
@@ -807,22 +853,46 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Masa Muscular (%)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-neutral-300 font-medium flex items-center gap-1">
+                      <span>Masa Muscular (kg)</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                        📱 Renpho en kg
+                      </span>
+                    </label>
+                    {editWeight && editMuscleKg ? (
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                        {((Number(editMuscleKg) / Number(editWeight)) * 100).toFixed(1)}%
+                      </span>
+                    ) : null}
+                  </div>
                   <input
                     type="number"
-                    step="0.1"
-                    min="5"
-                    max="70"
-                    value={editMuscle}
-                    onChange={(e) => setEditMuscle(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="Ej. 42.0"
+                    step="0.05"
+                    min="10"
+                    max="150"
+                    value={editMuscleKg}
+                    onChange={(e) => setEditMuscleKg(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 44.00"
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-sm font-bold font-mono focus:border-emerald-500 outline-none"
                   />
-                  {editWeight && editMuscle ? (
-                    <span className="text-[9px] text-emerald-400 font-mono block mt-0.5">
-                      ≈ {((Number(editWeight) * Number(editMuscle)) / 100).toFixed(1)} kg de músculo
+                  {editMuscleKg ? (
+                    <div className="flex items-center justify-between mt-1 text-[10px]">
+                      <span className="text-neutral-400">Escala Renpho:</span>
+                      {(() => {
+                        const info = getRenphoMuscleInfo(Number(editMuscleKg), currentUser.gender);
+                        return (
+                          <span className={`px-1.5 py-0.2 rounded font-bold text-[9px] ${info.badgeBg} ${info.badgeText}`}>
+                            {info.category}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-neutral-500 block mt-0.5">
+                      Ingresa el valor en kg como aparece en tu app Renpho (ej. 44.00 kg)
                     </span>
-                  ) : null}
+                  )}
                 </div>
               </div>
 
@@ -1042,31 +1112,67 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Masa Muscular (%)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-neutral-300 font-medium text-xs flex items-center gap-1">
+                      <span>Músculo (kg)</span>
+                      <span className="text-[8px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                        📱 Renpho
+                      </span>
+                    </label>
+                    {weight && muscleKg ? (
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                        {((Number(muscleKg) / Number(weight)) * 100).toFixed(1)}%
+                      </span>
+                    ) : null}
+                  </div>
                   <input
                     type="number"
-                    step="0.1"
+                    step="0.05"
                     min="10"
-                    max="70"
-                    value={muscle}
-                    onChange={(e) => setMuscle(parseFloat(e.target.value) || 0)}
+                    max="150"
+                    value={muscleKg}
+                    onChange={(e) => setMuscleKg(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 44.00"
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 outline-none"
                     required
                   />
+                  {muscleKg ? (
+                    <div className="flex items-center justify-between mt-1 text-[9px]">
+                      <span className="text-neutral-400">Renpho:</span>
+                      {(() => {
+                        const info = getRenphoMuscleInfo(Number(muscleKg), currentUser.gender);
+                        return (
+                          <span className={`px-1.5 py-0.2 rounded font-bold text-[8px] ${info.badgeBg} ${info.badgeText}`}>
+                            {info.category}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <span className="text-[9px] text-neutral-500 block mt-0.5">
+                      Ingresa en kg como en Renpho (ej. 44.00)
+                    </span>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-neutral-300 font-medium block mb-1">Grasa Corporal (%)</label>
+                  <label className="text-neutral-300 font-medium block mb-1 text-xs">Grasa Corporal (%)</label>
                   <input
                     type="number"
                     step="0.1"
                     min="3"
                     max="60"
                     value={bodyFat}
-                    onChange={(e) => setBodyFat(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setBodyFat(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    placeholder="Ej. 18.5"
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white font-mono text-xs focus:border-emerald-500 outline-none"
                     required
                   />
+                  {weight && bodyFat ? (
+                    <div className="mt-1 text-right text-[9px] text-purple-400/90 font-mono">
+                      ≈ {((Number(weight) * Number(bodyFat)) / 100).toFixed(1)} kg grasa
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -1272,11 +1378,45 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 </div>
 
                 <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-500/20 text-[10px] text-blue-300">
-                  <strong>💡 Nota clave para atletas funcionales de Kinetix:</strong> En deportistas con elevado desarrollo de masa muscular y fuerza, el IMC puede ubicarse en rango de sobrepeso (&gt; 25) aun teniendo baja grasa corporal. Por eso en Kinetix siempre contrastamos tu IMC con tu % de masa muscular y tu nivel de Grasa Visceral.
+                  <strong>💡 Nota clave para atletas funcionales de Kinetix:</strong> En deportistas con elevado desarrollo de masa muscular y fuerza, el IMC puede ubicarse en rango de sobrepeso (&gt; 25) aun teniendo baja grasa corporal. Por eso en Kinetix siempre contrastamos tu IMC con tu masa muscular en kg y tu nivel de Grasa Visceral.
                 </div>
               </div>
 
-              {/* SECTION 3: PASOS PARA COPIAR TU MEDICIÓN */}
+              {/* SECTION 2.5: MASA MUSCULAR EN KG (RENPHO) */}
+              <div className="space-y-2.5 bg-neutral-950/60 p-4 rounded-2xl border border-neutral-800">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                    <Flame className="w-4 h-4 text-emerald-400" />
+                    <span>3. Masa Muscular en Kilogramos (kg)</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    Báscula en kg
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-neutral-400">
+                  En la pantalla de tu app Renpho Health, la métrica principal de <strong>Masa Muscular</strong> se muestra directamente en <strong>kilogramos (kg)</strong>. Kinetix toma ese valor directo en kg y calcula automáticamente el porcentaje sobre tu peso total, clasificándote en:
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10px]">
+                  <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/30">
+                    <span className="text-sky-400 font-bold block">&lt; 32.90 kg</span>
+                    <span className="text-neutral-400 font-sans">Por debajo del promedio</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30">
+                    <span className="text-emerald-400 font-bold block">32.90 – 37.50 kg</span>
+                    <span className="text-neutral-400 font-sans">Promedio</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-emerald-900/40 border border-emerald-400/40">
+                    <span className="text-emerald-300 font-bold block">&gt; 37.50 kg</span>
+                    <span className="text-emerald-400 font-sans font-semibold">Excelente ★</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: PASOS PARA COPIAR TU MEDICIÓN */}
               <div className="p-4 rounded-2xl bg-neutral-950/60 border border-neutral-800 space-y-2">
                 <h4 className="font-bold text-white text-xs">
                   Pasos para sincronizar tus mediciones en Kinetix:
@@ -1285,8 +1425,8 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <li>Súbete descalzo a tu báscula RENPHO con la app abierta en tu teléfono.</li>
                   <li>Espera a que los números se fijen y se complete el escaneo de bioimpedancia.</li>
                   <li>En Kinetix Progress pulsa <strong className="text-white">+ Nuevo Registro</strong>.</li>
-                  <li>Introduce tu <strong>Peso</strong>, tu <strong>% Músculo</strong>, tu <strong>% Grasa</strong> y tu <strong>Nivel de Grasa Visceral</strong>.</li>
-                  <li>Kinetix Progress calculará y graficará de inmediato tu IMC con los mismos colores de tu app Renpho.</li>
+                  <li>Introduce tu <strong>Peso (kg)</strong>, tu <strong>Masa Muscular en kg</strong> (ej. 44.00 kg tal como aparece en tu app Renpho), tu <strong>% Grasa</strong> y tu <strong>Nivel de Grasa Visceral</strong>.</li>
+                  <li>Kinetix Progress calculará de inmediato tu IMC, el % de músculo y tu rango [Excelente / Promedio].</li>
                 </ol>
               </div>
             </div>

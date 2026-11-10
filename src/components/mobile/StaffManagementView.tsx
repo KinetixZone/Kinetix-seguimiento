@@ -1805,6 +1805,18 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       <span>Mi Evaluación</span>
                     </button>
 
+                    {onOpenBodyCompForUser && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenBodyCompForUser(staff)}
+                        className="text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-neutral-900 transition-colors"
+                        title="Ver o registrar pesaje y composición corporal Renpho de este coach o dueño"
+                      >
+                        <Scale className="w-3 h-3 text-sky-400" />
+                        <span>Mi Pesaje</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {

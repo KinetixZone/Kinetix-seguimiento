@@ -17,7 +17,8 @@ import {
   FileText,
   ShieldAlert,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Lock
 } from 'lucide-react';
 
 interface UserProfileAndLogoModalProps {
@@ -193,7 +194,15 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
 
             <div className="flex-1 space-y-1">
               <h4 className="text-sm font-bold text-white leading-tight">{currentUser.name}</h4>
-              <p className="text-xs text-neutral-400 font-mono">{currentUser.email}</p>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-400 font-mono">
+                <span className="text-blue-400 font-semibold">@{currentUser.username || (currentUser.email ? currentUser.email.split('@')[0] : 'usuario')}</span>
+                {currentUser.email && (
+                  <>
+                    <span>•</span>
+                    <span>{currentUser.email}</span>
+                  </>
+                )}
+              </div>
               <div className="pt-1 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -371,6 +380,22 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
               }`}>
                 {isStaff ? 'Coach / Staff' : 'Atleta Oficial'}
               </span>
+            </div>
+            <div className="flex items-center justify-between text-neutral-300">
+              <span className="flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Usuario Kinetix:</span>
+              </span>
+              <div className="text-right">
+                <span className="font-mono text-white font-bold bg-neutral-900 border border-neutral-800 px-2 py-0.5 rounded text-[11px]">
+                  @{currentUser.username || (currentUser.email ? currentUser.email.split('@')[0] : 'usuario')}
+                </span>
+                {!isStaff && (
+                  <span className="text-[9px] text-amber-400/90 block mt-0.5">
+                    🔒 Solo lectura · Asignado por Administración Kinetix
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-between text-neutral-300">
               <span>{isStaff ? 'Tipo de Cuenta:' : 'Membresía:'}</span>

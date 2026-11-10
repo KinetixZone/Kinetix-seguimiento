@@ -60,8 +60,10 @@ export interface BodyCompositionRecord {
   userId: string;
   recordedAt: string; // YYYY-MM-DD
   weightKg: number;
-  muscleMassPercent: number; // e.g. 45.0%
+  muscleMassKg?: number; // Valor directo en kg reportado por Renpho (ej. 44.00 kg)
+  muscleMassPercent: number; // Porcentaje de músculo (ej. 58.6%)
   bodyFatPercent: number; // e.g. 12.0%
+  bodyFatKg?: number; // e.g. 8.5 kg
   visceralFatLevel: number; // 1 to 59 scale
   bmi: number; // Calculated kg/m^2
   bmiCategory: 'Bajo Peso' | 'Normal' | 'Sobrepeso' | 'Obesidad I' | 'Obesidad II' | 'Obesidad III';
