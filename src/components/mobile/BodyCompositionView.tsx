@@ -884,8 +884,10 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <span className="text-neutral-400 font-mono">{initialRecord.muscleMassPercent}%</span>
                   <ArrowRight className="w-3 h-3 text-neutral-500" />
                   <span className="text-white font-bold font-mono">{latestRecord.muscleMassPercent}%</span>
-                  <span className="text-emerald-400 font-bold font-mono text-[11px] bg-emerald-950/60 px-2 py-0.5 rounded">
-                    +{deltaMuscle}%
+                  <span className={`font-bold font-mono text-[11px] px-2 py-0.5 rounded ${
+                    Number(deltaMuscle) > 0 ? 'text-emerald-400 bg-emerald-950/60' : Number(deltaMuscle) < 0 ? 'text-rose-400 bg-rose-950/60' : 'text-neutral-400 bg-neutral-800'
+                  }`}>
+                    {Number(deltaMuscle) > 0 ? `+${deltaMuscle}%` : `${deltaMuscle}%`}
                   </span>
                 </div>
               </div>
@@ -897,8 +899,10 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <span className="text-neutral-400 font-mono">{initialRecord.bodyFatPercent}%</span>
                   <ArrowRight className="w-3 h-3 text-neutral-500" />
                   <span className="text-white font-bold font-mono">{latestRecord.bodyFatPercent}%</span>
-                  <span className="text-purple-400 font-bold font-mono text-[11px] bg-purple-950/60 px-2 py-0.5 rounded">
-                    {deltaFat}%
+                  <span className={`font-bold font-mono text-[11px] px-2 py-0.5 rounded ${
+                    Number(deltaFat) < 0 ? 'text-emerald-400 bg-emerald-950/60' : Number(deltaFat) > 0 ? 'text-amber-400 bg-amber-950/60' : 'text-neutral-400 bg-neutral-800'
+                  }`}>
+                    {Number(deltaFat) > 0 ? `+${deltaFat}%` : `${deltaFat}%`}
                   </span>
                 </div>
               </div>
@@ -910,9 +914,16 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <span className="text-neutral-400 font-mono">Nivel {initialRecord.visceralFatLevel}</span>
                   <ArrowRight className="w-3 h-3 text-neutral-500" />
                   <span className="text-white font-bold font-mono">Nivel {latestRecord.visceralFatLevel}</span>
-                  <span className="text-emerald-400 font-bold font-mono text-[11px] bg-emerald-950/60 px-2 py-0.5 rounded">
-                    -{initialRecord.visceralFatLevel - latestRecord.visceralFatLevel} niveles
-                  </span>
+                  {(() => {
+                    const diff = initialRecord.visceralFatLevel - latestRecord.visceralFatLevel;
+                    return (
+                      <span className={`font-bold font-mono text-[11px] px-2 py-0.5 rounded ${
+                        diff > 0 ? 'text-emerald-400 bg-emerald-950/60' : diff < 0 ? 'text-rose-400 bg-rose-950/60' : 'text-neutral-400 bg-neutral-800'
+                      }`}>
+                        {diff > 0 ? `-${diff} nivel${diff > 1 ? 'es' : ''}` : diff < 0 ? `+${Math.abs(diff)} nivel${Math.abs(diff) > 1 ? 'es' : ''}` : 'Sin cambio'}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
