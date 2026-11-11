@@ -1503,7 +1503,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           </span>
                           <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
                         </div>
-                        <div className="grid grid-cols-20 gap-0.5 h-2 bg-neutral-950 p-0.5 rounded-full border border-neutral-800">
+                        <div 
+                          className="w-full max-w-full h-2.5 bg-neutral-950 p-0.5 rounded-full border border-neutral-800 overflow-hidden"
+                          style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: '2px' }}
+                        >
                           {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
                             const currentLvl = latestEval.cooperTest.levelNumber || 1;
                             const isReached = lvl <= currentLvl;
@@ -1863,7 +1866,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <span>Nivel 10 (Avanzado)</span>
                         <span className="text-red-500 font-bold">Nivel 20 (Ultra Élite)</span>
                       </div>
-                      <div className="grid grid-cols-20 gap-0.5 h-2.5 bg-neutral-900 rounded-full p-0.5 border border-neutral-800">
+                      <div 
+                        className="w-full max-w-full h-2.5 bg-neutral-900 rounded-full p-0.5 border border-neutral-800 overflow-hidden"
+                        style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: '2px' }}
+                      >
                         {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
                           const currentLvl = latestEval.cooperTest.levelNumber || 10;
                           const isReached = lvl <= currentLvl;

@@ -69,6 +69,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   const [editNotes, setEditNotes] = useState<string>('');
   const [editSuccessToast, setEditSuccessToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'trends' | 'compare' | 'history' | 'photos'>('trends');
+  const [chartMetric, setChartMetric] = useState<'all' | 'muscle' | 'fat' | 'weight'>('all');
 
   const handleOpenEditModal = (rec: BodyCompositionRecord) => {
     setRecordToEdit(rec);
@@ -298,13 +299,38 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
             Composición Corporal
           </h2>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Nuevo Registro</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {latestRecord && onUpdateRecord && (
+            <button
+              type="button"
+              onClick={() => handleOpenEditModal(latestRecord)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-blue-300 hover:text-white border border-neutral-700/80 text-xs font-semibold shadow-sm active:scale-95 transition-all"
+              title="Corregir y editar mi último pesaje registrado"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+              <span>Editar Mi Peso</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (latestRecord) {
+                setWeight(latestRecord.weightKg);
+                setMuscleKg(latestRecord.muscleMassKg ?? (latestRecord.weightKg && latestRecord.muscleMassPercent ? parseFloat(((latestRecord.weightKg * latestRecord.muscleMassPercent) / 100).toFixed(2)) : ''));
+                setBodyFat(latestRecord.bodyFatPercent);
+                setVisceralFat(latestRecord.visceralFatLevel || 3);
+                setRecordedDate(new Date().toISOString().slice(0, 10));
+                setNotes(latestRecord.notes || '');
+              }
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-500/25 active:scale-95 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>+ Nuevo</span>
+          </button>
+        </div>
       </div>
 
       {/* Sub Tabs: Trends, Before/After, History, Private Photos */}
@@ -358,20 +384,120 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
       {/* VIEW 1: TREND CHARTS */}
       {activeTab === 'trends' && (
         <div className="space-y-4">
+          {/* Latest Weigh-in Summary Banner with direct Edit Button */}
+          {latestRecord && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-neutral-900/90 to-purple-950/30 border border-neutral-800 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-neutral-400 uppercase tracking-wider font-semibold block">
+                      Último Pesaje Registrado
+                    </span>
+                    <span className="text-xs text-white font-bold font-mono">
+                      {latestRecord.recordedAt}
+                    </span>
+                  </div>
+                </div>
+
+                {onUpdateRecord && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(latestRecord)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/40 text-xs font-semibold active:scale-95 transition-all shadow-sm"
+                    title="Editar y corregir este pesaje si hubo una equivocación"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Editar mi Peso</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 pt-1 text-center font-mono">
+                <div className="bg-neutral-950/70 p-2 rounded-xl border border-neutral-800/60">
+                  <div className="text-[10px] text-neutral-400 font-sans">Peso</div>
+                  <div className="font-extrabold text-white text-base">{latestRecord.weightKg}kg</div>
+                  <div className="text-[9px] text-neutral-500 font-sans">IMC {latestRecord.bmi}</div>
+                </div>
+
+                <div className="bg-neutral-950/70 p-2 rounded-xl border border-neutral-800/60">
+                  <div className="text-[10px] text-emerald-400 font-sans flex items-center justify-center gap-0.5">
+                    <span>Músculo</span>
+                  </div>
+                  <div className="font-extrabold text-emerald-400 text-base">
+                    {latestRecord.muscleMassKg ? `${latestRecord.muscleMassKg}kg` : `${((latestRecord.weightKg * latestRecord.muscleMassPercent) / 100).toFixed(1)}kg`}
+                  </div>
+                  <div className="text-[9px] text-neutral-400 font-mono">{latestRecord.muscleMassPercent}%</div>
+                </div>
+
+                <div className="bg-neutral-950/70 p-2 rounded-xl border border-neutral-800/60">
+                  <div className="text-[10px] text-purple-400 font-sans">Grasa</div>
+                  <div className="font-extrabold text-purple-400 text-base">{latestRecord.bodyFatPercent}%</div>
+                  <div className="text-[9px] text-neutral-400 font-mono">
+                    {((latestRecord.weightKg * latestRecord.bodyFatPercent) / 100).toFixed(1)}kg
+                  </div>
+                </div>
+
+                <div className="bg-neutral-950/70 p-2 rounded-xl border border-neutral-800/60">
+                  <div className="text-[10px] text-amber-400 font-sans">Visceral</div>
+                  <div className="font-extrabold text-amber-300 text-base">Nivel {latestRecord.visceralFatLevel}</div>
+                  <div className="text-[9px] text-neutral-500 font-sans">1–59</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Main Chart Card */}
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-white">Evolución Trimestral (Kg y %)</span>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="flex items-center gap-1 text-blue-400">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Músculo %
-                </span>
-                <span className="flex items-center gap-1 text-red-400">
-                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Grasa %
-                </span>
-                <span className="flex items-center gap-1 text-white">
-                  <span className="w-2 h-2 rounded-full bg-white inline-block" /> Peso (kg)
-                </span>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-3 max-w-full overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div>
+                <h4 className="font-semibold text-white">Evolución de Composición Corporal</h4>
+                <span className="text-[10px] text-neutral-400">Tendencia histórica en el tiempo</span>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('all')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors ${
+                    chartMetric === 'all' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('muscle')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 ${
+                    chartMetric === 'muscle' ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-blue-400'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  Músculo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('fat')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 ${
+                    chartMetric === 'fat' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-red-400'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  Grasa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('weight')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 ${
+                    chartMetric === 'weight' ? 'bg-neutral-200 text-black font-bold' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                  Peso
+                </button>
               </div>
             </div>
 
@@ -396,78 +522,203 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   <span>+ Iniciar Primer Registro Antropométrico</span>
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="h-44 w-full relative pt-2">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 320 120">
-                    {/* Horizontal guide lines */}
-                    <line x1="0" y1="20" x2="320" y2="20" stroke="#262626" strokeDasharray="3 3" />
-                    <line x1="0" y1="60" x2="320" y2="60" stroke="#262626" strokeDasharray="3 3" />
-                    <line x1="0" y1="100" x2="320" y2="100" stroke="#262626" strokeDasharray="3 3" />
+            ) : (() => {
+              const isWeightMode = chartMetric === 'weight';
+              const muscleVals = sortedRecords.map(r => r.muscleMassPercent).filter(v => v > 0);
+              const fatVals = sortedRecords.map(r => r.bodyFatPercent).filter(v => v > 0);
+              const weightVals = sortedRecords.map(r => r.weightKg).filter(v => v > 0);
 
-                    {/* Plot Muscle % (Kinetix Blue Line) */}
-                    <polyline
-                      fill="none"
-                      stroke="#0055ff"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      points={sortedRecords.map((r, i) => {
-                        const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                        const y = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
-                        return `${x},${y}`;
-                      }).join(' ')}
-                    />
+              const minVal = isWeightMode
+                ? Math.max(20, Math.floor(Math.min(...weightVals, 50) - 2))
+                : Math.max(0, Math.floor(Math.min(...muscleVals, ...fatVals, 12) - 4));
 
-                    {/* Plot Body Fat % (Kinetix Red Line) */}
-                    <polyline
-                      fill="none"
-                      stroke="#ff1e27"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      points={sortedRecords.map((r, i) => {
-                        const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                        const y = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
-                        return `${x},${y}`;
-                      }).join(' ')}
-                    />
+              const maxVal = isWeightMode
+                ? Math.ceil(Math.max(...weightVals, 70) + 2)
+                : Math.min(100, Math.ceil(Math.max(...muscleVals, ...fatVals, 42) + 6));
 
-                    {/* Render Dots & Values */}
-                    {sortedRecords.map((r, i) => {
-                      const x = 30 + i * (260 / (sortedRecords.length - 1 || 1));
-                      const yM = 95 - ((r.muscleMassPercent - 40) / 8) * 75;
-                      const yF = 95 - ((r.bodyFatPercent - 10) / 10) * 75;
-                      return (
-                        <g key={r.id}>
-                          {/* Muscle Point */}
-                          <circle cx={x} cy={yM} r="4" fill="#0055ff" stroke="#000" strokeWidth="1.5" />
-                          <text x={x} y={yM - 7} fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">
-                            {r.muscleMassPercent}%
-                          </text>
-                          
-                          {/* Fat Point */}
-                          <circle cx={x} cy={yF} r="4" fill="#ff1e27" stroke="#000" strokeWidth="1.5" />
-                          <text x={x} y={yF + 12} fill="#ef4444" fontSize="9" fontWeight="bold" textAnchor="middle">
-                            {r.bodyFatPercent}%
-                          </text>
+              const rangeVal = Math.max(maxVal - minVal, isWeightMode ? 4 : 10);
 
-                          {/* X Axis Date Label */}
-                          <text x={x} y="118" fill="#737373" fontSize="8" textAnchor="middle">
-                            {r.recordedAt.slice(5)}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
+              const cLeft = 38;
+              const cRight = 330;
+              const cTop = 22;
+              const cBottom = 118;
+              const cWidth = cRight - cLeft;
+              const cHeight = cBottom - cTop;
+
+              const getX = (idx: number, len: number) => {
+                if (len <= 1) return cLeft + cWidth / 2;
+                return Number((cLeft + idx * (cWidth / (len - 1))).toFixed(1));
+              };
+
+              const getY = (val: number) => {
+                const clamped = Math.min(Math.max(val, minVal), maxVal);
+                const ratio = (clamped - minVal) / rangeVal;
+                return Number((cBottom - ratio * cHeight).toFixed(1));
+              };
+
+              const showMuscle = chartMetric === 'all' || chartMetric === 'muscle';
+              const showFat = chartMetric === 'all' || chartMetric === 'fat';
+              const showWeight = chartMetric === 'weight';
+
+              const midVal = Math.round((maxVal + minVal) / 2);
+              const midY = (cTop + cBottom) / 2;
+
+              return (
+                <div className="w-full max-w-full overflow-hidden rounded-2xl bg-neutral-950/80 border border-neutral-800/80 p-2 sm:p-3">
+                  <div className="h-44 sm:h-48 w-full relative">
+                    <svg className="w-full h-full block" viewBox="0 0 360 150" preserveAspectRatio="xMidYMid meet">
+                      <defs>
+                        <linearGradient id="muscleGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0055ff" stopOpacity="0.35" />
+                          <stop offset="100%" stopColor="#0055ff" stopOpacity="0.0" />
+                        </linearGradient>
+                        <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#ff1e27" stopOpacity="0.30" />
+                          <stop offset="100%" stopColor="#ff1e27" stopOpacity="0.0" />
+                        </linearGradient>
+                        <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Horizontal guide lines */}
+                      <line x1={cLeft} y1={cTop} x2={cRight} y2={cTop} stroke="#262626" strokeDasharray="3 3" />
+                      <line x1={cLeft} y1={midY} x2={cRight} y2={midY} stroke="#262626" strokeDasharray="3 3" />
+                      <line x1={cLeft} y1={cBottom} x2={cRight} y2={cBottom} stroke="#262626" strokeDasharray="3 3" />
+
+                      {/* Y-Axis Value Labels on Left */}
+                      <text x={cLeft - 6} y={cTop + 3} fill="#525252" fontSize="8" className="font-mono" textAnchor="end">
+                        {maxVal}{isWeightMode ? 'kg' : '%'}
+                      </text>
+                      <text x={cLeft - 6} y={midY + 3} fill="#525252" fontSize="8" className="font-mono" textAnchor="end">
+                        {midVal}{isWeightMode ? 'kg' : '%'}
+                      </text>
+                      <text x={cLeft - 6} y={cBottom + 3} fill="#525252" fontSize="8" className="font-mono" textAnchor="end">
+                        {minVal}{isWeightMode ? 'kg' : '%'}
+                      </text>
+
+                      {/* Muscle Area Fill */}
+                      {showMuscle && sortedRecords.length > 1 && (
+                        <polygon
+                          fill="url(#muscleGrad)"
+                          points={`${getX(0, sortedRecords.length)},${cBottom} ${sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.muscleMassPercent)}`).join(' ')} ${getX(sortedRecords.length - 1, sortedRecords.length)},${cBottom}`}
+                        />
+                      )}
+
+                      {/* Fat Area Fill */}
+                      {showFat && sortedRecords.length > 1 && (
+                        <polygon
+                          fill="url(#fatGrad)"
+                          points={`${getX(0, sortedRecords.length)},${cBottom} ${sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.bodyFatPercent)}`).join(' ')} ${getX(sortedRecords.length - 1, sortedRecords.length)},${cBottom}`}
+                        />
+                      )}
+
+                      {/* Weight Area Fill */}
+                      {showWeight && sortedRecords.length > 1 && (
+                        <polygon
+                          fill="url(#weightGrad)"
+                          points={`${getX(0, sortedRecords.length)},${cBottom} ${sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.weightKg)}`).join(' ')} ${getX(sortedRecords.length - 1, sortedRecords.length)},${cBottom}`}
+                        />
+                      )}
+
+                      {/* Plot Muscle % (Kinetix Blue Line) */}
+                      {showMuscle && sortedRecords.length > 1 && (
+                        <polyline
+                          fill="none"
+                          stroke="#0055ff"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.muscleMassPercent)}`).join(' ')}
+                        />
+                      )}
+
+                      {/* Plot Body Fat % (Kinetix Red Line) */}
+                      {showFat && sortedRecords.length > 1 && (
+                        <polyline
+                          fill="none"
+                          stroke="#ff1e27"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.bodyFatPercent)}`).join(' ')}
+                        />
+                      )}
+
+                      {/* Plot Weight (White Line) */}
+                      {showWeight && sortedRecords.length > 1 && (
+                        <polyline
+                          fill="none"
+                          stroke="#ffffff"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={sortedRecords.map((r, i) => `${getX(i, sortedRecords.length)},${getY(r.weightKg)}`).join(' ')}
+                        />
+                      )}
+
+                      {/* Render Dots, Value Badges & Dates */}
+                      {sortedRecords.map((r, i) => {
+                        const x = getX(i, sortedRecords.length);
+                        const ym = getY(r.muscleMassPercent);
+                        const yf = getY(r.bodyFatPercent);
+                        const yw = getY(r.weightKg);
+
+                        return (
+                          <g key={r.id}>
+                            {/* Muscle Point */}
+                            {showMuscle && (
+                              <>
+                                <circle cx={x} cy={ym} r="4" fill="#0055ff" stroke="#000" strokeWidth="1.5" />
+                                <text x={x} y={ym - 7} fill="#60a5fa" fontSize="9" fontWeight="bold" textAnchor="middle">
+                                  {r.muscleMassPercent}%
+                                </text>
+                              </>
+                            )}
+
+                            {/* Fat Point */}
+                            {showFat && (
+                              <>
+                                <circle cx={x} cy={yf} r="4" fill="#ff1e27" stroke="#000" strokeWidth="1.5" />
+                                <text x={x} y={yf + 12} fill="#ef4444" fontSize="9" fontWeight="bold" textAnchor="middle">
+                                  {r.bodyFatPercent}%
+                                </text>
+                              </>
+                            )}
+
+                            {/* Weight Point */}
+                            {showWeight && (
+                              <>
+                                <circle cx={x} cy={yw} r="4" fill="#ffffff" stroke="#000" strokeWidth="1.5" />
+                                <text x={x} y={yw - 7} fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">
+                                  {r.weightKg}kg
+                                </text>
+                              </>
+                            )}
+
+                            {/* X Axis Date Label */}
+                            <text x={x} y="140" fill="#a3a3a3" fontSize="8" textAnchor="middle">
+                              {r.recordedAt.slice(5)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+
+                  <div className="pt-2 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-400">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Recomposición Kinetix:</span>
+                    </span>
+                    <span className="text-emerald-400 font-bold font-mono">
+                      {Number(deltaMuscle) >= 0 ? `+${deltaMuscle}%` : `${deltaMuscle}%`} masa magra
+                    </span>
+                  </div>
                 </div>
-
-                <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
-                  <span>Tendencia: Recomposición corporal</span>
-                  <span className="text-blue-400 font-semibold">{deltaMuscle}% masa magra</span>
-                </div>
-              </>
-            )}
+              );
+            })()}
           </div>
 
           {/* Current Body Metrics Summary with Official RENPHO Indicators (Only displayed once the athlete registers measurements) */}
@@ -1090,6 +1341,22 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                 />
               </div>
 
+              {(() => {
+                const existingForDate = records.find(r => r.recordedAt === recordedDate);
+                if (!existingForDate) return null;
+                return (
+                  <div className="p-3 rounded-2xl bg-blue-950/60 border border-blue-500/40 text-blue-200 text-xs flex items-start gap-2 shadow-sm">
+                    <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-white block">Corrección de pesaje en esta fecha ({recordedDate})</span>
+                      <span className="text-[11px] text-blue-300/90 leading-snug block mt-0.5">
+                        Ya existe un registro guardado ({existingForDate.weightKg} kg, {existingForDate.muscleMassPercent}% músculo). Al guardar, se <strong>actualizarán tus valores</strong> en este registro sin crear duplicados.
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Weight with dynamic IMC preview */}
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -1241,7 +1508,13 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
                   className="flex-1 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black font-semibold transition-colors shadow-md shadow-emerald-500/20 text-xs flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{isStaffActing ? 'Guardar Solo Este' : 'Guardar Mi Medición'}</span>
+                  <span>
+                    {(() => {
+                      const hasExisting = records.some(r => r.recordedAt === recordedDate);
+                      if (hasExisting) return 'Actualizar Pesaje de Hoy';
+                      return isStaffActing ? 'Guardar Solo Este' : 'Guardar Mi Medición';
+                    })()}
+                  </span>
                 </button>
               </div>
             </div>

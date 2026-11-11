@@ -449,7 +449,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
       </div>
 
       {/* MAIN VIEW CONTENT CONTAINER (Con espacio inferior amplio para la barra móvil y safe-area) */}
-      <main className="flex-1 max-w-6xl w-full mx-auto pb-28 sm:pb-24 md:pb-8 pt-2">
+      <main className="flex-1 max-w-6xl w-full mx-auto pb-28 sm:pb-24 md:pb-8 pt-2 overflow-x-hidden min-w-0">
         {currentTab === 'dashboard' && (
           <AthleteDashboard
             currentUser={effectiveUser}

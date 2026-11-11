@@ -341,19 +341,33 @@ export default function App() {
     setCurrentUserId('user-staff-leslie');
   };
 
-  // Add Body Comp Record
+  // Add or Update Body Comp Record (Updates in-place if a record already exists on the same date)
   const handleAddBodyCompRecord = (record: Omit<BodyCompositionRecord, 'id'>) => {
-    const newRecord: BodyCompositionRecord = {
-      ...record,
-      id: `bc-${Date.now()}`,
-    };
-    setBodyCompRecords(prev => [...prev, newRecord]);
+    let savedRecord: BodyCompositionRecord;
+
+    setBodyCompRecords(prev => {
+      const existingIdx = prev.findIndex(b => b.userId === record.userId && b.recordedAt === record.recordedAt);
+      if (existingIdx !== -1) {
+        const updatedList = [...prev];
+        savedRecord = {
+          ...prev[existingIdx],
+          ...record,
+        };
+        updatedList[existingIdx] = savedRecord;
+        return updatedList;
+      }
+      savedRecord = {
+        ...record,
+        id: `bc-${Date.now()}`,
+      };
+      return [...prev, savedRecord];
+    });
 
     // Automatic push notification to the athlete
     const newNotif: PushNotificationSimulation = {
       id: `notif-bc-${Date.now()}`,
-      title: '⚖️ Nueva Evaluación de Composición Corporal',
-      body: `Se ha registrado tu pesaje oficial (${newRecord.weightKg} kg, ${newRecord.bodyFatPercent}% grasa). Consulta tus avances en la pestaña Antropometría.`,
+      title: '⚖️ Pesaje y Composición Corporal Kinetix',
+      body: `Se ha registrado tu pesaje oficial (${record.weightKg} kg, ${record.bodyFatPercent}% grasa). Consulta tus avances en la pestaña Antropometría.`,
       timestamp: new Date().toISOString(),
       read: false,
       type: 'test_results',
@@ -362,7 +376,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
 
     // Sync to Supabase in the background
-    syncBodyCompToSupabase(newRecord);
+    syncBodyCompToSupabase(savedRecord!);
     syncNotificationToSupabase(newNotif);
   };
 

@@ -237,24 +237,25 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
       {/* Monthly Highlight Stat Cards (2x2 Grid) */}
       <div className="grid grid-cols-2 gap-2.5">
         {/* Weight & BMI Card */}
+        {/* Weight & BMI Card */}
         <div 
           onClick={() => onNavigateTab('body')}
-          className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 transition-all cursor-pointer space-y-1 relative group"
+          className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-blue-500/50 transition-all cursor-pointer space-y-1 relative group shadow-sm"
         >
           <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 font-medium">
               <Scale className="w-3.5 h-3.5 text-blue-400" />
               Peso Corporal
             </span>
-            <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">
-              Historial &rarr;
+            <span className="text-[10px] text-blue-400 group-hover:text-blue-300 transition-colors font-semibold">
+              Editar &rarr;
             </span>
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-mono">
               {latestBodyComp ? latestBodyComp.weightKg : '--'}
             </span>
-            {latestBodyComp && <span className="text-xs text-neutral-400">kg</span>}
+            {latestBodyComp && <span className="text-xs text-neutral-400 font-mono">kg</span>}
           </div>
           <div className="text-[11px] text-neutral-400 flex items-center gap-1.5 pt-1">
             {latestBodyComp ? (
@@ -264,7 +265,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                 <span className="text-blue-400 font-medium">{latestBodyComp.bmiCategory}</span>
               </>
             ) : (
-              <span className="text-neutral-500">Pendiente de pesaje</span>
+              <span className="text-neutral-500">Toca para registrar</span>
             )}
           </div>
         </div>
@@ -272,24 +273,30 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
         {/* Muscle Mass Card */}
         <div 
           onClick={() => onNavigateTab('body')}
-          className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 transition-all cursor-pointer space-y-1 group"
+          className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-emerald-500/50 transition-all cursor-pointer space-y-1 group shadow-sm"
         >
           <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span className="flex items-center gap-1.5">
-              <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="flex items-center gap-1.5 font-medium">
+              <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
               Masa Muscular
             </span>
-            <span className="text-[10px] text-neutral-500 group-hover:text-cyan-400 transition-colors">
-              Métricas &rarr;
+            <span className="text-[10px] text-emerald-400 group-hover:text-emerald-300 transition-colors font-semibold">
+              Renpho &rarr;
             </span>
           </div>
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-mono">
-              {latestBodyComp ? `${latestBodyComp.muscleMassPercent}%` : '--'}
+              {latestBodyComp ? (latestBodyComp.muscleMassKg ? `${latestBodyComp.muscleMassKg}kg` : `${((latestBodyComp.weightKg * latestBodyComp.muscleMassPercent) / 100).toFixed(1)}kg`) : '--'}
             </span>
+            {latestBodyComp && (
+              <span className="text-xs text-emerald-400 font-mono font-bold">
+                {latestBodyComp.muscleMassPercent}%
+              </span>
+            )}
           </div>
-          <div className="text-[11px] text-neutral-400 pt-1">
-            <span>Grasa Visceral: {latestBodyComp ? `Nivel ${latestBodyComp.visceralFatLevel}` : '--'}</span>
+          <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
+            <span>Visceral: {latestBodyComp ? `Nivel ${latestBodyComp.visceralFatLevel}` : '--'}</span>
+            <span className="text-[10px] text-neutral-500 font-mono">Báscula</span>
           </div>
         </div>
 
