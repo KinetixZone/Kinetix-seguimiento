@@ -824,21 +824,36 @@ export default function App() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
+  const handleMarkNotificationAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleClearReadNotifications = () => {
+    // Dismiss all read notifications for current user
+    const readIds = new Set(visibleNotifications.filter(n => n.read).map(n => n.id));
+    setNotifications(prev => prev.filter(n => !readIds.has(n.id)));
+  };
+
   // Only show notifications relevant to the logged-in user
   const visibleNotifications = notifications.filter(notif => {
     if (currentUser?.role === 'staff') {
-      return notif.targetAudience === 'staff' || notif.targetUserId === currentUser.id;
+      return notif.targetAudience === 'staff' || notif.targetAudience === 'all' || notif.targetUserId === currentUser.id;
     } else {
-      if (notif.targetUserId) return notif.targetUserId === currentUser.id;
+      if (notif.targetUserId) return notif.targetUserId === currentUser?.id;
       if (notif.targetAudience === 'staff') return false;
       if (notif.targetAudience === 'athletes' || notif.targetAudience === 'all') return true;
       if (notif.targetAudience?.startsWith('color_')) {
-        const billingDay = currentUser.membership.billingDayOfMonth || 15;
+        const billingDay = currentUser?.membership?.billingDayOfMonth ?? 15;
         return notif.targetAudience === `color_${billingDay}`;
       }
       return !notif.targetUserId && !notif.targetAudience;
     }
   });
+
 
   const unreadCount = visibleNotifications.filter(n => !n.read).length;
 
@@ -936,7 +951,11 @@ export default function App() {
         notifications={visibleNotifications}
         allNotifications={notifications}
         isStaff={currentUser?.role === 'staff'}
+        currentUserId={currentUser?.id}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+        onMarkAsRead={handleMarkNotificationAsRead}
+        onDismissNotification={handleDismissNotification}
+        onClearReadNotifications={handleClearReadNotifications}
         onOpenSendNotification={() => setIsSendNotificationOpen(true)}
       />
 

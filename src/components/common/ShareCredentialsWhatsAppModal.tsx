@@ -78,7 +78,7 @@ ${athlete.email && !athlete.email.includes('@kinetix.fit') ? `📧 *Correo:* ${a
 💪 *Tus Récords de Fuerza (1RM):* Podrás ver tus marcas en Peso Muerto, Sentadilla, Press de Pecho y Dominadas.
 🏃‍♂️ *Test de Cooper y Resistencia:* Tu nivel aeróbico oficial de 12 minutos y tus evaluaciones físicas periódicas.
 ⚖️ *Composición Corporal Renpho:* Historial de tus pesajes de bioimpedancia con porcentaje de masa muscular (en kg), porcentaje de grasa y grasa visceral.
-🔔 *Avisos y Mensajes de tus Coaches:* En tu bandeja recibirás felicitaciones por tus nuevos récords, correcciones técnicas y avisos importantes de Leslie, Jorge y el equipo.
+🔔 *Avisos y Mensajes de Kinetix:* En tu bandeja recibirás felicitaciones por tus nuevos récords, correcciones técnicas y avisos importantes.
 💳 *Estatus de Membresía:* En la pestaña *"Plan"* podrás ver tus días restantes y tu corte mensual.
 ${cutOffText}
 
@@ -89,7 +89,7 @@ Tu acceso a las gráficas, pesajes y retos se mantiene activo mientras tu mensua
 💡 *Tip Pro:* Al abrir el enlace en tu navegador (Safari o Chrome), pulsa *"Compartir"* o el menú y selecciona *"Agregar a Pantalla de Inicio"* para usarla como una aplicación instalada en tu celular 📱.
 
 ¡A darlo todo en cada entrenamiento! 💪⚡
-— *Coaches Leslie & Jorge | Kinetix Functional Zone*`;
+— *Kinetix Functional Zone*`;
   }, [athlete.name, athlete.email, username, currentPassword, appUrl, billingDay, isNoCutoff, paymentInfo]);
 
   const [customMessage, setCustomMessage] = useState(defaultMessage);
