@@ -66,8 +66,11 @@ import {
   RefreshCw,
   Download,
   Pencil,
-  Zap
+  Zap,
+  MessageCircle
 } from 'lucide-react';
+import { ShareCredentialsWhatsAppModal } from '../common/ShareCredentialsWhatsAppModal';
+
 import { 
   KINETIX_OFFICIAL_SUPABASE_SQL, 
   getSupabaseCredentials, 
@@ -233,6 +236,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [initialPassword, setInitialPassword] = useState('kinetix123');
   const [createdSuccessMsg, setCreatedSuccessMsg] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createdAthleteData, setCreatedAthleteData] = useState<{ athlete: UserProfile; password: string } | null>(null);
+  const [athleteToShareWhatsApp, setAthleteToShareWhatsApp] = useState<{ athlete: UserProfile; password?: string } | null>(null);
 
   // Payment color filter state: 'all' | 0 | 5 | 15 | 20 | 30 | 'due_soon'
   const [colorFilter, setColorFilter] = useState<'all' | 0 | 5 | 15 | 20 | 30 | 'due_soon'>('all');
@@ -1350,6 +1355,43 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
     const expiry = calculateNextExpiryFromDay(billingDay);
     const pass = initialPassword.trim() || 'kinetix123';
+    const resolvedUsername = cleanUser || cleanName.toLowerCase().split(' ')[0].replace(/[^a-z0-9_]/g, '') || 'usuario';
+
+    const tempAthleteObj: UserProfile = {
+      id: `user-${Date.now()}`,
+      name: cleanName,
+      email: finalEmail,
+      username: resolvedUsername,
+      role: 'athlete',
+      phone: '',
+      avatarUrl: '',
+      birthDate: '1998-01-01',
+      gender,
+      heightCm,
+      weightUnit: 'kg',
+      emergencyContact: {
+        name: 'Pendiente',
+        phone: 'Pendiente',
+        relationship: 'Familiar',
+      },
+      membership: {
+        id: `mem-${Date.now()}`,
+        planName,
+        status: 'active',
+        startDate: new Date().toISOString().split('T')[0],
+        expiryDate: expiry,
+        monthlyFee: 0,
+        currency: 'USD',
+        autoRenew: true,
+        gracePeriodDays: 5,
+        daysUntilExpiry: 30,
+        lastPaymentDate: new Date().toISOString().split('T')[0],
+        nextPaymentDate: expiry,
+        billingDayOfMonth: billingDay,
+        paymentReminderSent: false,
+      },
+      createdAt: new Date().toISOString().split('T')[0],
+    };
 
     onCreateUserByEmail({
       name: cleanName,
@@ -1363,18 +1405,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       switchToCreatedUser: false, // El dueño / coach se queda en su panel administrativo
     });
 
+    setCreatedAthleteData({ athlete: tempAthleteObj, password: pass });
     setCreatedSuccessMsg(true);
-    setTimeout(() => {
-      setCreatedSuccessMsg(false);
-      setShowCreateModal(false);
-      setName('');
-      setEmail('');
-      setCustomUsername('');
-      setPlanName('Kinetix');
-      setBillingDay(15);
-      setInitialPassword('kinetix123');
-    }, 1800);
   };
+
 
   // Owner/Coach password updater for athlete
   const handleOwnerUpdatePassword = (newPass: string) => {
@@ -3163,6 +3197,22 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
                   <button
                     onClick={() => {
+                      try {
+                        const saved = localStorage.getItem(`kinetix_pwd_${athlete.id}`) || athlete.password || 'kinetix123';
+                        setAthleteToShareWhatsApp({ athlete, password: saved });
+                      } catch {
+                        setAthleteToShareWhatsApp({ athlete, password: 'kinetix123' });
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                    title="Compartir credenciales de acceso y corte por WhatsApp (abre WhatsApp para elegir contacto)"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-400 fill-current" />
+                    <span>WhatsApp</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
                       setSelectedAthleteForPayment(athlete);
                       setEditExpiryDate(athlete.membership.expiryDate);
                       setEditStatus(athlete.membership.status);
@@ -3364,13 +3414,75 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </button>
             </div>
 
-            {createdSuccessMsg ? (
-              <div className="p-6 text-center space-y-2">
-                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-bounce" />
-                <h4 className="text-sm font-bold text-white">¡Invitación Enviada con Éxito!</h4>
-                <p className="text-xs text-neutral-400">
-                  Se ha generado la cuenta para <strong>{name}</strong> ({email}) con fecha de corte día {billingDay} de cada mes.
-                </p>
+            {createdSuccessMsg && createdAthleteData ? (
+              <div className="p-5 text-center space-y-3.5 animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white">¡Atleta Creado con Éxito!</h4>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    La cuenta de <strong className="text-white">{createdAthleteData.athlete.name}</strong> está lista en el sistema.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 text-left text-xs space-y-1.5">
+                  <div className="flex justify-between items-center text-neutral-300">
+                    <span>Usuario:</span>
+                    <strong className="text-white font-mono">@{createdAthleteData.athlete.username}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-neutral-300">
+                    <span>Contraseña:</span>
+                    <strong className="text-emerald-400 font-mono">{createdAthleteData.password}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-neutral-300">
+                    <span>Corte Mensual:</span>
+                    <strong className="text-blue-400 font-mono">
+                      {createdAthleteData.athlete.membership?.billingDayOfMonth === 0 
+                        ? 'Sin Corte (Permanente)' 
+                        : `Día ${createdAthleteData.athlete.membership?.billingDayOfMonth || 15} de cada mes`}
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toShare = createdAthleteData;
+                    setShowCreateModal(false);
+                    setCreatedSuccessMsg(false);
+                    setCreatedAthleteData(null);
+                    setName('');
+                    setEmail('');
+                    setCustomUsername('');
+                    setPlanName('Kinetix');
+                    setBillingDay(15);
+                    setInitialPassword('kinetix123');
+                    setAthleteToShareWhatsApp(toShare);
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4 fill-current" />
+                  <span>Enviar Credenciales por WhatsApp Ahora</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreatedSuccessMsg(false);
+                    setCreatedAthleteData(null);
+                    setName('');
+                    setEmail('');
+                    setCustomUsername('');
+                    setPlanName('Kinetix');
+                    setBillingDay(15);
+                    setInitialPassword('kinetix123');
+                  }}
+                  className="w-full py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition-colors"
+                >
+                  Cerrar y Compartir Después
+                </button>
               </div>
             ) : (
               <form onSubmit={handleCreateSubmit} className="space-y-3.5 text-xs">
@@ -3613,12 +3725,28 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   )}
                 </p>
               </div>
-              <button
-                onClick={() => setSelectedAthleteForPayment(null)}
-                className="text-neutral-400 hover:text-white p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedAthleteForPayment.role === 'athlete' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pass = athletePassword || 'kinetix123';
+                      setAthleteToShareWhatsApp({ athlete: selectedAthleteForPayment, password: pass });
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95"
+                    title="Compartir credenciales por WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-400 fill-current" />
+                    <span className="hidden sm:inline">Compartir</span> WhatsApp
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedAthleteForPayment(null)}
+                  className="text-neutral-400 hover:text-white p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Navigation Tabs */}
@@ -4078,6 +4206,37 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         Si el alumno olvidó su contraseña o no puede ingresar, puedes leérsela directamente o asignarle una nueva a continuación.
                       </p>
                     </div>
+
+                    {/* Quick WhatsApp Share Button inside Security Tab */}
+                    {selectedAthleteForPayment.role === 'athlete' && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-800/60 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+                            <MessageCircle className="w-4 h-4 text-emerald-400 fill-current" />
+                            <span>Enviar Credenciales por WhatsApp:</span>
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+                            1 Toque
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-300 leading-relaxed">
+                          Envía a su WhatsApp el mensaje pre-redactado con su usuario (@{selectedAthleteForPayment.username || 'usuario'}), clave, enlace directo a la app y recordatorio amistoso de corte.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAthleteToShareWhatsApp({
+                              athlete: selectedAthleteForPayment,
+                              password: athletePassword || 'kinetix123'
+                            });
+                          }}
+                          className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                        >
+                          <MessageCircle className="w-4 h-4 fill-current" />
+                          <span>Abrir WhatsApp & Elegir Contacto</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Change or Reset Password Card */}
                     <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2.5">
@@ -6864,6 +7023,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         onSendNotification={onSendBatchNotification ? (t, b, u) => onSendBatchNotification(t, b, u || []) : undefined}
         onOpenIndividualEdit={handleOpenQuickEditWeights}
       />
+
+      {/* MODAL: COMPARTIR CREDENCIALES Y ACCESO POR WHATSAPP */}
+      {athleteToShareWhatsApp && (
+        <ShareCredentialsWhatsAppModal
+          athlete={athleteToShareWhatsApp.athlete}
+          initialPassword={athleteToShareWhatsApp.password}
+          onClose={() => setAthleteToShareWhatsApp(null)}
+          onUpdatePhone={(newPhone) => {
+            if (onUpdateAthleteProfile) {
+              onUpdateAthleteProfile(athleteToShareWhatsApp.athlete.id, { phone: newPhone });
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
+
