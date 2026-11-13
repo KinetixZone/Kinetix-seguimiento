@@ -32,7 +32,12 @@ import {
   syncBodyCompToSupabase, 
   syncEvaluationToSupabase, 
   syncNotificationToSupabase, 
-  loadAllFromSupabase 
+  loadAllFromSupabase,
+  deleteUserFromSupabase,
+  deleteBodyCompFromSupabase,
+  deleteEvaluationFromSupabase,
+  deleteNotificationFromSupabase,
+  importSupabaseFromUrlParams
 } from './lib/supabase';
 
 export const KINETIX_APP_VERSION = '2026.10.23-v4';
@@ -42,6 +47,7 @@ export default function App() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [isSendNotificationOpen, setIsSendNotificationOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [sentToastMsg, setSentToastMsg] = useState<string | null>(null);
 
   // Automated Cache-Buster & Version Invalidation on Mobile Devices
   useEffect(() => {
@@ -219,16 +225,60 @@ export default function App() {
     } catch {}
   }, [notifications]);
 
-  // Hydrate from Supabase on mount if configured and tables exist
+  const applyCloudSnapshot = (cloud: NonNullable<Awaited<ReturnType<typeof loadAllFromSupabase>>>) => {
+    if (cloud.users && cloud.users.length > 0) {
+      setUsers(cloud.users);
+      // Sync user passwords locally so passwords edited on computer work on mobile
+      cloud.users.forEach(u => {
+        if (u.password) {
+          try {
+            localStorage.setItem(`kinetix_pwd_${u.id}`, u.password);
+          } catch {}
+        }
+      });
+    }
+    if (cloud.bodyComp && cloud.bodyComp.length > 0) setBodyCompRecords(cloud.bodyComp);
+    if (cloud.evaluations && cloud.evaluations.length > 0) setEvaluations(cloud.evaluations);
+    if (cloud.notifications && cloud.notifications.length > 0) setNotifications(cloud.notifications);
+  };
+
+  const handleRefreshFromCloud = async (): Promise<{ ok: boolean; message: string }> => {
+    try {
+      const cloud = await loadAllFromSupabase();
+      if (!cloud) {
+        return {
+          ok: false,
+          message: 'No se pudo conectar con Supabase. Verifica la URL y la Clave Anónima.',
+        };
+      }
+      applyCloudSnapshot(cloud);
+      const uCount = cloud.users?.length || 0;
+      const eCount = cloud.evaluations?.length || 0;
+      const bCount = cloud.bodyComp?.length || 0;
+      return {
+        ok: true,
+        message: `¡Sincronizado desde la nube! Cargados: ${uCount} perfiles, ${eCount} evaluaciones y ${bCount} pesajes.`,
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        message: `Error al descargar datos de la nube: ${err?.message || 'Error de red'}`,
+      };
+    }
+  };
+
+  // Hydrate from Supabase on mount if configured (or opened via cloud-connect URL)
   useEffect(() => {
     async function hydrate() {
       try {
+        const imported = importSupabaseFromUrlParams();
         const cloud = await loadAllFromSupabase();
         if (cloud) {
-          if (cloud.users && cloud.users.length > 0) setUsers(cloud.users);
-          if (cloud.bodyComp && cloud.bodyComp.length > 0) setBodyCompRecords(cloud.bodyComp);
-          if (cloud.evaluations && cloud.evaluations.length > 0) setEvaluations(cloud.evaluations);
-          if (cloud.notifications && cloud.notifications.length > 0) setNotifications(cloud.notifications);
+          applyCloudSnapshot(cloud);
+          if (imported) {
+            setSentToastMsg('☁️ Celular conectado a Kinetix Cloud y sincronizado.');
+            setTimeout(() => setSentToastMsg(null), 4000);
+          }
         }
       } catch (err) {
         console.warn('Hydration from Supabase skipped:', err);
@@ -343,23 +393,18 @@ export default function App() {
 
   // Add or Update Body Comp Record (Updates in-place if a record already exists on the same date)
   const handleAddBodyCompRecord = (record: Omit<BodyCompositionRecord, 'id'>) => {
-    let savedRecord: BodyCompositionRecord;
+    const existing = bodyCompRecords.find(b => b.userId === record.userId && b.recordedAt === record.recordedAt);
+    const savedRecord: BodyCompositionRecord = existing
+      ? { ...existing, ...record }
+      : { ...record, id: `bc-${Date.now()}` };
 
     setBodyCompRecords(prev => {
-      const existingIdx = prev.findIndex(b => b.userId === record.userId && b.recordedAt === record.recordedAt);
-      if (existingIdx !== -1) {
+      const idx = prev.findIndex(b => b.id === savedRecord.id || (b.userId === record.userId && b.recordedAt === record.recordedAt));
+      if (idx !== -1) {
         const updatedList = [...prev];
-        savedRecord = {
-          ...prev[existingIdx],
-          ...record,
-        };
-        updatedList[existingIdx] = savedRecord;
+        updatedList[idx] = savedRecord;
         return updatedList;
       }
-      savedRecord = {
-        ...record,
-        id: `bc-${Date.now()}`,
-      };
       return [...prev, savedRecord];
     });
 
@@ -376,13 +421,14 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
 
     // Sync to Supabase in the background
-    syncBodyCompToSupabase(savedRecord!);
+    syncBodyCompToSupabase(savedRecord);
     syncNotificationToSupabase(newNotif);
   };
 
   // Delete Body Comp Record
   const handleDeleteBodyCompRecord = (recordId: string) => {
     setBodyCompRecords(prev => prev.filter(b => b.id !== recordId));
+    deleteBodyCompFromSupabase(recordId);
   };
 
   // Update Body Comp Record
@@ -399,21 +445,19 @@ export default function App() {
 
   // Add Physical Evaluation
   const handleAddEvaluation = (evalRec: Omit<PhysicalEvaluationRecord, 'id'>) => {
-    const newEval: PhysicalEvaluationRecord = {
-      ...evalRec,
-      id: `eval-${Date.now()}`,
-    };
+    const existing = evaluations.find(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
+    const savedEval: PhysicalEvaluationRecord = existing
+      ? { ...existing, ...evalRec }
+      : { ...evalRec, id: `eval-${Date.now()}` };
+
     setEvaluations(prev => {
-      const existingIdx = prev.findIndex(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
-      if (existingIdx !== -1) {
+      const idx = prev.findIndex(e => e.id === savedEval.id || (e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate));
+      if (idx !== -1) {
         const updated = [...prev];
-        updated[existingIdx] = {
-          ...prev[existingIdx],
-          ...evalRec,
-        };
+        updated[idx] = savedEval;
         return updated;
       }
-      return [...prev, newEval];
+      return [...prev, savedEval];
     });
 
     // Send automatic notification to the athlete with their 1RM milestone
@@ -435,36 +479,49 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
 
     // Sync to Supabase in the background
-    syncEvaluationToSupabase(newEval);
+    syncEvaluationToSupabase(savedEval);
     syncNotificationToSupabase(newNotif);
   };
 
   // Delete Physical Evaluation
   const handleDeleteEvaluation = (evalId: string) => {
     setEvaluations(prev => prev.filter(e => e.id !== evalId));
+    deleteEvaluationFromSupabase(evalId);
   };
 
   // Update Physical Evaluation
   const handleUpdateEvaluation = (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => {
-    setEvaluations(prev => prev.map(e => e.id === evalId ? { ...e, ...updates } : e));
+    setEvaluations(prev => {
+      const next = prev.map(e => e.id === evalId ? { ...e, ...updates } : e);
+      const updated = next.find(e => e.id === evalId);
+      if (updated) {
+        syncEvaluationToSupabase(updated);
+      }
+      return next;
+    });
   };
 
   // Update Membership Status
   const handleUpdateMembershipStatus = (status: MembershipStatus, daysUntilExpiry: number) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === currentUserId) {
-        return {
-          ...u,
-          membership: {
-            ...u.membership,
-            status,
-            daysUntilExpiry,
-            expiryDate: status === 'active' ? '2024-05-30' : u.membership.expiryDate,
-          }
-        };
-      }
-      return u;
-    }));
+    setUsers(prev => {
+      const next = prev.map(u => {
+        if (u.id === currentUserId) {
+          return {
+            ...u,
+            membership: {
+              ...u.membership,
+              status,
+              daysUntilExpiry,
+              expiryDate: status === 'active' ? '2024-05-30' : u.membership.expiryDate,
+            }
+          };
+        }
+        return u;
+      });
+      const updated = next.find(u => u.id === currentUserId);
+      if (updated) syncUserToSupabase(updated);
+      return next;
+    });
   };
 
   // Staff direct control: Update payment date, billing day, plan and access
@@ -475,40 +532,45 @@ export default function App() {
     newPlanName?: KinetixPlanName,
     billingDayOfMonth?: number
   ) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        const plan = newPlanName || u.membership.planName;
-        const isFreeOrFamily = plan === 'Familia & Amigos (Sin Corte)' || plan === 'Cortesía / Beca (Sin Corte)' || billingDayOfMonth === 0;
-        const fee = isFreeOrFamily
-          ? 0
-          : plan === 'Entrenos Personalizados (Coach Jorge)' 
-          ? 149.99 
-          : plan === 'Kinetix con Nutrición' 
-          ? 99.99 
-          : 79.99;
-        const billDay = isFreeOrFamily ? 0 : (billingDayOfMonth ?? u.membership.billingDayOfMonth ?? 15);
-        const expiry = isFreeOrFamily
-          ? 'Permanente'
-          : (newExpiryDate || (status === 'active' ? `2024-05-${billDay.toString().padStart(2, '0')}` : u.membership.expiryDate));
-        const daysUntilExpiry = isFreeOrFamily ? 99999 : (status === 'suspended' ? 0 : 25);
+    setUsers(prev => {
+      const next = prev.map(u => {
+        if (u.id === userId) {
+          const plan = newPlanName || u.membership.planName;
+          const isFreeOrFamily = plan === 'Familia & Amigos (Sin Corte)' || plan === 'Cortesía / Beca (Sin Corte)' || billingDayOfMonth === 0;
+          const fee = isFreeOrFamily
+            ? 0
+            : plan === 'Entrenos Personalizados (Coach Jorge)' 
+            ? 149.99 
+            : plan === 'Kinetix con Nutrición' 
+            ? 99.99 
+            : 79.99;
+          const billDay = isFreeOrFamily ? 0 : (billingDayOfMonth ?? u.membership.billingDayOfMonth ?? 15);
+          const expiry = isFreeOrFamily
+            ? 'Permanente'
+            : (newExpiryDate || (status === 'active' ? `2024-05-${billDay.toString().padStart(2, '0')}` : u.membership.expiryDate));
+          const daysUntilExpiry = isFreeOrFamily ? 99999 : (status === 'suspended' ? 0 : 25);
 
-        return {
-          ...u,
-          membership: {
-            ...u.membership,
-            status: isFreeOrFamily ? 'active' : status,
-            planName: plan,
-            monthlyFee: fee,
-            expiryDate: expiry,
-            daysUntilExpiry,
-            billingDayOfMonth: billDay,
-            hasNutritionPlan: plan !== 'Kinetix',
-            personalCoach: plan === 'Entrenos Personalizados (Coach Jorge)' ? 'Coach Jorge' : undefined,
-          }
-        };
-      }
-      return u;
-    }));
+          return {
+            ...u,
+            membership: {
+              ...u.membership,
+              status: isFreeOrFamily ? 'active' : status,
+              planName: plan,
+              monthlyFee: fee,
+              expiryDate: expiry,
+              daysUntilExpiry,
+              billingDayOfMonth: billDay,
+              hasNutritionPlan: plan !== 'Kinetix',
+              personalCoach: plan === 'Entrenos Personalizados (Coach Jorge)' ? 'Coach Jorge' : undefined,
+            }
+          };
+        }
+        return u;
+      });
+      const updated = next.find(u => u.id === userId);
+      if (updated) syncUserToSupabase(updated);
+      return next;
+    });
   };
 
   // Delete Athlete
@@ -516,6 +578,7 @@ export default function App() {
     setUsers(prev => prev.filter(u => u.id !== userId));
     setBodyCompRecords(prev => prev.filter(b => b.userId !== userId));
     setEvaluations(prev => prev.filter(e => e.userId !== userId));
+    deleteUserFromSupabase(userId);
     if (currentUserId === userId) {
       setCurrentUserId('user-staff-01');
     }
@@ -725,6 +788,8 @@ export default function App() {
     };
     setNotifications(prev => [newNotif, ...prev]);
     syncNotificationToSupabase(newNotif);
+    setSentToastMsg(`✅ Aviso enviado: "${title}"`);
+    setTimeout(() => setSentToastMsg(null), 3500);
   };
 
   const handleSendBatchNotification = (title: string, body: string, targetUserIds: string[]) => {
@@ -740,6 +805,8 @@ export default function App() {
     }));
     setNotifications(prev => [...newNotifs, ...prev]);
     newNotifs.forEach(n => syncNotificationToSupabase(n));
+    setSentToastMsg(`✅ Aviso enviado a ${targetUserIds.length} atleta(s)`);
+    setTimeout(() => setSentToastMsg(null), 3500);
   };
 
   const handleCreateStaffMember = (staffData: {
@@ -830,6 +897,7 @@ export default function App() {
 
   const handleDismissNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    deleteNotificationFromSupabase(id);
   };
 
   const handleClearReadNotifications = () => {
@@ -928,8 +996,23 @@ export default function App() {
           consentHistory={consentHistory}
           gymLogoUrl={gymLogoUrl}
           onSendBatchNotification={handleSendBatchNotification}
+          onRefreshFromCloud={handleRefreshFromCloud}
         />
       </main>
+
+      {/* Global Toast Confirmation for Sent Notifications & Cloud Link */}
+      {sentToastMsg && (
+        <div className="fixed bottom-20 sm:bottom-6 right-4 left-4 sm:left-auto z-50 sm:max-w-sm bg-emerald-950/95 border border-emerald-500/60 text-emerald-100 px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold flex items-center justify-between gap-2 animate-fade-in backdrop-blur-md">
+          <span>{sentToastMsg}</span>
+          <button
+            type="button"
+            onClick={() => setSentToastMsg(null)}
+            className="text-emerald-300 hover:text-white text-[10px] underline shrink-0"
+          >
+            OK
+          </button>
+        </div>
+      )}
 
       {/* Profile & Gym Logo Modal */}
       {isProfileModalOpen && (

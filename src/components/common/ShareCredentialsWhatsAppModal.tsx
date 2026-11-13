@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { getPaymentGroup } from '../../utils/paymentColorCodes';
+import { buildCloudConnectUrl } from '../../lib/supabase';
 
 interface ShareCredentialsWhatsAppModalProps {
   athlete: UserProfile;
@@ -49,8 +50,8 @@ export const ShareCredentialsWhatsAppModal: React.FC<ShareCredentialsWhatsAppMod
   const [copied, setCopied] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
 
-  // App Origin URL
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://kinetix-app.fit';
+  // App Origin URL (auto-includes cloud sync token if Supabase is configured)
+  const appUrl = typeof window !== 'undefined' ? buildCloudConnectUrl(window.location.origin) : 'https://kinetix-app.fit';
   const username = athlete.username || athlete.name.toLowerCase().split(' ')[0].replace(/[^a-z0-9_]/g, '');
   const billingDay = athlete.membership?.billingDayOfMonth ?? 15;
   const isNoCutoff = billingDay === 0 || athlete.membership?.planName?.includes('Sin Corte');

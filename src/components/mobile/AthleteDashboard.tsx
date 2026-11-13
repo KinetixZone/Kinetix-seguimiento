@@ -16,13 +16,17 @@ import {
   Instagram,
   CreditCard,
   Flame,
-  ShieldAlert
+  ShieldAlert,
+  TrendingDown,
+  Zap
 } from 'lucide-react';
 
 interface AthleteDashboardProps {
   currentUser: UserProfile;
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord;
+  bodyCompRecords?: BodyCompositionRecord[];
+  evaluations?: PhysicalEvaluationRecord[];
   onNavigateTab: (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => void;
   onOpenReport: () => void;
   onOpenShareStory?: () => void;
@@ -34,6 +38,8 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
   currentUser,
   latestBodyComp,
   latestEval,
+  bodyCompRecords = [],
+  evaluations = [],
   onNavigateTab,
   onOpenReport,
   onOpenShareStory,
@@ -41,6 +47,86 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
   const daysRemaining = currentUser.membership?.expiryDate && currentUser.membership.expiryDate !== 'Permanente'
     ? calculateDaysUntilExpiry(currentUser.membership.expiryDate)
     : 999;
+
+  // Quick Stats: Progreso porcentual del último mes en Peso y Carga Levantada
+  const sortedBodyComps = React.useMemo(() => {
+    const list = bodyCompRecords.length > 0
+      ? [...bodyCompRecords]
+      : latestBodyComp
+      ? [latestBodyComp]
+      : [];
+    return list.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+  }, [bodyCompRecords, latestBodyComp]);
+
+  const weightQuickStat = React.useMemo(() => {
+    if (sortedBodyComps.length === 0) {
+      return { hasData: false, hasComparison: false, currentKg: 0, diffKg: 0, pct: 0, prevDate: '' };
+    }
+    const latest = sortedBodyComps[sortedBodyComps.length - 1];
+    if (sortedBodyComps.length < 2) {
+      return { hasData: true, hasComparison: false, currentKg: latest.weightKg, diffKg: 0, pct: 0, prevDate: latest.recordedAt };
+    }
+    const latestTs = new Date(latest.recordedAt).getTime();
+    const thirtyDaysAgoTs = latestTs - 30 * 24 * 60 * 60 * 1000;
+    // Pick record inside 30-day window (earliest in window) or fallback to immediate previous record
+    const inMonthWindow = sortedBodyComps.slice(0, -1).filter(r => new Date(r.recordedAt).getTime() >= thirtyDaysAgoTs);
+    const baseline = inMonthWindow.length > 0 ? inMonthWindow[0] : sortedBodyComps[sortedBodyComps.length - 2];
+    const diffKg = Number((latest.weightKg - baseline.weightKg).toFixed(1));
+    const pct = baseline.weightKg > 0 ? Number((((latest.weightKg - baseline.weightKg) / baseline.weightKg) * 100).toFixed(1)) : 0;
+    return {
+      hasData: true,
+      hasComparison: true,
+      currentKg: latest.weightKg,
+      diffKg,
+      pct,
+      prevDate: baseline.recordedAt,
+    };
+  }, [sortedBodyComps]);
+
+  const sortedEvals = React.useMemo(() => {
+    const list = evaluations.length > 0
+      ? [...evaluations]
+      : latestEval
+      ? [latestEval]
+      : [];
+    return list.sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+  }, [evaluations, latestEval]);
+
+  const loadQuickStat = React.useMemo(() => {
+    const getTotalLoad = (ev?: PhysicalEvaluationRecord) => {
+      if (!ev || !ev.strengthRecords) return 0;
+      return ev.strengthRecords.reduce((acc, rec) => {
+        if (rec.status === 'na' || rec.status === 'np') return acc;
+        const val = rec.estimated1RMKg > 0 ? rec.estimated1RMKg : (rec.weightKg || 0);
+        return acc + val;
+      }, 0);
+    };
+
+    const evalsWithLoad = sortedEvals.filter(ev => getTotalLoad(ev) > 0);
+    if (evalsWithLoad.length === 0) {
+      return { hasData: false, hasComparison: false, currentLoad: 0, diffKg: 0, pct: 0, prevDate: '' };
+    }
+    const latest = evalsWithLoad[evalsWithLoad.length - 1];
+    const currentLoad = Number(getTotalLoad(latest).toFixed(1));
+    if (evalsWithLoad.length < 2) {
+      return { hasData: true, hasComparison: false, currentLoad, diffKg: 0, pct: 0, prevDate: latest.evaluationDate };
+    }
+    const latestTs = new Date(latest.evaluationDate).getTime();
+    const thirtyDaysAgoTs = latestTs - 35 * 24 * 60 * 60 * 1000;
+    const inMonthWindow = evalsWithLoad.slice(0, -1).filter(ev => new Date(ev.evaluationDate).getTime() >= thirtyDaysAgoTs);
+    const baseline = inMonthWindow.length > 0 ? inMonthWindow[0] : evalsWithLoad[evalsWithLoad.length - 2];
+    const prevLoad = getTotalLoad(baseline);
+    const diffKg = Number((currentLoad - prevLoad).toFixed(1));
+    const pct = prevLoad > 0 ? Number((((currentLoad - prevLoad) / prevLoad) * 100).toFixed(1)) : 0;
+    return {
+      hasData: true,
+      hasComparison: true,
+      currentLoad,
+      diffKg,
+      pct,
+      prevDate: baseline.evaluationDate,
+    };
+  }, [sortedEvals]);
 
   // The warning banner ONLY triggers when 15 days or less remain (15 to 0 days)
   const isExpiringSoon = currentUser.role !== 'staff' && 
@@ -233,6 +319,153 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           </button>
         </div>
       )}
+
+      {/* Dynamic Quick Stats: Progreso % del Último Mes (Peso & Carga Levantada) */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+            <Zap className="w-3 h-3 text-amber-400" />
+            <span>Quick Stats · Progreso Último Mes</span>
+          </span>
+          <span className="text-[10px] text-neutral-500 font-mono">Variación %</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Quick Stat 1: Progreso de Peso */}
+          <button
+            type="button"
+            onClick={() => onNavigateTab('body')}
+            className="text-left p-3.5 rounded-2xl bg-gradient-to-br from-blue-950/60 via-neutral-900/95 to-cyan-950/35 border border-blue-500/25 hover:border-blue-400/50 transition-all shadow-md active:scale-[0.98] space-y-2 relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[11px] font-semibold text-blue-200 flex items-center gap-1">
+                <Scale className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Peso (30d)</span>
+              </span>
+              {weightQuickStat.hasComparison ? (
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-0.5 ${
+                  weightQuickStat.pct < 0
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : weightQuickStat.pct > 0
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                }`}>
+                  {weightQuickStat.pct < 0 ? (
+                    <TrendingDown className="w-2.5 h-2.5" />
+                  ) : weightQuickStat.pct > 0 ? (
+                    <TrendingUp className="w-2.5 h-2.5" />
+                  ) : null}
+                  <span>{weightQuickStat.pct > 0 ? `+${weightQuickStat.pct}%` : `${weightQuickStat.pct}%`}</span>
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-mono bg-blue-500/15 text-blue-300 border border-blue-500/25">
+                  {weightQuickStat.hasData ? 'Base' : 'Nuevo'}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-xl font-extrabold text-white font-mono tabular-nums">
+                {weightQuickStat.hasData ? `${weightQuickStat.currentKg} kg` : '--'}
+              </span>
+              {weightQuickStat.hasComparison && (
+                <span className="text-[10px] font-mono text-neutral-300">
+                  {weightQuickStat.diffKg > 0 ? `+${weightQuickStat.diffKg}` : weightQuickStat.diffKg} kg
+                </span>
+              )}
+            </div>
+
+            {/* Subtle visual bar */}
+            <div className="space-y-1">
+              <div className="h-1.5 w-full rounded-full bg-neutral-950/80 overflow-hidden border border-neutral-800/80">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500"
+                  style={{
+                    width: weightQuickStat.hasComparison
+                      ? `${Math.min(100, Math.max(18, 50 + Math.abs(weightQuickStat.pct) * 6))}%`
+                      : weightQuickStat.hasData
+                      ? '45%'
+                      : '12%',
+                  }}
+                />
+              </div>
+              <span className="text-[9px] text-neutral-400 block truncate">
+                {weightQuickStat.hasComparison
+                  ? `vs ${weightQuickStat.prevDate}`
+                  : weightQuickStat.hasData
+                  ? '1 pesaje registrado'
+                  : 'Registra tu peso'}
+              </span>
+            </div>
+          </button>
+
+          {/* Quick Stat 2: Progreso de Carga Levantada (1RM) */}
+          <button
+            type="button"
+            onClick={() => onNavigateTab('tests')}
+            className="text-left p-3.5 rounded-2xl bg-gradient-to-br from-emerald-950/55 via-neutral-900/95 to-amber-950/30 border border-emerald-500/25 hover:border-emerald-400/50 transition-all shadow-md active:scale-[0.98] space-y-2 relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[11px] font-semibold text-emerald-200 flex items-center gap-1">
+                <Dumbbell className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Carga 1RM</span>
+              </span>
+              {loadQuickStat.hasComparison ? (
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-0.5 ${
+                  loadQuickStat.pct >= 0
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                }`}>
+                  {loadQuickStat.pct >= 0 ? (
+                    <TrendingUp className="w-2.5 h-2.5" />
+                  ) : (
+                    <TrendingDown className="w-2.5 h-2.5" />
+                  )}
+                  <span>{loadQuickStat.pct > 0 ? `+${loadQuickStat.pct}%` : `${loadQuickStat.pct}%`}</span>
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                  {loadQuickStat.hasData ? 'Base' : 'Pend.'}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-xl font-extrabold text-white font-mono tabular-nums">
+                {loadQuickStat.hasData ? `${loadQuickStat.currentLoad} kg` : '--'}
+              </span>
+              {loadQuickStat.hasComparison && (
+                <span className="text-[10px] font-mono text-emerald-300">
+                  {loadQuickStat.diffKg > 0 ? `+${loadQuickStat.diffKg}` : loadQuickStat.diffKg} kg
+                </span>
+              )}
+            </div>
+
+            {/* Subtle visual bar */}
+            <div className="space-y-1">
+              <div className="h-1.5 w-full rounded-full bg-neutral-950/80 overflow-hidden border border-neutral-800/80">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-500"
+                  style={{
+                    width: loadQuickStat.hasComparison
+                      ? `${Math.min(100, Math.max(22, 55 + Math.abs(loadQuickStat.pct) * 3))}%`
+                      : loadQuickStat.hasData
+                      ? '50%'
+                      : '12%',
+                  }}
+                />
+              </div>
+              <span className="text-[9px] text-neutral-400 block truncate">
+                {loadQuickStat.hasComparison
+                  ? `vs ${loadQuickStat.prevDate}`
+                  : loadQuickStat.hasData
+                  ? 'Total 1RM acumulado'
+                  : 'Pendiente de evaluar'}
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
 
       {/* Monthly Highlight Stat Cards (2x2 Grid) */}
       <div className="grid grid-cols-2 gap-2.5">

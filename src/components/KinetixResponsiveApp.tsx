@@ -87,6 +87,7 @@ interface KinetixResponsiveAppProps {
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
   gymLogoUrl?: string | null;
   onSendBatchNotification?: (title: string, body: string, targetUserIds: string[]) => void;
+  onRefreshFromCloud?: () => Promise<{ ok: boolean; message: string }>;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -117,6 +118,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   consentHistory,
   gymLogoUrl,
   onSendBatchNotification,
+  onRefreshFromCloud,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
@@ -455,6 +457,8 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             currentUser={effectiveUser}
             latestBodyComp={latestBodyComp}
             latestEval={latestEval}
+            bodyCompRecords={userBodyComps}
+            evaluations={userEvals}
             onNavigateTab={(tab) => handleNavigateTab(tab)}
             onOpenReport={() => setShowReportModal(true)}
             onOpenShareStory={() => setShowShareStoryModal(true)}
@@ -527,6 +531,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             consentHistory={consentHistory}
             onAddEvaluation={onAddEvaluation}
             onUpdateEvaluation={onUpdateEvaluation}
+            onRefreshFromCloud={onRefreshFromCloud}
           />
         )}
 

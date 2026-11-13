@@ -351,6 +351,8 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               currentUser={currentUser}
               latestBodyComp={latestBodyComp}
               latestEval={latestEval}
+              bodyCompRecords={userBodyComps}
+              evaluations={userEvals}
               onNavigateTab={(tab) => setCurrentTab(tab)}
               onOpenReport={() => setShowReportModal(true)}
               onOpenShareStory={() => setShowShareStoryModal(true)}

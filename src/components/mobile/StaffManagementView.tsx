@@ -67,7 +67,9 @@ import {
   Download,
   Pencil,
   Zap,
-  MessageCircle
+  MessageCircle,
+  Smartphone,
+  Share2
 } from 'lucide-react';
 import { ShareCredentialsWhatsAppModal } from '../common/ShareCredentialsWhatsAppModal';
 
@@ -78,7 +80,8 @@ import {
   testSupabaseConnection, 
   syncAllToSupabase,
   isSupabaseConfigured,
-  cleanSupabaseUrl
+  cleanSupabaseUrl,
+  buildCloudConnectUrl
 } from '../../lib/supabase';
 
 interface StaffManagementViewProps {
@@ -127,6 +130,7 @@ interface StaffManagementViewProps {
   consentHistory?: Record<string, PrivacyConsentRecord[]>;
   onAddEvaluation?: (evaluation: Omit<PhysicalEvaluationRecord, 'id'>) => void;
   onUpdateEvaluation?: (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => void;
+  onRefreshFromCloud?: () => Promise<{ ok: boolean; message: string }>;
 }
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
@@ -153,11 +157,13 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   consentHistory,
   onAddEvaluation,
   onUpdateEvaluation,
+  onRefreshFromCloud,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateStaffModal, setShowCreateStaffModal] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedCloudLink, setCopiedCloudLink] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffUsername, setNewStaffUsername] = useState('');
@@ -172,6 +178,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [supabaseTestStatus, setSupabaseTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isDownloadingCloud, setIsDownloadingCloud] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const handleDownloadBackup = () => {
@@ -2230,22 +2237,73 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <Database className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
+                <h3 className="text-base font-bold text-white font-brand flex items-center gap-2 flex-wrap">
                   <span>Base de Datos en la Nube & Respaldos</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                     isSupabaseConfigured()
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                       : 'bg-amber-950 text-amber-300 border border-amber-800'
                   }`}>
-                    {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local Seguro'}
+                    {isSupabaseConfigured() ? '🟢 Conectado en la Nube' : '🟡 Modo Local (Solo este dispositivo)'}
                   </span>
                 </h3>
                 <p className="text-xs text-neutral-400">
-                  Respaldo automático permanente, sincronización en tiempo real y exportación de datos
+                  Respaldo automático permanente, sincronización entre computadora y celular, y exportación
                 </p>
               </div>
             </div>
           </div>
+
+          {!isSupabaseConfigured() ? (
+            <div className="p-3.5 rounded-2xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-100 space-y-2">
+              <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>¿Por qué dice "Modo Local" o no ves tus pruebas de la computadora?</span>
+              </div>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Cada navegador (computadora vs. celular) guarda sus datos por separado hasta que ambos estén conectados al mismo proyecto <strong>Supabase Cloud</strong>. En tu computadora entra a <strong>Configurar Supabase &rarr; Conectar mi Celular</strong> o ingresa tus credenciales aquí.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-800/50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="space-y-0.5">
+                <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4" />
+                  <span>¿Quieres ver estos mismos datos en tu celular?</span>
+                </div>
+                <p className="text-[11px] text-neutral-300">
+                  Envíate este enlace mágico a tu WhatsApp y ábrelo en tu celular una sola vez para vincularlo automáticamente.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cloudUrl = buildCloudConnectUrl();
+                    navigator.clipboard?.writeText(cloudUrl);
+                    setCopiedCloudLink(true);
+                    setTimeout(() => setCopiedCloudLink(false), 3000);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white text-[11px] font-bold flex items-center gap-1.5"
+                >
+                  {copiedCloudLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-blue-400" />}
+                  <span>{copiedCloudLink ? '¡Enlace Copiado!' : 'Copiar Enlace'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cloudUrl = buildCloudConnectUrl();
+                    const msg = `🔗 *Enlace de Conexión Kinetix Cloud*\nÁbrelo en tu celular para sincronizar automáticamente todos tus atletas, pruebas y pesajes:\n${cloudUrl}`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                  <span>Enviar a mi WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
@@ -2258,79 +2316,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <Cloud className="w-4 h-4 text-emerald-400" />
               </div>
               <p className="text-[11px] text-neutral-400">
-                Ver credenciales, probar conexión y ejecutar script SQL oficial.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowExportModal(true)}
-              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-blue-500/50 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-white group-hover:text-blue-400">Exportar a Excel / CSV</span>
-                <FileSpreadsheet className="w-4 h-4 text-blue-400" />
-              </div>
-              <p className="text-[11px] text-neutral-400">
-                Descarga reporte completo con pesajes, asistencias y membresías.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadBackup}
-              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-amber-500/50 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-white group-hover:text-amber-400">Descargar Copia JSON</span>
-                <Download className="w-4 h-4 text-amber-400" />
-              </div>
-              <p className="text-[11px] text-neutral-400">
-                Guarda una copia de seguridad local completa de tus atletas y marcas.
-              </p>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* SECCIÓN: BASE DE DATOS SUPABASE & RESPALDOS */}
-      {(staffViewSection === 'database') && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white font-brand flex items-center gap-2">
-                  <span>Base de Datos en la Nube & Respaldos</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                    isSupabaseConfigured()
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                      : 'bg-amber-950 text-amber-300 border border-amber-800'
-                  }`}>
-                    {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local Seguro'}
-                  </span>
-                </h3>
-                <p className="text-xs text-neutral-400">
-                  Respaldo automático permanente, sincronización en tiempo real y exportación de datos
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              type="button"
-              onClick={() => setShowSupabaseModal(true)}
-              className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 hover:border-emerald-500/50 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-white group-hover:text-emerald-400">Configurar Supabase</span>
-                <Cloud className="w-4 h-4 text-emerald-400" />
-              </div>
-              <p className="text-[11px] text-neutral-400">
-                Ver credenciales, probar conexión y ejecutar script SQL oficial.
+                Conectar nube, bajar pruebas de la compu o vincular celular.
               </p>
             </button>
 
@@ -4752,13 +4738,38 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
                       const res = await testSupabaseConnection();
                       setSupabaseTestStatus(res);
+                      if (res.ok && onRefreshFromCloud) {
+                        const pullRes = await onRefreshFromCloud();
+                        if (pullRes.ok) setSyncResult(pullRes.message);
+                      }
                       setIsTestingSupabase(false);
                     }}
                     className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>{isTestingSupabase ? 'Verificando...' : 'Guardar y Probar Conexión'}</span>
+                    <span>{isTestingSupabase ? 'Verificando...' : 'Guardar, Probar y Cargar'}</span>
                   </button>
+
+                  {onRefreshFromCloud && (
+                    <button
+                      type="button"
+                      disabled={isDownloadingCloud}
+                      onClick={async () => {
+                        setIsDownloadingCloud(true);
+                        setSyncResult(null);
+                        const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
+                        setSupabaseUrlInput(cleanUrl);
+                        saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                        const res = await onRefreshFromCloud();
+                        setSyncResult(res.message);
+                        setIsDownloadingCloud(false);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
+                    >
+                      <Download className={`w-3.5 h-3.5 ${isDownloadingCloud ? 'animate-bounce' : ''}`} />
+                      <span>{isDownloadingCloud ? 'Descargando...' : 'Descargar de la Nube'}</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -4780,7 +4791,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingAll ? 'Sincronizando...' : 'Subir Todos los Datos a Supabase'}</span>
+                    <span>{isSyncingAll ? 'Subiendo...' : 'Subir Datos a Supabase'}</span>
                   </button>
 
                   <button
@@ -4790,9 +4801,44 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     title="Guarda una copia de seguridad local en archivo .json"
                   >
                     <Download className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Descargar Respaldo JSON</span>
+                    <span>Respaldo JSON</span>
                   </button>
                 </div>
+
+                {/* Conectar otro celular (1 toque) */}
+                {isSupabaseConfigured() && (
+                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="text-[11px] text-neutral-300">
+                      <strong className="text-emerald-300 block">📲 Conectar tu Celular en 1 Toque</strong>
+                      <span>Abre este enlace en tu celular para que deje de decir &quot;Modo Local&quot; y descargue tus pruebas.</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(buildCloudConnectUrl());
+                          setCopiedCloudLink(true);
+                          setTimeout(() => setCopiedCloudLink(false), 3000);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-[11px] font-bold flex items-center gap-1"
+                      >
+                        {copiedCloudLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-blue-400" />}
+                        <span>{copiedCloudLink ? 'Copiado' : 'Copiar Link'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const msg = `🔗 *Conectar Kinetix Cloud en mi Celular:*\n${buildCloudConnectUrl()}`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1"
+                      >
+                        <MessageCircle className="w-3 h-3 fill-current" />
+                        <span>WhatsApp</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Card 4: Script SQL Oficial Kinetix */}

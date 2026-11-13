@@ -335,6 +335,8 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               currentUser={currentUser}
               latestBodyComp={latestBodyComp}
               latestEval={latestEval}
+              bodyCompRecords={userBodyComps}
+              evaluations={userEvals}
               onNavigateTab={(tab) => setCurrentSection(tab as any)}
               onOpenReport={() => setShowReportModal(true)}
               onOpenShareStory={() => setShowShareStoryModal(true)}

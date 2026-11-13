@@ -46,6 +46,74 @@ export function clearSupabaseCredentials() {
   } catch {}
 }
 
+/**
+ * Encodes current Supabase credentials into a shareable app URL (?sb=...)
+ * so another phone/device automatically connects to the same cloud database.
+ */
+export function buildCloudConnectUrl(baseUrl?: string): string {
+  const origin = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+  const { url, key } = getSupabaseCredentials();
+  if (!url || !key || !url.startsWith('https://')) {
+    return origin;
+  }
+  try {
+    const payload = JSON.stringify({ u: url, k: key });
+    const encoded = btoa(unescape(encodeURIComponent(payload)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const sep = origin.includes('?') ? '&' : '?';
+    return `${origin}${sep}sb=${encoded}`;
+  } catch {
+    return origin;
+  }
+}
+
+/**
+ * Checks URL query parameters for ?sb=... (or ?sb_url=&sb_key=) on startup,
+ * saves credentials to localStorage on the current device, and cleans the URL bar.
+ */
+export function importSupabaseFromUrlParams(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sbToken = params.get('sb');
+    const sbUrl = params.get('sb_url');
+    const sbKey = params.get('sb_key');
+
+    let imported = false;
+    if (sbToken) {
+      const normalized = sbToken.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+      const decoded = decodeURIComponent(escape(atob(padded)));
+      const parsed = JSON.parse(decoded);
+      if (parsed?.u && parsed?.k && String(parsed.u).startsWith('https://')) {
+        saveSupabaseCredentials(String(parsed.u), String(parsed.k));
+        imported = true;
+      }
+    } else if (sbUrl && sbKey && sbUrl.startsWith('https://')) {
+      saveSupabaseCredentials(sbUrl, sbKey);
+      imported = true;
+    }
+
+    if (imported) {
+      params.delete('sb');
+      params.delete('sb_url');
+      params.delete('sb_key');
+      const newSearch = params.toString();
+      const cleanPath = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+      window.history.replaceState({}, '', cleanPath);
+    }
+    return imported;
+  } catch (err) {
+    console.warn('Could not import Supabase credentials from URL:', err);
+    return false;
+  }
+}
+
+// Auto-import immediately if opened via a cloud-connect link
+importSupabaseFromUrlParams();
+
 export function getSupabaseClient(): SupabaseClient | null {
   const { url, key } = getSupabaseCredentials();
   if (
@@ -89,7 +157,7 @@ export async function testSupabaseConnection(): Promise<{ ok: boolean; message: 
   }
 
   try {
-    const { error } = await client.from('users').select('id').limit(1);
+    const { count: usersCount, error } = await client.from('users').select('id', { count: 'exact', head: true });
     if (error) {
       if (error.code === 'PGRST205' || error.message.includes('relation "public.users" does not exist') || error.message.includes('not found')) {
         return {
@@ -102,9 +170,10 @@ export async function testSupabaseConnection(): Promise<{ ok: boolean; message: 
         message: `Error al conectar con Supabase: ${error.message} (Código: ${error.code})` 
       };
     }
+    const { count: evalsCount } = await client.from('physical_evaluations').select('id', { count: 'exact', head: true });
     return { 
       ok: true, 
-      message: '¡Conexión y tablas verificadas con éxito en Supabase Cloud!' 
+      message: `¡Conectado a Supabase Cloud! (${usersCount ?? 0} usuarios y ${evalsCount ?? 0} evaluaciones en la nube)` 
     };
   } catch (err: any) {
     return { 
@@ -422,7 +491,9 @@ export async function syncBodyCompToSupabase(record: BodyCompositionRecord): Pro
       recorded_at: record.recordedAt,
       weight_kg: record.weightKg,
       muscle_mass_percent: record.muscleMassPercent,
+      muscle_mass_kg: record.muscleMassKg ?? null,
       body_fat_percent: record.bodyFatPercent,
+      body_fat_kg: record.bodyFatKg ?? null,
       visceral_fat_level: record.visceralFatLevel,
       bmi: record.bmi,
       bmi_category: record.bmiCategory || null,
@@ -608,7 +679,9 @@ export async function loadAllFromSupabase(): Promise<{
         recordedAt: row.recorded_at,
         weightKg: Number(row.weight_kg),
         muscleMassPercent: Number(row.muscle_mass_percent),
+        muscleMassKg: row.muscle_mass_kg != null ? Number(row.muscle_mass_kg) : undefined,
         bodyFatPercent: Number(row.body_fat_percent),
+        bodyFatKg: row.body_fat_kg != null ? Number(row.body_fat_kg) : undefined,
         visceralFatLevel: Number(row.visceral_fat_level),
         bmi: Number(row.bmi),
         bmiCategory: row.bmi_category || 'Normal',
@@ -656,4 +729,36 @@ export async function loadAllFromSupabase(): Promise<{
     console.warn('Error loading data from Supabase:', err);
     return null;
   }
+}
+
+export async function deleteUserFromSupabase(userId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('users').delete().eq('id', userId);
+  } catch {}
+}
+
+export async function deleteBodyCompFromSupabase(recordId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('body_composition').delete().eq('id', recordId);
+  } catch {}
+}
+
+export async function deleteEvaluationFromSupabase(evalId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('physical_evaluations').delete().eq('id', evalId);
+  } catch {}
+}
+
+export async function deleteNotificationFromSupabase(notifId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+  try {
+    await client.from('notifications').delete().eq('id', notifId);
+  } catch {}
 }
