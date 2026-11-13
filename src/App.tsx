@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationHeader } from './components/NavigationHeader';
 import { KinetixResponsiveApp } from './components/KinetixResponsiveApp';
 import { LoginPage } from './components/auth/LoginPage';
@@ -32,12 +32,16 @@ import {
   syncBodyCompToSupabase, 
   syncEvaluationToSupabase, 
   syncNotificationToSupabase, 
+  syncAllToSupabase,
   loadAllFromSupabase,
   deleteUserFromSupabase,
   deleteBodyCompFromSupabase,
   deleteEvaluationFromSupabase,
   deleteNotificationFromSupabase,
-  importSupabaseFromUrlParams
+  importSupabaseFromUrlParams,
+  ensureSharedCloudConfig,
+  subscribeToRealtimeUpdates,
+  isSupabaseConfigured
 } from './lib/supabase';
 
 export const KINETIX_APP_VERSION = '2026.10.23-v4';
@@ -48,6 +52,11 @@ export default function App() {
   const [isSendNotificationOpen, setIsSendNotificationOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [sentToastMsg, setSentToastMsg] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const offlineDirtyRef = useRef<boolean>(false);
+  const hasMountedDataRef = useRef<boolean>(false);
 
   // Automated Cache-Buster & Version Invalidation on Mobile Devices
   useEffect(() => {
@@ -267,24 +276,128 @@ export default function App() {
     }
   };
 
-  // Hydrate from Supabase on mount if configured (or opened via cloud-connect URL)
+  const usersRef = useRef(users);
+  const bodyCompRef = useRef(bodyCompRecords);
+  const evalsRef = useRef(evaluations);
+  const notifsRef = useRef(notifications);
+  useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { bodyCompRef.current = bodyCompRecords; }, [bodyCompRecords]);
+  useEffect(() => { evalsRef.current = evaluations; }, [evaluations]);
+  useEffect(() => { notifsRef.current = notifications; }, [notifications]);
+
+  // Mark pending cloud push if data is edited while offline
   useEffect(() => {
-    async function hydrate() {
+    if (!hasMountedDataRef.current) {
+      hasMountedDataRef.current = true;
+      return;
+    }
+    if (!isOnline) {
+      offlineDirtyRef.current = true;
+    }
+  }, [users, bodyCompRecords, evaluations, notifications, isOnline]);
+
+  // Auto-connect shared cloud config, hydrate from Supabase, subscribe to Realtime & handle offline/online reconnect
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribeRealtime = () => {};
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const pullLatest = async () => {
+      if (cancelled || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+      try {
+        const cloud = await loadAllFromSupabase();
+        if (!cancelled && cloud) {
+          applyCloudSnapshot(cloud);
+        }
+      } catch (err) {
+        console.warn('Cloud refresh skipped:', err);
+      }
+    };
+
+    const schedulePull = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        pullLatest();
+      }, 600);
+    };
+
+    async function hydrateAndSubscribe() {
       try {
         const imported = importSupabaseFromUrlParams();
+        await ensureSharedCloudConfig();
         const cloud = await loadAllFromSupabase();
-        if (cloud) {
+        if (!cancelled && cloud) {
           applyCloudSnapshot(cloud);
           if (imported) {
-            setSentToastMsg('☁️ Celular conectado a Kinetix Cloud y sincronizado.');
+            setSentToastMsg('☁️ Dispositivo conectado a Kinetix Cloud en tiempo real.');
             setTimeout(() => setSentToastMsg(null), 4000);
           }
+        }
+        if (!cancelled && isSupabaseConfigured()) {
+          unsubscribeRealtime = subscribeToRealtimeUpdates(schedulePull);
         }
       } catch (err) {
         console.warn('Hydration from Supabase skipped:', err);
       }
     }
-    hydrate();
+
+    hydrateAndSubscribe();
+
+    const handleOnline = async () => {
+      setIsOnline(true);
+      try {
+        await ensureSharedCloudConfig();
+        if (offlineDirtyRef.current && isSupabaseConfigured()) {
+          const res = await syncAllToSupabase(
+            usersRef.current,
+            bodyCompRef.current,
+            evalsRef.current,
+            notifsRef.current
+          );
+          if (res.success) {
+            offlineDirtyRef.current = false;
+            setSentToastMsg('☁️ Internet recuperado: cambios locales sincronizados en la nube.');
+            setTimeout(() => setSentToastMsg(null), 4000);
+          }
+        }
+        await pullLatest();
+        unsubscribeRealtime();
+        if (isSupabaseConfigured()) {
+          unsubscribeRealtime = subscribeToRealtimeUpdates(schedulePull);
+        }
+      } catch {}
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    const handleFocus = () => {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        pullLatest();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        handleFocus();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribeRealtime();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const currentUser = users.find(u => u.id === currentUserId) || users[0];
@@ -999,6 +1112,13 @@ export default function App() {
           onRefreshFromCloud={handleRefreshFromCloud}
         />
       </main>
+
+      {/* Offline-Only Banner (shown only when device genuinely loses internet connection) */}
+      {!isOnline && (
+        <div className="fixed bottom-20 sm:bottom-6 left-4 right-4 sm:right-auto z-50 sm:max-w-md bg-amber-950/95 border border-amber-500/60 text-amber-100 px-4 py-2.5 rounded-2xl shadow-2xl text-xs font-semibold flex items-center gap-2 backdrop-blur-md">
+          <span>🟠 Sin internet: trabajando con caché local. Se sincronizará automáticamente al reconectar.</span>
+        </div>
+      )}
 
       {/* Global Toast Confirmation for Sent Notifications & Cloud Link */}
       {sentToastMsg && (

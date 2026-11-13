@@ -2241,38 +2241,44 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   <span>Base de Datos en la Nube & Respaldos</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                     isSupabaseConfigured()
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      ? (typeof navigator !== 'undefined' && !navigator.onLine
+                          ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                          : 'bg-emerald-950 text-emerald-300 border border-emerald-800')
                       : 'bg-amber-950 text-amber-300 border border-amber-800'
                   }`}>
-                    {isSupabaseConfigured() ? '🟢 Conectado en la Nube' : '🟡 Modo Local (Solo este dispositivo)'}
+                    {isSupabaseConfigured()
+                      ? (typeof navigator !== 'undefined' && !navigator.onLine
+                          ? '🟠 Sin Internet (Caché Local)'
+                          : '🟢 En Tiempo Real (Supabase Cloud)')
+                      : '🟡 Nube Sin Configurar (Solo Admin)'}
                   </span>
                 </h3>
                 <p className="text-xs text-neutral-400">
-                  Respaldo automático permanente, sincronización entre computadora y celular, y exportación
+                  Sincronización automática en tiempo real entre computadora, celulares y atletas
                 </p>
               </div>
             </div>
           </div>
 
           {!isSupabaseConfigured() ? (
-            <div className="p-3.5 rounded-2xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-100 space-y-2">
+            <div className="p-3.5 rounded-2xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-100 space-y-1.5">
               <div className="font-bold flex items-center gap-1.5 text-amber-300">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>¿Por qué dice "Modo Local" o no ves tus pruebas de la computadora?</span>
+                <span>Configuración única del administrador</span>
               </div>
               <p className="text-[11px] text-neutral-300 leading-relaxed">
-                Cada navegador (computadora vs. celular) guarda sus datos por separado hasta que ambos estén conectados al mismo proyecto <strong>Supabase Cloud</strong>. En tu computadora entra a <strong>Configurar Supabase &rarr; Conectar mi Celular</strong> o ingresa tus credenciales aquí.
+                Conecta tu proyecto <strong>Supabase Cloud</strong> una sola vez desde aquí. En cuanto lo guardes, todos los celulares y usuarios de la app se conectarán en tiempo real automáticamente sin que tengan que configurar nada.
               </p>
             </div>
           ) : (
             <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-800/50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="space-y-0.5">
                 <div className="font-bold text-emerald-300 flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4" />
-                  <span>¿Quieres ver estos mismos datos en tu celular?</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Conexión automática activa para todos los dispositivos</span>
                 </div>
                 <p className="text-[11px] text-neutral-300">
-                  Envíate este enlace mágico a tu WhatsApp y ábrelo en tu celular una sola vez para vincularlo automáticamente.
+                  Cualquier cambio en pruebas, pesajes o notificaciones se refleja en tiempo real en tu celular y computadora. Si se corta el internet, se guarda en caché local y se sube al reconectar.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -2284,22 +2290,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     setCopiedCloudLink(true);
                     setTimeout(() => setCopiedCloudLink(false), 3000);
                   }}
+                  title="Opcional: enlace directo con credenciales por si abres otro dominio"
                   className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white text-[11px] font-bold flex items-center gap-1.5"
                 >
                   {copiedCloudLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-blue-400" />}
-                  <span>{copiedCloudLink ? '¡Enlace Copiado!' : 'Copiar Enlace'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cloudUrl = buildCloudConnectUrl();
-                    const msg = `🔗 *Enlace de Conexión Kinetix Cloud*\nÁbrelo en tu celular para sincronizar automáticamente todos tus atletas, pruebas y pesajes:\n${cloudUrl}`;
-                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
-                  }}
-                  className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                  <span>Enviar a mi WhatsApp</span>
+                  <span>{copiedCloudLink ? '¡Copiado!' : 'Link Directo'}</span>
                 </button>
               </div>
             </div>
@@ -4602,10 +4597,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                         : 'bg-amber-950 text-amber-300 border border-amber-800'
                     }`}>
-                      {isSupabaseConfigured() ? '🟢 Conectado' : '🟡 Modo Local'}
+                      {isSupabaseConfigured() ? '🟢 En Tiempo Real' : '🟡 Sin Configurar'}
                     </span>
                   </h3>
-                  <p className="text-xs text-neutral-400">Respaldo permanente, sincronización en tiempo real y script SQL oficial</p>
+                  <p className="text-xs text-neutral-400">Conexión compartida automática para todos los dispositivos y respaldo offline</p>
                 </div>
               </div>
               <button
@@ -4735,7 +4730,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       setSupabaseTestStatus(null);
                       const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
                       setSupabaseUrlInput(cleanUrl);
-                      saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                      if (supabaseKeyInput.trim()) {
+                        saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                      }
                       const res = await testSupabaseConnection();
                       setSupabaseTestStatus(res);
                       if (res.ok && onRefreshFromCloud) {
@@ -4759,7 +4756,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         setSyncResult(null);
                         const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
                         setSupabaseUrlInput(cleanUrl);
-                        saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                        if (supabaseKeyInput.trim()) {
+                          saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                        }
                         const res = await onRefreshFromCloud();
                         setSyncResult(res.message);
                         setIsDownloadingCloud(false);
@@ -4779,7 +4778,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       setSyncResult(null);
                       const cleanUrl = cleanSupabaseUrl(supabaseUrlInput);
                       setSupabaseUrlInput(cleanUrl);
-                      saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                      if (supabaseKeyInput.trim()) {
+                        saveSupabaseCredentials(cleanUrl, supabaseKeyInput.trim());
+                      }
                       const res = await syncAllToSupabase(users, bodyCompRecords, evaluations, []);
                       if (res.success) {
                         setSyncResult(`¡Sincronización completada! Subidos: ${res.syncedCount.users} atletas, ${res.syncedCount.bodyComp} pesajes, ${res.syncedCount.evals} tests.`);
@@ -4805,12 +4806,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                   </button>
                 </div>
 
-                {/* Conectar otro celular (1 toque) */}
+                {/* Nota de enlace directo opcional */}
                 {isSupabaseConfigured() && (
-                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="text-[11px] text-neutral-300">
-                      <strong className="text-emerald-300 block">📲 Conectar tu Celular en 1 Toque</strong>
-                      <span>Abre este enlace en tu celular para que deje de decir &quot;Modo Local&quot; y descargue tus pruebas.</span>
+                      <strong className="text-emerald-300 block">☁️ Activo automáticamente en todos los dispositivos</strong>
+                      <span>Los celulares y alumnos ya se conectan solos vía servidor. Usa este link solo como respaldo si abres otra URL distinta.</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -4824,17 +4825,6 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                       >
                         {copiedCloudLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3 text-blue-400" />}
                         <span>{copiedCloudLink ? 'Copiado' : 'Copiar Link'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const msg = `🔗 *Conectar Kinetix Cloud en mi Celular:*\n${buildCloudConnectUrl()}`;
-                          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1"
-                      >
-                        <MessageCircle className="w-3 h-3 fill-current" />
-                        <span>WhatsApp</span>
                       </button>
                     </div>
                   </div>

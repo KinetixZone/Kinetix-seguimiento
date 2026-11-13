@@ -31,19 +31,97 @@ export function getSupabaseCredentials(): { url: string; key: string } {
   return { url: cleanSupabaseUrl(envUrl), key: envKey.trim() };
 }
 
-export function saveSupabaseCredentials(url: string, key: string) {
+let runtimeProxyMode = false;
+
+export function isServerProxyMode(): boolean {
+  if (runtimeProxyMode) return true;
+  try {
+    return localStorage.getItem('kinetix_cloud_proxy_mode') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setServerProxyMode(enabled: boolean, projectUrl?: string) {
+  runtimeProxyMode = enabled;
+  try {
+    if (enabled) {
+      localStorage.setItem('kinetix_cloud_proxy_mode', 'true');
+      if (projectUrl) localStorage.setItem('kinetix_supabase_url', cleanSupabaseUrl(projectUrl));
+      localStorage.removeItem('kinetix_supabase_anon_key');
+    } else {
+      localStorage.removeItem('kinetix_cloud_proxy_mode');
+    }
+  } catch {}
+}
+
+export function saveSupabaseCredentials(url: string, key: string, syncToServer = true) {
   try {
     const cleanedUrl = cleanSupabaseUrl(url);
-    localStorage.setItem('kinetix_supabase_url', cleanedUrl);
-    localStorage.setItem('kinetix_supabase_anon_key', key.trim());
+    const cleanedKey = key.trim();
+    if (cleanedKey.startsWith('sb_secret_')) {
+      setServerProxyMode(true, cleanedUrl);
+    } else {
+      setServerProxyMode(false);
+      localStorage.setItem('kinetix_supabase_url', cleanedUrl);
+      localStorage.setItem('kinetix_supabase_anon_key', cleanedKey);
+    }
+    if (syncToServer && typeof fetch !== 'undefined' && cleanedUrl.startsWith('https://') && cleanedKey) {
+      fetch('/api/cloud-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: cleanedUrl, key: cleanedKey }),
+      }).catch(() => {});
+    }
   } catch {}
 }
 
 export function clearSupabaseCredentials() {
+  runtimeProxyMode = false;
   try {
+    localStorage.removeItem('kinetix_cloud_proxy_mode');
     localStorage.removeItem('kinetix_supabase_url');
     localStorage.removeItem('kinetix_supabase_anon_key');
   } catch {}
+}
+
+/**
+ * Ensures all devices opening the app automatically share the owner's Supabase Cloud config:
+ * - If the server is in proxy mode (or has shared public config), configures this phone/browser automatically.
+ * - If this computer already had local credentials and the server didn't yet, pushes them to the server.
+ */
+export async function ensureSharedCloudConfig(): Promise<boolean> {
+  if (typeof fetch === 'undefined') return isSupabaseConfigured();
+  try {
+    const res = await fetch('/api/cloud-config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.configured && data?.mode === 'proxy') {
+        setServerProxyMode(true, data.url || '');
+        return true;
+      }
+      if (data?.configured && data?.url && data?.key) {
+        saveSupabaseCredentials(data.url, data.key, false);
+        return true;
+      }
+    }
+  } catch {}
+
+  const localCreds = getSupabaseCredentials();
+  if (localCreds.url.startsWith('https://') && localCreds.key && !localCreds.url.includes('your-project')) {
+    try {
+      await fetch('/api/cloud-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: localCreds.url, key: localCreds.key }),
+      });
+      if (localCreds.key.startsWith('sb_secret_')) {
+        setServerProxyMode(true, localCreds.url);
+      }
+      return true;
+    } catch {}
+  }
+  return isSupabaseConfigured();
 }
 
 /**
@@ -116,6 +194,20 @@ importSupabaseFromUrlParams();
 
 export function getSupabaseClient(): SupabaseClient | null {
   const { url, key } = getSupabaseCredentials();
+
+  if ((isServerProxyMode() || key.startsWith('sb_secret_')) && typeof window !== 'undefined') {
+    try {
+      return createClient(`${window.location.origin}/api/sb-proxy`, 'kinetix-server-proxy', {
+        auth: {
+          persistSession: false,
+        },
+      });
+    } catch (e) {
+      console.warn('Failed to initialize Supabase proxy client:', e);
+      return null;
+    }
+  }
+
   if (
     url && 
     key && 
@@ -761,4 +853,44 @@ export async function deleteNotificationFromSupabase(notifId: string): Promise<v
   try {
     await client.from('notifications').delete().eq('id', notifId);
   } catch {}
+}
+
+/**
+ * Subscribes to Supabase Realtime changes (direct mode) or SSE + periodic refresh (server proxy mode)
+ * so phones and computers reflect updates automatically without manual refreshes.
+ */
+export function subscribeToRealtimeUpdates(onChange: () => void): () => void {
+  if (isServerProxyMode() && typeof window !== 'undefined') {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/cloud-events');
+      es.onmessage = () => onChange();
+    } catch {}
+    const pollId = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        onChange();
+      }
+    }, 10000);
+    return () => {
+      try { es?.close(); } catch {}
+      clearInterval(pollId);
+    };
+  }
+
+  const client = getSupabaseClient();
+  if (!client) return () => {};
+
+  const channel = client
+    .channel('kinetix-realtime-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'body_composition' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'physical_evaluations' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, onChange)
+    .subscribe();
+
+  return () => {
+    try {
+      client.removeChannel(channel);
+    } catch {}
+  };
 }
