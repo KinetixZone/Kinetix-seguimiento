@@ -23,8 +23,22 @@ function cleanUrl(raw: string): string {
 }
 
 function readServerCloudConfig(): CloudConfigPayload | null {
-  const envUrl = cleanUrl(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '');
-  const envKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
+  const envUrl = cleanUrl(
+    process.env.VITE_SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.SUPABASE_URL ||
+      ''
+  );
+  const envKey = (
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ''
+  ).trim();
 
   if (envUrl.startsWith('https://') && envKey && !envUrl.includes('your-project')) {
     return { url: envUrl, key: envKey };
@@ -68,12 +82,13 @@ async function startServer() {
   app.get('/api/cloud-config', (_req, res) => {
     const config = readServerCloudConfig();
     if (!config) {
-      return res.json({ configured: false, mode: 'none', url: '', key: '' });
+      return res.json({ configured: false, mode: 'none', sse: true, url: '', key: '' });
     }
     if (config.key.startsWith('sb_secret_')) {
       return res.json({
         configured: true,
         mode: 'proxy',
+        sse: true,
         url: config.url,
         key: '',
       });
@@ -81,6 +96,7 @@ async function startServer() {
     return res.json({
       configured: true,
       mode: 'direct',
+      sse: true,
       url: config.url,
       key: config.key,
     });

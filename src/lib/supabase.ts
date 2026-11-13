@@ -32,6 +32,7 @@ export function getSupabaseCredentials(): { url: string; key: string } {
 }
 
 let runtimeProxyMode = false;
+let serverSupportsSse = true;
 
 export function isServerProxyMode(): boolean {
   if (runtimeProxyMode) return true;
@@ -94,8 +95,10 @@ export async function ensureSharedCloudConfig(): Promise<boolean> {
   if (typeof fetch === 'undefined') return isSupabaseConfigured();
   try {
     const res = await fetch('/api/cloud-config');
-    if (res.ok) {
+    const ctype = res.headers.get('content-type') || '';
+    if (res.ok && ctype.includes('application/json')) {
       const data = await res.json();
+      serverSupportsSse = data?.sse !== false;
       if (data?.configured && data?.mode === 'proxy') {
         setServerProxyMode(true, data.url || '');
         return true;
@@ -862,15 +865,17 @@ export async function deleteNotificationFromSupabase(notifId: string): Promise<v
 export function subscribeToRealtimeUpdates(onChange: () => void): () => void {
   if (isServerProxyMode() && typeof window !== 'undefined') {
     let es: EventSource | null = null;
-    try {
-      es = new EventSource('/api/cloud-events');
-      es.onmessage = () => onChange();
-    } catch {}
+    if (serverSupportsSse) {
+      try {
+        es = new EventSource('/api/cloud-events');
+        es.onmessage = () => onChange();
+      } catch {}
+    }
     const pollId = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         onChange();
       }
-    }, 10000);
+    }, 8000);
     return () => {
       try { es?.close(); } catch {}
       clearInterval(pollId);
