@@ -55,6 +55,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+  const [, setCloudStatusTick] = useState<number>(0);
   const offlineDirtyRef = useRef<boolean>(false);
   const hasMountedDataRef = useRef<boolean>(false);
 
@@ -325,6 +326,7 @@ export default function App() {
       try {
         const imported = importSupabaseFromUrlParams();
         await ensureSharedCloudConfig();
+        if (!cancelled) setCloudStatusTick(t => t + 1);
         const cloud = await loadAllFromSupabase();
         if (!cancelled && cloud) {
           applyCloudSnapshot(cloud);

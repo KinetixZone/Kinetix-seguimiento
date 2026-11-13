@@ -2264,10 +2264,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             <div className="p-3.5 rounded-2xl bg-amber-950/35 border border-amber-700/50 text-xs text-amber-100 space-y-1.5">
               <div className="font-bold flex items-center gap-1.5 text-amber-300">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>Configuración única del administrador</span>
+                <span>Este despliegue aún no detecta variables de Supabase</span>
               </div>
               <p className="text-[11px] text-neutral-300 leading-relaxed">
-                Conecta tu proyecto <strong>Supabase Cloud</strong> una sola vez desde aquí. En cuanto lo guardes, todos los celulares y usuarios de la app se conectarán en tiempo real automáticamente sin que tengan que configurar nada.
+                Los usuarios y dueños no deberían configurar nada por dispositivo: asegúrate de que este entorno (Vercel o servidor) esté desplegado con las variables de Supabase activas, o ingresa las credenciales aquí como respaldo.
               </p>
             </div>
           ) : (
