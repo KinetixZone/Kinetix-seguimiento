@@ -84,7 +84,7 @@ ${athlete.email && !athlete.email.includes('@kinetix.fit') ? `📧 *Correo:* ${a
 ${cutOffText}
 
 ---
-⚠️ *IMPORTANTE & AMISTOSO:*
+⚠️ *IMPORTANTE:*
 Tu acceso a las gráficas, pesajes y retos se mantiene activo mientras tu mensualidad esté al corriente. Si se acerca tu día ${isNoCutoff ? '' : billingDay}, te recordamos con tiempo para que no pierdas ningún registro de tus avances.
 
 💡 *Tip Pro:* Al abrir el enlace en tu navegador (Safari o Chrome), pulsa *"Compartir"* o el menú y selecciona *"Agregar a Pantalla de Inicio"* para usarla como una aplicación instalada en tu celular 📱.
@@ -335,7 +335,7 @@ Tu acceso a las gráficas, pesajes y retos se mantiene activo mientras tu mensua
             </span>
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              <span>Corte Amistoso</span>
+              <span>Fecha de Corte</span>
             </span>
           </div>
         </div>

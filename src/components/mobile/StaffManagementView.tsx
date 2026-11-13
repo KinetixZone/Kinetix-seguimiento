@@ -1514,7 +1514,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             type="button"
             onClick={() => setShowBatchEvaluationGrid(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-lg shadow-blue-500/30 active:scale-95 transition-all ring-2 ring-blue-400/40 cursor-pointer"
-            title="Abrir Sábana Masiva para calificar a todos los atletas de un solo jalón tipo Excel"
+            title="Abrir Sábana Masiva para registrar las evaluaciones de todos los atletas en una sola vista"
           >
             <FileSpreadsheet className="w-4 h-4 text-white" />
             <span>📊 Evaluar a Todos (Evaluación Masiva)</span>
@@ -2093,7 +2093,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     Herramienta Oficial Staff Kinetix
                   </span>
                   <h3 className="text-base sm:text-lg font-extrabold text-white font-brand mt-0.5">
-                    Sábana de Evaluación Masiva (Evaluar a Todos de un Jalón)
+                    Sábana de Evaluación Masiva (Evaluación Grupal)
                   </h3>
                   <p className="text-xs text-neutral-300">
                     Ingresa marcas de todos los alumnos en una sola grilla tipo Excel sin ir uno por uno.
@@ -2190,7 +2190,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               type="button"
               onClick={() => setShowBatchEvaluationGrid(true)}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-blue-400/30"
-              title="Abrir sábana masiva tipo Excel para evaluar a todos los atletas de un solo jalón"
+              title="Abrir sábana masiva para evaluar a todos los atletas en una sola vista"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
               <span>📊 Evaluar a Todos (Evaluación Masiva)</span>
@@ -2311,7 +2311,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <Cloud className="w-4 h-4 text-emerald-400" />
               </div>
               <p className="text-[11px] text-neutral-400">
-                Conectar nube, bajar pruebas de la compu o vincular celular.
+                Sincronización en la nube, verificación de conexión y respaldos.
               </p>
             </button>
 
@@ -4201,7 +4201,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] text-neutral-300 leading-relaxed">
-                          Envía a su WhatsApp el mensaje pre-redactado con su usuario (@{selectedAthleteForPayment.username || 'usuario'}), clave, enlace directo a la app y recordatorio amistoso de corte.
+                          Envía a su WhatsApp el mensaje pre-redactado con su usuario (@{selectedAthleteForPayment.username || 'usuario'}), clave, enlace directo a la app y recordatorio de fecha de corte.
                         </p>
                         <button
                           type="button"

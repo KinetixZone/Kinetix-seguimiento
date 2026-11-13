@@ -638,7 +638,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                   </span>
                 </div>
                 <p className="text-[11px] text-neutral-400">
-                  Ingresa marcas de todos los atletas de un solo jalón sin ir alumno por alumno.
+                  Registra las marcas de todos los atletas en una sola vista de forma ágil y centralizada.
                 </p>
               </div>
             </div>
