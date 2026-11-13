@@ -16,19 +16,39 @@ export function cleanSupabaseUrl(rawUrl: string): string {
   return url;
 }
 
-// Retrieve credentials from localStorage first (for in-app configuration) or fallback to Vite env vars
+const DEFAULT_PUBLIC_SUPABASE_URL = 'https://igqztilcgcttasqappgo.supabase.co';
+const DEFAULT_PUBLIC_SUPABASE_KEY = 'sb_publishable_X-ej5wiIf_2bgvMKMzcbtg_VfqCkWdA';
+
+// Retrieve credentials from localStorage (excluding secret keys), Vite env vars, or built-in public project config
 export function getSupabaseCredentials(): { url: string; key: string } {
   try {
-    const storedUrl = localStorage.getItem('kinetix_supabase_url');
-    const storedKey = localStorage.getItem('kinetix_supabase_anon_key');
-    if (storedUrl && storedKey) {
-      return { url: cleanSupabaseUrl(storedUrl), key: storedKey.trim() };
+    const storedUrl = cleanSupabaseUrl(localStorage.getItem('kinetix_supabase_url') || '');
+    const storedKey = (localStorage.getItem('kinetix_supabase_anon_key') || '').trim();
+    if (
+      storedUrl.startsWith('https://') &&
+      !storedUrl.includes('your-project') &&
+      storedKey &&
+      !storedKey.startsWith('sb_secret_')
+    ) {
+      return { url: storedUrl, key: storedKey };
     }
   } catch {}
 
-  const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-  return { url: cleanSupabaseUrl(envUrl), key: envKey.trim() };
+  const envUrl = cleanSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || '');
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  if (
+    envUrl.startsWith('https://') &&
+    !envUrl.includes('your-project') &&
+    envKey &&
+    !envKey.startsWith('sb_secret_')
+  ) {
+    return { url: envUrl, key: envKey };
+  }
+
+  return {
+    url: DEFAULT_PUBLIC_SUPABASE_URL,
+    key: DEFAULT_PUBLIC_SUPABASE_KEY,
+  };
 }
 
 let runtimeProxyMode = false;
@@ -88,10 +108,15 @@ export function clearSupabaseCredentials() {
 
 /**
  * Ensures all devices opening the app automatically share the owner's Supabase Cloud config:
- * - If the server is in proxy mode (or has shared public config), configures this phone/browser automatically.
- * - If this computer already had local credentials and the server didn't yet, pushes them to the server.
+ * - Prefers direct public publishable/anon key for native Supabase Realtime.
+ * - Uses server proxy mode if the server specifies a secret key without a public key.
  */
 export async function ensureSharedCloudConfig(): Promise<boolean> {
+  const creds = getSupabaseCredentials();
+  if (creds.url.startsWith('https://') && creds.key && !creds.key.startsWith('sb_secret_')) {
+    setServerProxyMode(false);
+  }
+
   if (typeof fetch === 'undefined') return isSupabaseConfigured();
   try {
     const res = await fetch('/api/cloud-config');
@@ -99,12 +124,12 @@ export async function ensureSharedCloudConfig(): Promise<boolean> {
     if (res.ok && ctype.includes('application/json')) {
       const data = await res.json();
       serverSupportsSse = data?.sse !== false;
-      if (data?.configured && data?.mode === 'proxy') {
-        setServerProxyMode(true, data.url || '');
+      if (data?.configured && data?.mode === 'direct' && data?.url && data?.key) {
+        saveSupabaseCredentials(data.url, data.key, false);
         return true;
       }
-      if (data?.configured && data?.url && data?.key) {
-        saveSupabaseCredentials(data.url, data.key, false);
+      if (data?.configured && data?.mode === 'proxy' && !creds.key) {
+        setServerProxyMode(true, data.url || '');
         return true;
       }
     }
@@ -198,22 +223,10 @@ importSupabaseFromUrlParams();
 export function getSupabaseClient(): SupabaseClient | null {
   const { url, key } = getSupabaseCredentials();
 
-  if ((isServerProxyMode() || key.startsWith('sb_secret_')) && typeof window !== 'undefined') {
-    try {
-      return createClient(`${window.location.origin}/api/sb-proxy`, 'kinetix-server-proxy', {
-        auth: {
-          persistSession: false,
-        },
-      });
-    } catch (e) {
-      console.warn('Failed to initialize Supabase proxy client:', e);
-      return null;
-    }
-  }
-
   if (
     url && 
     key && 
+    !key.startsWith('sb_secret_') &&
     url.startsWith('https://') && 
     !url.includes('your-project') && 
     !url.includes('placeholder')
@@ -226,6 +239,19 @@ export function getSupabaseClient(): SupabaseClient | null {
       });
     } catch (e) {
       console.warn('Failed to initialize Supabase client:', e);
+      return null;
+    }
+  }
+
+  if ((isServerProxyMode() || key.startsWith('sb_secret_')) && typeof window !== 'undefined') {
+    try {
+      return createClient(`${window.location.origin}/api/sb-proxy`, 'kinetix-server-proxy', {
+        auth: {
+          persistSession: false,
+        },
+      });
+    } catch (e) {
+      console.warn('Failed to initialize Supabase proxy client:', e);
       return null;
     }
   }
