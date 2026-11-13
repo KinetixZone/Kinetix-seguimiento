@@ -18,21 +18,31 @@ function isSafePublicSupabaseKey(key: string): boolean {
 
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
-  const publicUrl = (
-    env.VITE_SUPABASE_URL ||
-    env.NEXT_PUBLIC_SUPABASE_URL ||
-    env.SUPABASE_URL ||
-    ''
-  ).trim();
+  const urlKeys = [
+    'VITE_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_URL',
+    ...Object.keys(env).filter((k) => k.toUpperCase().endsWith('_SUPABASE_URL')),
+  ];
+  const publicUrl =
+    urlKeys
+      .map((k) => (env[k] || '').trim())
+      .find((v) => v.startsWith('https://') && !v.includes('your-project')) || '';
 
-  const rawPublicKey = (
-    env.VITE_SUPABASE_ANON_KEY ||
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    env.SUPABASE_ANON_KEY ||
-    env.SUPABASE_PUBLISHABLE_KEY ||
-    ''
-  ).trim();
+  const pubKeyNames = [
+    'VITE_SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    'SUPABASE_ANON_KEY',
+    'SUPABASE_PUBLISHABLE_KEY',
+    ...Object.keys(env).filter(
+      (k) =>
+        k.toUpperCase().endsWith('_SUPABASE_ANON_KEY') ||
+        k.toUpperCase().endsWith('_SUPABASE_PUBLISHABLE_KEY')
+    ),
+  ];
+  const rawPublicKey =
+    pubKeyNames.map((k) => (env[k] || '').trim()).find((v) => isSafePublicSupabaseKey(v)) || '';
 
   const publicKey = isSafePublicSupabaseKey(rawPublicKey) ? rawPublicKey : '';
 

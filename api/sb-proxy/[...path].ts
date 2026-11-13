@@ -1,31 +1,8 @@
-function cleanUrl(raw: string): string {
-  return (raw || '')
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/rest\/v1\/?$/i, '')
-    .replace(/\/+$/, '');
-}
+import { resolveSupabaseFromEnv } from '../cloud-config';
 
 export default async function handler(req: any, res: any) {
   const env: Record<string, string | undefined> = (globalThis as any).process?.env || {};
-
-  const baseUrl = cleanUrl(
-    env.VITE_SUPABASE_URL ||
-      env.NEXT_PUBLIC_SUPABASE_URL ||
-      env.SUPABASE_URL ||
-      ''
-  );
-
-  const key = (
-    env.VITE_SUPABASE_ANON_KEY ||
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    env.SUPABASE_ANON_KEY ||
-    env.SUPABASE_PUBLISHABLE_KEY ||
-    env.SUPABASE_SECRET_KEY ||
-    env.SUPABASE_SERVICE_ROLE_KEY ||
-    ''
-  ).trim();
+  const { url: baseUrl, chosenKey: key } = resolveSupabaseFromEnv(env);
 
   if (!baseUrl.startsWith('https://') || !key) {
     return res.status(503).json({ message: 'Supabase Cloud no configurado en Vercel.' });
