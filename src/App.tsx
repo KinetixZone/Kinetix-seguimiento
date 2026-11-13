@@ -464,7 +464,14 @@ export default function App() {
 
   // Update user avatar (Atletas & Coach)
   const handleUpdateAvatar = (userId: string, newAvatarUrl: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, avatarUrl: newAvatarUrl } : u));
+    setUsers(prev => {
+      const next = prev.map(u => u.id === userId ? { ...u, avatarUrl: newAvatarUrl } : u);
+      const updated = next.find(u => u.id === userId);
+      if (updated) {
+        syncUserToSupabase(updated);
+      }
+      return next;
+    });
     try {
       localStorage.setItem(`kinetix_avatar_${userId}`, newAvatarUrl);
     } catch {}
