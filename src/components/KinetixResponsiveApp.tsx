@@ -144,7 +144,9 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
     setTabHistory(['dashboard']);
   }, [currentUser.id]);
 
-  const userBodyComps = bodyCompRecords.filter(b => b.userId === effectiveUser.id);
+  const userBodyComps = [...bodyCompRecords.filter(b => b.userId === effectiveUser.id)].sort(
+    (a, b) => a.recordedAt.localeCompare(b.recordedAt)
+  );
   const userEvals = [...evaluations.filter(e => e.userId === effectiveUser.id)].sort(
     (a, b) => a.evaluationDate.localeCompare(b.evaluationDate)
   );
@@ -800,6 +802,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowReportModal(false)}
         />

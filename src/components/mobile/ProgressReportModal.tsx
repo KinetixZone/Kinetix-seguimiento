@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord } from '../../types';
 import { Printer, Download, X, Award, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { resolveLatestStrengthPillars } from '../../utils/evaluationHelpers';
 
 interface ProgressReportModalProps {
   athlete: UserProfile;
@@ -8,6 +9,7 @@ interface ProgressReportModalProps {
   latestEval?: PhysicalEvaluationRecord | null;
   latestStrengthEval?: PhysicalEvaluationRecord | null;
   latestAerobicEval?: PhysicalEvaluationRecord | null;
+  evaluations?: PhysicalEvaluationRecord[];
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -18,6 +20,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   latestEval,
   latestStrengthEval,
   latestAerobicEval,
+  evaluations = [],
   gymLogoUrl,
   onClose,
 }) => {
@@ -32,6 +35,18 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   const validStrengthEval = (validEval && (validEval.strengthRecords?.length || 0) > 0)
     ? validEval
     : (candidateStrengthEval && (candidateStrengthEval.strengthRecords?.length || 0) > 0 ? candidateStrengthEval : null);
+
+  const athleteSortedEvals = evaluations
+    .filter(e => e.userId === athlete.id)
+    .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+  const resolvedStrengthPillars = athleteSortedEvals.length > 0
+    ? resolveLatestStrengthPillars(athleteSortedEvals)
+    : (validStrengthEval?.strengthRecords || []).map(r => ({
+        record: r,
+        evaluationDate: validStrengthEval?.evaluationDate || '',
+        previousRecord: null,
+        previousDate: null,
+      }));
 
   const isEvalStrengthOnly = (ev: PhysicalEvaluationRecord | null) =>
     Boolean(ev && (ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM'));
@@ -360,7 +375,15 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
                               Toma: {validAerobicEval.evaluationDate}
                             </span>
                           )}
-                          {isCooper2 ? (
+                          {validAerobicEval.cooperTest.status === 'na' ? (
+                            <span className="text-neutral-300 font-bold bg-neutral-800 border border-neutral-700 px-2 py-0.5 rounded text-[10px]">
+                              NA · EXENTO
+                            </span>
+                          ) : validAerobicEval.cooperTest.status === 'np' ? (
+                            <span className="text-amber-400 font-bold bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded text-[10px]">
+                              NP · NO PRESENTADA
+                            </span>
+                          ) : isCooper2 ? (
                             <span className="text-amber-400 font-bold bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded text-[10px]">
                               COOPER 2 · POR VUELTAS
                             </span>
@@ -419,12 +442,15 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
                       </span>
                     )}
                   </div>
-                  {validStrengthEval && validStrengthEval.strengthRecords.length > 0 ? (
+                  {resolvedStrengthPillars.length > 0 ? (
                     <div className="space-y-1 text-[11px] font-mono">
-                      {validStrengthEval.strengthRecords.map(rec => (
-                        <div key={rec.exerciseId} className="flex justify-between py-0.5 border-b border-neutral-800/40 last:border-none">
-                          <span className="text-neutral-400 font-sans">{rec.exerciseName}:</span>
-                          <span className="text-white font-bold">
+                      {resolvedStrengthPillars.map(({ record: rec, evaluationDate }) => (
+                        <div key={rec.exerciseId} className="flex justify-between py-0.5 border-b border-neutral-800/40 last:border-none gap-2">
+                          <span className="text-neutral-400 font-sans">
+                            {rec.exerciseName}
+                            {validStrengthEval && evaluationDate && evaluationDate !== validStrengthEval.evaluationDate ? ` (${evaluationDate})` : ''}:
+                          </span>
+                          <span className="text-white font-bold shrink-0">
                             {rec.status === 'na' ? 'NA' : rec.status === 'np' ? 'NP' : `${rec.estimated1RMKg} kg (${rec.weightKg}kg × ${rec.reps})`}
                           </span>
                         </div>

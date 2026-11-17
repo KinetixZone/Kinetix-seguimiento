@@ -95,7 +95,9 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const isStaff = currentUser.role === 'staff';
-  const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
+  const userBodyComps = [...bodyCompRecords.filter(b => b.userId === currentUser.id)].sort(
+    (a, b) => a.recordedAt.localeCompare(b.recordedAt)
+  );
   const userEvals = [...evaluations.filter(e => e.userId === currentUser.id)].sort(
     (a, b) => a.evaluationDate.localeCompare(b.evaluationDate)
   );
@@ -429,6 +431,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           onClose={() => setShowReportModal(false)}
         />
       )}

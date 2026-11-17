@@ -16,6 +16,15 @@ import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode, NO_CUTOFF_CONF
 import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { BatchEvaluationGridView } from './BatchEvaluationGridView';
+import {
+  getLocalTodayDateStr,
+  isCooperCompletedEval,
+  isEnduranceCompletedEval,
+  isStrengthCompletedEval,
+  getEffectiveStrength1RMKg,
+  formatYearMonthLabel,
+  shiftYearMonth
+} from '../../utils/evaluationHelpers';
 import { 
   Users, 
   UserPlus, 
@@ -223,8 +232,21 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   // Executive KPI summary collapsible banner state
   const [isExecutiveSummaryExpanded, setIsExecutiveSummaryExpanded] = useState<boolean>(false);
 
-  // Athlete physical evaluation and body composition filter: 'all' | 'evaluated' | 'pending_eval' | 'with_body' | 'pending_body'
-  const [evalStatusFilter, setEvalStatusFilter] = useState<'all' | 'evaluated' | 'pending_eval' | 'with_body' | 'pending_body'>('all');
+  // Athlete physical evaluation and body composition filter
+  const [evalStatusFilter, setEvalStatusFilter] = useState<
+    | 'all'
+    | 'evaluated'
+    | 'pending_eval'
+    | 'with_body'
+    | 'pending_body'
+    | 'pending_month_any'
+    | 'pending_month_strength'
+    | 'pending_month_endurance'
+    | 'pending_month_body'
+  >('all');
+
+  // Global Box Analytics period filter: 'all' | 'last_3m' | 'last_6m' | 'YYYY-MM'
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<string>('all');
 
   // Athlete password inspection & update state for Coaches/Owners
   const [athletePassword, setAthletePassword] = useState<string>('');
@@ -814,11 +836,51 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   // Regla estricta: Únicamente analiza atletas (u.role === 'athlete').
   // Las pruebas y marcas de los Coaches (Leslie, Jorge, Gus) quedan 100% aisladas y protegidas.
   // =========================================================================
+  const currentMonthKey = getLocalTodayDateStr().slice(0, 7);
+
   const boxAnalytics = useMemo(() => {
     const athletes = users.filter(u => u.role === 'athlete');
+    const athleteIds = new Set(athletes.map(a => a.id));
     const totalAthletes = athletes.length;
 
-    // 1. Membresías & Retención
+    const athleteEvaluations = evaluations.filter(ev => athleteIds.has(ev.userId));
+    const athleteBodyComps = bodyCompRecords.filter(bc => athleteIds.has(bc.userId));
+
+    // Distinct months available across evaluations + body comps + current month
+    const monthSet = new Set<string>([currentMonthKey]);
+    athleteEvaluations.forEach(ev => {
+      const ym = ev.evaluationDate?.slice(0, 7);
+      if (ym && /^\d{4}-\d{2}$/.test(ym)) monthSet.add(ym);
+    });
+    athleteBodyComps.forEach(bc => {
+      const ym = bc.recordedAt?.slice(0, 7);
+      if (ym && /^\d{4}-\d{2}$/.test(ym)) monthSet.add(ym);
+    });
+    const availableMonthsDesc = Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+
+    const periodStartMonth =
+      analyticsPeriod === 'last_3m'
+        ? shiftYearMonth(currentMonthKey, -2)
+        : analyticsPeriod === 'last_6m'
+        ? shiftYearMonth(currentMonthKey, -5)
+        : /^\d{4}-\d{2}$/.test(analyticsPeriod)
+        ? analyticsPeriod
+        : '';
+
+    const matchesPeriod = (dateStr?: string): boolean => {
+      if (!dateStr) return false;
+      const ym = dateStr.slice(0, 7);
+      if (analyticsPeriod === 'all') return true;
+      if (analyticsPeriod === 'last_3m' || analyticsPeriod === 'last_6m') {
+        return ym >= periodStartMonth && ym <= currentMonthKey;
+      }
+      return ym === analyticsPeriod;
+    };
+
+    const periodEvaluations = athleteEvaluations.filter(ev => matchesPeriod(ev.evaluationDate));
+    const periodBodyComps = athleteBodyComps.filter(bc => matchesPeriod(bc.recordedAt));
+
+    // 1. Membresías & Retención (estado vigente actual)
     const activeCount = athletes.filter(a => a.membership?.status === 'active').length;
     const expiringSoonCount = athletes.filter(a => a.membership?.status === 'expiring_soon').length;
     const suspendedCount = athletes.filter(a => a.membership?.status === 'suspended').length;
@@ -831,10 +893,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const cutoff20 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 20);
     const cutoff30 = athletes.filter(a => (a.membership?.billingDayOfMonth || 15) === 30);
 
-    // 2. Evaluaciones Físicas Oficiales (Cooper, Navette, 1RM)
+    // 2. Evaluaciones Físicas Oficiales dentro del periodo seleccionado
     const athleteEvalMap = new Map<string, PhysicalEvaluationRecord[]>();
     athletes.forEach(a => athleteEvalMap.set(a.id, []));
-    evaluations.forEach(ev => {
+    periodEvaluations.forEach(ev => {
       if (athleteEvalMap.has(ev.userId)) {
         athleteEvalMap.get(ev.userId)!.push(ev);
       }
@@ -844,7 +906,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     let totalEvaluationsLogged = 0;
     let latestBoxEvalDate = '';
 
-    // Promedios 1RM del Box (solo atletas evaluados)
+    // Promedios 1RM del Box (último valor válido por ejercicio de cada atleta dentro del periodo)
     let squatSum = 0, squatCount = 0;
     let deadliftSum = 0, deadliftCount = 0;
     let hipThrustSum = 0, hipThrustCount = 0;
@@ -861,16 +923,22 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           latestBoxEvalDate = latest.evaluationDate;
         }
 
-        const latestWithStrength = evalList.find(ev => (ev.strengthRecords?.length || 0) > 0);
-        latestWithStrength?.strengthRecords?.forEach(sr => {
-          if (sr.status === 'completed' && sr.weightKg > 0) {
-            if (sr.exerciseId === 'squats') { squatSum += sr.weightKg; squatCount++; }
-            else if (sr.exerciseId === 'deadlift') { deadliftSum += sr.weightKg; deadliftCount++; }
-            else if (sr.exerciseId === 'hip_thrust') { hipThrustSum += sr.weightKg; hipThrustCount++; }
-            else if (sr.exerciseId === 'horizontal_press') { pressSum += sr.weightKg; pressCount++; }
-            else if (sr.exerciseId === 'pullups_or_rows') { rowSum += sr.weightKg; rowCount++; }
+        const latestByExercise = new Map<string, number>();
+        for (const ev of evalList) {
+          for (const sr of ev.strengthRecords || []) {
+            if (latestByExercise.has(sr.exerciseId)) continue;
+            const kg = getEffectiveStrength1RMKg(sr);
+            if (sr.status !== 'na' && sr.status !== 'np' && kg > 0) {
+              latestByExercise.set(sr.exerciseId, kg);
+            }
           }
-        });
+        }
+
+        if (latestByExercise.has('squats')) { squatSum += latestByExercise.get('squats')!; squatCount++; }
+        if (latestByExercise.has('deadlift')) { deadliftSum += latestByExercise.get('deadlift')!; deadliftCount++; }
+        if (latestByExercise.has('hip_thrust')) { hipThrustSum += latestByExercise.get('hip_thrust')!; hipThrustCount++; }
+        if (latestByExercise.has('horizontal_press')) { pressSum += latestByExercise.get('horizontal_press')!; pressCount++; }
+        if (latestByExercise.has('pullups_or_rows')) { rowSum += latestByExercise.get('pullups_or_rows')!; rowCount++; }
       }
     });
 
@@ -878,11 +946,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const pendingEvaluationCount = totalAthletes - evaluatedAthletesCount;
 
     // 3. Composición Corporal (Báscula Renpho Bioimpedancia)
-    const athleteBodyMap = new Map<string, BodyCompositionRecord[]>();
-    athletes.forEach(a => athleteBodyMap.set(a.id, []));
-    bodyCompRecords.forEach(bc => {
-      if (athleteBodyMap.has(bc.userId)) {
-        athleteBodyMap.get(bc.userId)!.push(bc);
+    const allBodyMap = new Map<string, BodyCompositionRecord[]>();
+    athletes.forEach(a => allBodyMap.set(a.id, []));
+    athleteBodyComps.forEach(bc => {
+      if (allBodyMap.has(bc.userId)) {
+        allBodyMap.get(bc.userId)!.push(bc);
       }
     });
 
@@ -912,24 +980,37 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const bodyEvolutionList: AthleteBodyEvolution[] = [];
 
     athletes.forEach(a => {
-      const records = athleteBodyMap.get(a.id) || [];
-      if (records.length > 0) {
+      const allRecords = [...(allBodyMap.get(a.id) || [])].sort((r1, r2) => r1.recordedAt.localeCompare(r2.recordedAt));
+      const periodRecords = analyticsPeriod === 'all'
+        ? allRecords
+        : allRecords.filter(r => matchesPeriod(r.recordedAt));
+
+      if (periodRecords.length > 0) {
         athletesWithBodyRecords++;
-        // Ordenar cronológicamente (más antiguo primero)
-        records.sort((r1, r2) => r1.recordedAt.localeCompare(r2.recordedAt));
-        const initial = records[0];
-        const latest = records[records.length - 1];
+        const latest = periodRecords[periodRecords.length - 1];
 
         currentFatSum += latest.bodyFatPercent;
         currentFatCount++;
         currentWeightSum += latest.weightKg;
         currentWeightCount++;
 
-        if (records.length >= 2) {
+        // Para comparar progreso en un periodo (mes/trimestre), usamos el primer pesaje del periodo
+        // o, si solo hay 1 pesaje en el periodo, el último pesaje previo como línea base.
+        let baseline: BodyCompositionRecord | null = null;
+        if (periodRecords.length >= 2) {
+          baseline = periodRecords[0];
+        } else if (analyticsPeriod !== 'all' && periodStartMonth) {
+          const priorRecords = allRecords.filter(r => r.recordedAt.slice(0, 7) < periodStartMonth);
+          if (priorRecords.length > 0) {
+            baseline = priorRecords[priorRecords.length - 1];
+          }
+        }
+
+        if (baseline) {
           athletesWithMultipleWeighIns++;
-          const fatDelta = parseFloat((latest.bodyFatPercent - initial.bodyFatPercent).toFixed(1));
-          const muscleDelta = parseFloat((latest.muscleMassPercent - initial.muscleMassPercent).toFixed(1));
-          const weightDelta = parseFloat((latest.weightKg - initial.weightKg).toFixed(1));
+          const fatDelta = parseFloat((latest.bodyFatPercent - baseline.bodyFatPercent).toFixed(1));
+          const muscleDelta = parseFloat((latest.muscleMassPercent - baseline.muscleMassPercent).toFixed(1));
+          const weightDelta = parseFloat((latest.weightKg - baseline.weightKg).toFixed(1));
 
           totalFatDelta += fatDelta;
           totalMuscleDelta += muscleDelta;
@@ -940,12 +1021,12 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
           bodyEvolutionList.push({
             athlete: a,
-            initialRecord: initial,
+            initialRecord: baseline,
             latestRecord: latest,
             fatDelta,
             muscleDelta,
             weightDelta,
-            recordsCount: records.length,
+            recordsCount: periodRecords.length,
           });
         }
       }
@@ -957,6 +1038,138 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const avgCurrentFat = currentFatCount > 0 ? parseFloat((currentFatSum / currentFatCount).toFixed(1)) : 0;
     const avgCurrentWeight = currentWeightCount > 0 ? parseFloat((currentWeightSum / currentWeightCount).toFixed(1)) : 0;
     const percentFatImproved = athletesWithMultipleWeighIns > 0 ? Math.round((fatImprovedCount / athletesWithMultipleWeighIns) * 100) : 0;
+
+    // 4. Comparativa Mensual Global (mes a mes)
+    const availableMonthsAsc = [...availableMonthsDesc].reverse();
+    interface MonthlyBoxSummary {
+      month: string;
+      label: string;
+      evaluatedCount: number;
+      strengthCount: number;
+      enduranceCount: number;
+      weighedCount: number;
+      coveragePercent: number;
+      avgBodyFat: number | null;
+      avgWeight: number | null;
+      avgStrengthLiftKg: number | null;
+      fatDeltaVsPrev: number | null;
+      strengthDeltaVsPrev: number | null;
+      avg1RM: { squats: number; deadlift: number; hipThrust: number; press: number; row: number };
+    }
+
+    const monthlySummariesAsc: MonthlyBoxSummary[] = [];
+    let prevAvgFat: number | null = null;
+    let prevAvgStrength: number | null = null;
+
+    availableMonthsAsc.forEach((ym) => {
+      const mEvals = athleteEvaluations.filter(ev => ev.evaluationDate.slice(0, 7) === ym);
+      const mBody = athleteBodyComps.filter(bc => bc.recordedAt.slice(0, 7) === ym);
+
+      const evalUsers = new Set<string>();
+      const strengthUsers = new Set<string>();
+      const enduranceUsers = new Set<string>();
+      const perAthleteEx = new Map<string, Map<string, number>>();
+
+      // Sort desc so first encountered exercise per athlete is latest in that month
+      [...mEvals]
+        .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))
+        .forEach(ev => {
+          evalUsers.add(ev.userId);
+          if (isStrengthCompletedEval(ev)) strengthUsers.add(ev.userId);
+          if (isCooperCompletedEval(ev) || isEnduranceCompletedEval(ev)) enduranceUsers.add(ev.userId);
+          if (!perAthleteEx.has(ev.userId)) perAthleteEx.set(ev.userId, new Map());
+          const exMap = perAthleteEx.get(ev.userId)!;
+          (ev.strengthRecords || []).forEach(sr => {
+            if (exMap.has(sr.exerciseId)) return;
+            const kg = getEffectiveStrength1RMKg(sr);
+            if (sr.status !== 'na' && sr.status !== 'np' && kg > 0) {
+              exMap.set(sr.exerciseId, kg);
+            }
+          });
+        });
+
+      const sums = { squats: 0, deadlift: 0, hip_thrust: 0, horizontal_press: 0, pullups_or_rows: 0 };
+      const counts = { squats: 0, deadlift: 0, hip_thrust: 0, horizontal_press: 0, pullups_or_rows: 0 };
+      let allLiftSum = 0;
+      let allLiftCount = 0;
+
+      perAthleteEx.forEach(exMap => {
+        exMap.forEach((kg, exId) => {
+          allLiftSum += kg;
+          allLiftCount++;
+          if (exId in sums) {
+            const k = exId as keyof typeof sums;
+            sums[k] += kg;
+            counts[k]++;
+          }
+        });
+      });
+
+      const latestBodyByAthlete = new Map<string, BodyCompositionRecord>();
+      [...mBody]
+        .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+        .forEach(bc => latestBodyByAthlete.set(bc.userId, bc));
+
+      let fatSum = 0, wSum = 0;
+      latestBodyByAthlete.forEach(bc => {
+        fatSum += bc.bodyFatPercent;
+        wSum += bc.weightKg;
+      });
+      const weighedCount = latestBodyByAthlete.size;
+      const avgBodyFat = weighedCount > 0 ? parseFloat((fatSum / weighedCount).toFixed(1)) : null;
+      const avgWeight = weighedCount > 0 ? parseFloat((wSum / weighedCount).toFixed(1)) : null;
+      const avgStrengthLiftKg = allLiftCount > 0 ? Math.round(allLiftSum / allLiftCount) : null;
+
+      const fatDeltaVsPrev = avgBodyFat !== null && prevAvgFat !== null
+        ? parseFloat((avgBodyFat - prevAvgFat).toFixed(1))
+        : null;
+      const strengthDeltaVsPrev = avgStrengthLiftKg !== null && prevAvgStrength !== null
+        ? Math.round(avgStrengthLiftKg - prevAvgStrength)
+        : null;
+
+      if (avgBodyFat !== null) prevAvgFat = avgBodyFat;
+      if (avgStrengthLiftKg !== null) prevAvgStrength = avgStrengthLiftKg;
+
+      monthlySummariesAsc.push({
+        month: ym,
+        label: formatYearMonthLabel(ym),
+        evaluatedCount: evalUsers.size,
+        strengthCount: strengthUsers.size,
+        enduranceCount: enduranceUsers.size,
+        weighedCount,
+        coveragePercent: totalAthletes > 0 ? Math.round((evalUsers.size / totalAthletes) * 100) : 0,
+        avgBodyFat,
+        avgWeight,
+        avgStrengthLiftKg,
+        fatDeltaVsPrev,
+        strengthDeltaVsPrev,
+        avg1RM: {
+          squats: counts.squats > 0 ? Math.round(sums.squats / counts.squats) : 0,
+          deadlift: counts.deadlift > 0 ? Math.round(sums.deadlift / counts.deadlift) : 0,
+          hipThrust: counts.hip_thrust > 0 ? Math.round(sums.hip_thrust / counts.hip_thrust) : 0,
+          press: counts.horizontal_press > 0 ? Math.round(sums.horizontal_press / counts.horizontal_press) : 0,
+          row: counts.pullups_or_rows > 0 ? Math.round(sums.pullups_or_rows / counts.pullups_or_rows) : 0,
+        },
+      });
+    });
+
+    const monthlyComparison = [...monthlySummariesAsc].reverse();
+
+    // 5. Pendientes del mes en curso (para filtro rápido en Staff)
+    const curMonthEvals = athleteEvaluations.filter(ev => ev.evaluationDate.slice(0, 7) === currentMonthKey);
+    const curMonthBody = athleteBodyComps.filter(bc => bc.recordedAt.slice(0, 7) === currentMonthKey);
+    let pendingMonthAnyCount = 0;
+    let pendingMonthStrengthCount = 0;
+    let pendingMonthEnduranceCount = 0;
+    let pendingMonthBodyCount = 0;
+
+    athletes.forEach(a => {
+      const aEvals = curMonthEvals.filter(ev => ev.userId === a.id);
+      if (aEvals.length === 0) pendingMonthAnyCount++;
+      if (!aEvals.some(ev => isStrengthCompletedEval(ev))) pendingMonthStrengthCount++;
+      if (!aEvals.some(ev => isCooperCompletedEval(ev) || isEnduranceCompletedEval(ev))) pendingMonthEnduranceCount++;
+      if (!curMonthBody.some(bc => bc.userId === a.id)) pendingMonthBodyCount++;
+    });
 
     return {
       totalAthletes,
@@ -994,8 +1207,14 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       muscleGainedCount,
       percentFatImproved,
       bodyEvolutionList,
+      availableMonthsDesc,
+      monthlyComparison,
+      pendingMonthAnyCount,
+      pendingMonthStrengthCount,
+      pendingMonthEnduranceCount,
+      pendingMonthBodyCount,
     };
-  }, [users, evaluations, bodyCompRecords]);
+  }, [users, evaluations, bodyCompRecords, analyticsPeriod, currentMonthKey]);
 
   const dueSoonAthletes = users.filter(u => u.role === 'athlete' && isExpiringInNext3Days(u));
 
@@ -1023,7 +1242,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       }
     }
 
-    // Filtro por estado de evaluación física y pesaje
+    // Filtro por estado de evaluación física y pesaje (histórico o mes en curso)
     if (evalStatusFilter === 'evaluated') {
       const hasEval = evaluations.some(e => e.userId === u.id);
       if (!hasEval) return false;
@@ -1036,6 +1255,25 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     } else if (evalStatusFilter === 'pending_body') {
       const hasBody = bodyCompRecords.some(b => b.userId === u.id);
       if (hasBody) return false;
+    } else if (evalStatusFilter === 'pending_month_any') {
+      const hasMonthEval = evaluations.some(e => e.userId === u.id && e.evaluationDate.slice(0, 7) === currentMonthKey);
+      if (hasMonthEval) return false;
+    } else if (evalStatusFilter === 'pending_month_strength') {
+      const hasMonthStrength = evaluations.some(
+        e => e.userId === u.id && e.evaluationDate.slice(0, 7) === currentMonthKey && isStrengthCompletedEval(e)
+      );
+      if (hasMonthStrength) return false;
+    } else if (evalStatusFilter === 'pending_month_endurance') {
+      const hasMonthEndurance = evaluations.some(
+        e =>
+          e.userId === u.id &&
+          e.evaluationDate.slice(0, 7) === currentMonthKey &&
+          (isCooperCompletedEval(e) || isEnduranceCompletedEval(e))
+      );
+      if (hasMonthEndurance) return false;
+    } else if (evalStatusFilter === 'pending_month_body') {
+      const hasMonthBody = bodyCompRecords.some(b => b.userId === u.id && b.recordedAt.slice(0, 7) === currentMonthKey);
+      if (hasMonthBody) return false;
     }
 
     return true;
@@ -2533,11 +2771,64 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
             </div>
 
+            {/* Selector de Periodo Global (Mes / Trimestre / Todo el historial) */}
+            <div className="pt-2 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                <span className="text-[10px] text-neutral-400 uppercase font-bold mr-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                  Periodo:
+                </span>
+                {[
+                  { id: 'all', label: 'Todo el historial' },
+                  { id: 'last_3m', label: 'Último Trimestre (3M)' },
+                  { id: 'last_6m', label: 'Últimos 6 Meses' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setAnalyticsPeriod(opt.id)}
+                    className={`px-2.5 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                      analyticsPeriod === opt.id
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] text-neutral-400 font-semibold">Mes específico:</label>
+                <select
+                  value={/^\d{4}-\d{2}$/.test(analyticsPeriod) ? analyticsPeriod : ''}
+                  onChange={(e) => setAnalyticsPeriod(e.target.value || 'all')}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1 text-[11px] text-white font-bold outline-none focus:border-purple-500"
+                >
+                  <option value="">Elegir mes...</option>
+                  {boxAnalytics.availableMonthsDesc.map((ym) => (
+                    <option key={ym} value={ym}>
+                      {formatYearMonthLabel(ym)}{ym === currentMonthKey ? ' (Actual)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Aviso de Privacidad y Aislamiento de Coaches */}
             <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] text-neutral-300 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                <strong>Aislamiento Total:</strong> Estas métricas analizan estrictamente a los <strong>{boxAnalytics.totalAthletes} atletas</strong>. Las pruebas personales de los coaches (Leslie, Jorge, Gus) se mantienen 100% aisladas y no alteran las estadísticas del gimnasio.
+                <strong>Aislamiento Total:</strong> Estas métricas analizan estrictamente a los <strong>{boxAnalytics.totalAthletes} atletas</strong>
+                {analyticsPeriod !== 'all' && (
+                  <> en el periodo <strong className="text-purple-300">{
+                    analyticsPeriod === 'last_3m'
+                      ? 'Últimos 3 Meses'
+                      : analyticsPeriod === 'last_6m'
+                      ? 'Últimos 6 Meses'
+                      : formatYearMonthLabel(analyticsPeriod)
+                  }</strong></>
+                )}. Las pruebas personales de los coaches se mantienen 100% aisladas.
               </span>
             </div>
           </div>
@@ -2762,6 +3053,115 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <span>Último Test en Box: <strong className="text-white">{boxAnalytics.latestBoxEvalDate || 'Sin test'}</strong></span>
                 <span>Total Registros: <strong className="text-blue-400 font-mono">{boxAnalytics.totalEvaluationsLogged}</strong></span>
               </div>
+            </div>
+          </div>
+
+          {/* Comparativa Mensual Global (Mes a Mes) */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-3 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-white font-brand flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-purple-400" />
+                  <span>Comparativa Mensual Global del Box</span>
+                  <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full font-mono">
+                    {boxAnalytics.monthlyComparison.length} {boxAnalytics.monthlyComparison.length === 1 ? 'mes' : 'meses'}
+                  </span>
+                </h4>
+                <p className="text-xs text-neutral-400">
+                  Evolución mes a mes en cobertura de evaluaciones, promedio de fuerza 1RM y composición corporal. Toca un mes para filtrar el tablero.
+                </p>
+              </div>
+              {analyticsPeriod !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsPeriod('all')}
+                  className="text-xs text-purple-300 hover:text-white bg-purple-950/60 border border-purple-800/60 px-2.5 py-1 rounded-xl font-bold self-start sm:self-auto"
+                >
+                  Ver todos los meses
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {boxAnalytics.monthlyComparison.map((m) => {
+                const isSelectedMonth = analyticsPeriod === m.month;
+                return (
+                  <button
+                    key={m.month}
+                    type="button"
+                    onClick={() => setAnalyticsPeriod(isSelectedMonth ? 'all' : m.month)}
+                    className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer ${
+                      isSelectedMonth
+                        ? 'bg-purple-950/40 border-purple-500/70 shadow-md shadow-purple-950/30'
+                        : 'bg-neutral-950/80 border-neutral-800 hover:border-neutral-700'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-black px-2.5 py-0.5 rounded-lg font-brand ${
+                          isSelectedMonth ? 'bg-purple-600 text-white' : 'bg-neutral-800 text-white'
+                        }`}>
+                          {m.label}
+                        </span>
+                        {m.month === currentMonthKey && (
+                          <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full">
+                            Mes actual
+                          </span>
+                        )}
+                        <span className="text-[11px] text-neutral-400 font-mono">
+                          {m.evaluatedCount}/{boxAnalytics.totalAthletes} evaluados ({m.coveragePercent}%)
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                        <span className="px-2 py-0.5 rounded-lg bg-neutral-900 border border-neutral-800 text-blue-300">
+                          🏋️ {m.strengthCount} Fuerza
+                        </span>
+                        <span className="px-2 py-0.5 rounded-lg bg-neutral-900 border border-neutral-800 text-rose-300">
+                          ⏱️ {m.enduranceCount} Resist.
+                        </span>
+                        <span className="px-2 py-0.5 rounded-lg bg-neutral-900 border border-neutral-800 text-emerald-300">
+                          ⚖️ {m.weighedCount} Báscula
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-neutral-800/70 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-neutral-500 block text-[10px]">Prom. Grasa Box</span>
+                        <div className="flex items-center gap-1.5 font-mono font-bold">
+                          <span className="text-white">{m.avgBodyFat !== null ? `${m.avgBodyFat}%` : '—'}</span>
+                          {m.fatDeltaVsPrev !== null && (
+                            <span className={`text-[10px] ${m.fatDeltaVsPrev < 0 ? 'text-emerald-400' : m.fatDeltaVsPrev > 0 ? 'text-red-400' : 'text-neutral-400'}`}>
+                              {m.fatDeltaVsPrev < 0 ? `▼ ${Math.abs(m.fatDeltaVsPrev)}%` : m.fatDeltaVsPrev > 0 ? `▲ +${m.fatDeltaVsPrev}%` : '='}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-neutral-500 block text-[10px]">Prom. Fuerza 1RM</span>
+                        <div className="flex items-center gap-1.5 font-mono font-bold">
+                          <span className="text-white">{m.avgStrengthLiftKg !== null ? `${m.avgStrengthLiftKg} kg` : 'Sin 1RM'}</span>
+                          {m.strengthDeltaVsPrev !== null && (
+                            <span className={`text-[10px] ${m.strengthDeltaVsPrev > 0 ? 'text-emerald-400' : m.strengthDeltaVsPrev < 0 ? 'text-amber-400' : 'text-neutral-400'}`}>
+                              {m.strengthDeltaVsPrev > 0 ? `+${m.strengthDeltaVsPrev}kg` : `${m.strengthDeltaVsPrev}kg`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-neutral-400 font-mono">
+                        <span>Sentadilla: <strong className="text-white">{m.avg1RM.squats ? `${m.avg1RM.squats}kg` : '—'}</strong></span>
+                        <span>P. Muerto: <strong className="text-white">{m.avg1RM.deadlift ? `${m.avg1RM.deadlift}kg` : '—'}</strong></span>
+                        <span>Hip T.: <strong className="text-white">{m.avg1RM.hipThrust ? `${m.avg1RM.hipThrust}kg` : '—'}</strong></span>
+                        <span>Press: <strong className="text-white">{m.avg1RM.press ? `${m.avg1RM.press}kg` : '—'}</strong></span>
+                        <span>Remo: <strong className="text-white">{m.avg1RM.row ? `${m.avg1RM.row}kg` : '—'}</strong></span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -3062,6 +3462,105 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </span>
             </button>
           </div>
+
+          {/* LISTA RÁPIDA DE PENDIENTES DEL MES EN CURSO */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <span className="text-[10px] text-amber-400 uppercase font-bold shrink-0 pr-1 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Pendientes {formatYearMonthLabel(currentMonthKey)}:
+            </span>
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter(evalStatusFilter === 'pending_month_any' ? 'all' : 'pending_month_any')}
+              className={`px-2.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_month_any'
+                  ? 'bg-amber-500 text-black font-extrabold shadow-md shadow-amber-500/30'
+                  : 'bg-neutral-950 text-amber-300 hover:bg-neutral-900 border border-amber-800/50'
+              }`}
+              title={`Atletas sin ninguna prueba registrada en ${formatYearMonthLabel(currentMonthKey)}`}
+            >
+              <span>⏳ Sin eval. mes</span>
+              <span className="text-[10px] px-1.5 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.pendingMonthAnyCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter(evalStatusFilter === 'pending_month_strength' ? 'all' : 'pending_month_strength')}
+              className={`px-2.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_month_strength'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'bg-neutral-950 text-blue-300 hover:bg-neutral-900 border border-blue-800/50'
+              }`}
+              title={`Atletas a los que les falta Fuerza 1RM en ${formatYearMonthLabel(currentMonthKey)}`}
+            >
+              <span>🏋️ Sin Fuerza 1RM</span>
+              <span className="text-[10px] px-1.5 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.pendingMonthStrengthCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter(evalStatusFilter === 'pending_month_endurance' ? 'all' : 'pending_month_endurance')}
+              className={`px-2.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_month_endurance'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                  : 'bg-neutral-950 text-rose-300 hover:bg-neutral-900 border border-rose-800/50'
+              }`}
+              title={`Atletas sin Cooper/Navette o Tiempo de Resistencia en ${formatYearMonthLabel(currentMonthKey)}`}
+            >
+              <span>⏱️ Sin Resistencia</span>
+              <span className="text-[10px] px-1.5 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.pendingMonthEnduranceCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEvalStatusFilter(evalStatusFilter === 'pending_month_body' ? 'all' : 'pending_month_body')}
+              className={`px-2.5 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                evalStatusFilter === 'pending_month_body'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'bg-neutral-950 text-emerald-300 hover:bg-neutral-900 border border-emerald-800/50'
+              }`}
+              title={`Atletas sin pesaje Renpho en ${formatYearMonthLabel(currentMonthKey)}`}
+            >
+              <span>⚖️ Sin Pesaje mes</span>
+              <span className="text-[10px] px-1.5 rounded-full bg-black/40 font-mono font-bold">
+                {boxAnalytics.pendingMonthBodyCount}
+              </span>
+            </button>
+          </div>
+
+          {evalStatusFilter.startsWith('pending_month_') && (
+            <div className="p-2.5 rounded-2xl bg-amber-950/30 border border-amber-700/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-amber-200 font-semibold">
+                Mostrando <strong>{filteredAthletes.length}</strong> {filteredAthletes.length === 1 ? 'atleta pendiente' : 'atletas pendientes'} en{' '}
+                <strong>{formatYearMonthLabel(currentMonthKey)}</strong>
+                {evalStatusFilter === 'pending_month_strength' && ' (falta Fuerza 1RM)'}
+                {evalStatusFilter === 'pending_month_endurance' && ' (falta Resistencia)'}
+                {evalStatusFilter === 'pending_month_body' && ' (falta Pesaje Renpho)'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStaffViewSection('tests')}
+                  className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-colors"
+                >
+                  Ir a Sábana Masiva
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEvalStatusFilter('all')}
+                  className="px-2.5 py-1 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold text-[11px] transition-colors"
+                >
+                  Ver todos
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Search Input con botón de borrado rápido para celular */}
           <div className="relative">

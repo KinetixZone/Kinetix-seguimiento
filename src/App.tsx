@@ -27,6 +27,7 @@ import {
   BrandTheme,
   PrivacyConsentRecord
 } from './types';
+import { isAerobicOmittedEval } from './utils/evaluationHelpers';
 import { 
   syncUserToSupabase, 
   syncBodyCompToSupabase, 
@@ -565,14 +566,50 @@ export default function App() {
     });
   };
 
-  // Add Physical Evaluation
+  // Add Physical Evaluation (Smart-merges stations on the same date so partial sessions never overwrite each other)
   const handleAddEvaluation = (evalRec: Omit<PhysicalEvaluationRecord, 'id'>) => {
     const existing = evalsRef.current.find(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
     const uidSuffix = Math.random().toString(36).slice(2, 7);
     const userSuffix = evalRec.userId.slice(-4);
-    const savedEval: PhysicalEvaluationRecord = existing
-      ? { ...existing, ...evalRec, id: existing.id }
-      : { ...evalRec, id: `eval-${Date.now()}-${uidSuffix}-${userSuffix}` };
+
+    let savedEval: PhysicalEvaluationRecord;
+    if (existing) {
+      const existingHasAerobic = !isAerobicOmittedEval(existing);
+      const incomingOmittedAerobic = isAerobicOmittedEval(evalRec as PhysicalEvaluationRecord);
+      const mergedCooper = incomingOmittedAerobic && existingHasAerobic ? existing.cooperTest : evalRec.cooperTest;
+      const mergedEndurance = incomingOmittedAerobic && existingHasAerobic ? existing.enduranceTest : evalRec.enduranceTest;
+
+      const existingStrength = existing.strengthRecords || [];
+      const incomingStrength = evalRec.strengthRecords || [];
+      let mergedStrength = incomingStrength;
+      if (incomingStrength.length === 0 && existingStrength.length > 0) {
+        mergedStrength = existingStrength;
+      } else if (incomingStrength.length > 0 && existingStrength.length > 0) {
+        const byId = new Map(existingStrength.map(r => [r.exerciseId, r]));
+        incomingStrength.forEach(r => byId.set(r.exerciseId, r));
+        mergedStrength = Array.from(byId.values());
+      }
+
+      const incomingNotes = (evalRec.generalCoachNotes || '').trim();
+      const existingNotes = (existing.generalCoachNotes || '').trim();
+      const mergedNotes = incomingNotes
+        ? (existingNotes && !incomingNotes.includes(existingNotes) && incomingNotes.startsWith('Marca rápida:')
+            ? `${existingNotes} | ${incomingNotes}`
+            : incomingNotes)
+        : existingNotes;
+
+      savedEval = {
+        ...existing,
+        ...evalRec,
+        id: existing.id,
+        cooperTest: mergedCooper,
+        enduranceTest: mergedEndurance,
+        strengthRecords: mergedStrength,
+        generalCoachNotes: mergedNotes,
+      };
+    } else {
+      savedEval = { ...evalRec, id: `eval-${Date.now()}-${uidSuffix}-${userSuffix}` };
+    }
 
     const syncIdx = evalsRef.current.findIndex(
       e => e.id === savedEval.id || (e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate)

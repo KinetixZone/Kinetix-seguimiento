@@ -103,7 +103,9 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
-  const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
+  const userBodyComps = [...bodyCompRecords.filter(b => b.userId === currentUser.id)].sort(
+    (a, b) => a.recordedAt.localeCompare(b.recordedAt)
+  );
   const userEvals = [...evaluations.filter(e => e.userId === currentUser.id)].sort(
     (a, b) => a.evaluationDate.localeCompare(b.evaluationDate)
   );
@@ -503,6 +505,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           onClose={() => setShowReportModal(false)}
         />
       )}

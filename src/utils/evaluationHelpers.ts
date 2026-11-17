@@ -65,6 +65,29 @@ export const getEffectiveStrength1RMKg = (rec?: StrengthMaxRecord | null): numbe
   return rec.estimated1RMKg > 0 ? rec.estimated1RMKg : (rec.weightKg || 0);
 };
 
+export const isStrengthCompletedEval = (ev?: PhysicalEvaluationRecord | null): boolean =>
+  Boolean(
+    ev?.strengthRecords?.some(
+      (r) => r.status !== 'na' && r.status !== 'np' && getEffectiveStrength1RMKg(r) > 0
+    )
+  );
+
+const SHORT_MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+export const formatYearMonthLabel = (ym: string): string => {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return ym;
+  const [y, m] = ym.split('-');
+  const idx = parseInt(m, 10) - 1;
+  return `${SHORT_MONTHS_ES[idx] || m} ${y}`;
+};
+
+export const shiftYearMonth = (ym: string, deltaMonths: number): string => {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return ym;
+  const [y, m] = ym.split('-').map(Number);
+  const dt = new Date(y, m - 1 + deltaMonths, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export interface ResolvedExerciseRecord {
   record: StrengthMaxRecord;
   evaluationDate: string;
