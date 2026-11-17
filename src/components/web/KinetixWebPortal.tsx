@@ -96,9 +96,12 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const isStaff = currentUser.role === 'staff';
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
-  const userEvals = evaluations.filter(e => e.userId === currentUser.id);
+  const userEvals = [...evaluations.filter(e => e.userId === currentUser.id)].sort(
+    (a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime()
+  );
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
+  const latestStrengthEval = [...userEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || latestEval;
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -417,6 +420,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           athlete={currentUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           onClose={() => setShowReportModal(false)}
         />
       )}
@@ -427,6 +431,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           athlete={currentUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

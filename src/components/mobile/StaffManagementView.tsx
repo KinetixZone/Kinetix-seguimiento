@@ -415,8 +415,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const getLatestAthleteExerciseData = (athleteId: string, exId: string) => {
     const userEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-    const latest = sorted[sorted.length - 1];
-    return latest?.strengthRecords?.find(s => s.exerciseId === exId);
+    const latestWithStrength = [...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
+    return latestWithStrength?.strengthRecords?.find(s => s.exerciseId === exId);
   };
 
   // Update inputs whenever exercise changes so every athlete card reflects their individual previous mark
@@ -656,6 +656,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         const pastEvals = evaluations.filter(e => e.userId === athId);
         const sortedPast = [...pastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
         const latestPast = sortedPast[sortedPast.length - 1];
+        const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
 
         const defaultCooper: CooperTestRecord = latestPast?.cooperTest || {
           level: 'Nivel 5',
@@ -675,7 +676,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           status: 'completed',
         };
 
-        const baseStrength: StrengthMaxRecord[] = latestPast?.strengthRecords?.map(s => {
+        const baseStrength: StrengthMaxRecord[] = latestPastStrength?.strengthRecords?.map(s => {
           if (s.exerciseId === expressExerciseId) return newRec;
           return s;
         }) || [newRec];
@@ -832,7 +833,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           latestBoxEvalDate = latest.evaluationDate;
         }
 
-        latest.strengthRecords?.forEach(sr => {
+        const latestWithStrength = evalList.find(ev => (ev.strengthRecords?.length || 0) > 0);
+        latestWithStrength?.strengthRecords?.forEach(sr => {
           if (sr.status === 'completed' && sr.weightKg > 0) {
             if (sr.exerciseId === 'squats') { squatSum += sr.weightKg; squatCount++; }
             else if (sr.exerciseId === 'deadlift') { deadliftSum += sr.weightKg; deadliftCount++; }
@@ -3296,7 +3298,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 const athleteBodies = bodyCompRecords.filter(b => b.userId === athlete.id).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
                 const latestBody = athleteBodies[0];
 
-                const completed1RMs = latestEval?.strengthRecords?.filter(s => s.status === 'completed' && s.weightKg > 0).length || 0;
+                const isLatestEnduranceOnly = latestEval && (!latestEval.strengthRecords || latestEval.strengthRecords.length === 0);
+                const latestWithStrength = athleteEvals.find(e => (e.strengthRecords?.length || 0) > 0);
+                const completed1RMs = latestWithStrength?.strengthRecords?.filter(s => s.status === 'completed' && s.weightKg > 0).length || 0;
 
                 return (
                   <div className="pt-2 border-t border-neutral-800/60 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -3314,7 +3318,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           </span>
                           <span className="text-[10px] text-neutral-400 block truncate">
                             {latestEval
-                              ? `${completed1RMs}/5 1RM registradas`
+                              ? (isLatestEnduranceOnly
+                                  ? (completed1RMs > 0
+                                      ? `🏃 Solo Resistencia · ${completed1RMs}/5 1RM previas OK`
+                                      : '🏃 Solo Resistencia registrada')
+                                  : `${completed1RMs}/5 1RM registradas`)
                               : 'Pendiente de evaluar en sábana oficial'}
                           </span>
                         </div>

@@ -22,6 +22,7 @@ interface ShareableStoryModalProps {
   athlete: UserProfile;
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
+  latestStrengthEval?: PhysicalEvaluationRecord | null;
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -30,6 +31,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   athlete,
   latestBodyComp,
   latestEval,
+  latestStrengthEval,
   gymLogoUrl,
   onClose,
 }) => {
@@ -40,8 +42,11 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   const [instagramStepActive, setInstagramStepActive] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const strengthRecord = latestEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
-    latestEval?.strengthRecords[0] || null;
+  const strengthSourceEval = (latestEval?.strengthRecords?.length ? latestEval : null) ||
+    (latestStrengthEval?.strengthRecords?.length ? latestStrengthEval : null);
+
+  const strengthRecord = strengthSourceEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
+    strengthSourceEval?.strengthRecords[0] || null;
 
   // Preformatted text for sharing
   const generateShareText = () => {
@@ -404,13 +409,13 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
         </div>
 
         {/* Exercise picker if strength (Clean wrap so Sentadillas and all exercises are 100% visible) */}
-        {storyType === 'strength' && latestEval?.strengthRecords && (
+        {storyType === 'strength' && strengthSourceEval?.strengthRecords && strengthSourceEval.strengthRecords.length > 0 && (
           <div className="space-y-1.5 bg-neutral-950 p-2.5 rounded-2xl border border-neutral-800/80">
             <span className="text-[11px] text-neutral-300 block font-semibold">
               Selecciona el ejercicio evaluado:
             </span>
             <div className="flex flex-wrap gap-1.5 text-xs">
-              {latestEval.strengthRecords.map(rec => (
+              {strengthSourceEval.strengthRecords.map(rec => (
                 <button
                   key={rec.exerciseId}
                   type="button"
@@ -474,7 +479,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>NUEVO RÉCORD PERSONAL (PR)</span>
                   </div>
 
-                  {!latestEval || !latestEval.strengthRecords || latestEval.strengthRecords.length === 0 || !strengthRecord ? (
+                  {!strengthSourceEval || !strengthSourceEval.strengthRecords || strengthSourceEval.strengthRecords.length === 0 || !strengthRecord ? (
                     <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
                       <p className="text-xs text-neutral-300 font-medium">Aún no hay marcas de fuerza registradas</p>
                       <p className="text-[10px] text-neutral-500">Inicia tu primera evaluación técnica con el Coach para generar tu tarjeta de 1RM.</p>

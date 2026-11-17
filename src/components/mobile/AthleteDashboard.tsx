@@ -92,6 +92,10 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
     return list.sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
   }, [evaluations, latestEval]);
 
+  const latestStrengthEval = React.useMemo(() => {
+    return [...sortedEvals].reverse().find(ev => (ev.strengthRecords?.length || 0) > 0) || null;
+  }, [sortedEvals]);
+
   const loadQuickStat = React.useMemo(() => {
     const getTotalLoad = (ev?: PhysicalEvaluationRecord) => {
       if (!ev || !ev.strengthRecords) return 0;
@@ -648,7 +652,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
       )}
 
       {/* Progress Achievement Banner (Only show real achievements if evaluations exist) */}
-      {latestEval && latestEval.strengthRecords && latestEval.strengthRecords.length > 0 ? (
+      {latestEval ? (
         <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/50 via-neutral-900 to-red-950/40 border border-blue-500/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
@@ -725,16 +729,20 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
             <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
             Pruebas Recientes de Fuerza Máxima
           </h3>
-          <span className="text-[11px] font-mono text-neutral-500">{displayMonth}</span>
+          <span className="text-[11px] font-mono text-neutral-500">
+            {latestStrengthEval ? latestStrengthEval.evaluationDate : displayMonth}
+          </span>
         </div>
 
-        {(!latestEval || !latestEval.strengthRecords || latestEval.strengthRecords.length === 0) ? (
+        {(!latestStrengthEval || !latestStrengthEval.strengthRecords || latestStrengthEval.strengthRecords.length === 0) ? (
           <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800 text-center text-xs text-neutral-400">
-            Aún no se han capturado pruebas de fuerza ni test de Cooper. Tu coach registrará tu primera evaluación en pista.
+            {latestEval
+              ? 'Tu evaluación más reciente fue enfocada solo en resistencia. Cuando realices pruebas 1RM aparecerán aquí.'
+              : 'Aún no se han capturado pruebas de fuerza ni test de Cooper. Tu coach registrará tu primera evaluación en pista.'}
           </div>
         ) : (
           <div className="space-y-2">
-            {latestEval.strengthRecords.slice(0, 4).map((rec) => (
+            {latestStrengthEval.strengthRecords.slice(0, 4).map((rec) => (
               <div 
                 key={rec.exerciseId}
                 className="flex items-center justify-between py-2 border-b border-neutral-800/60 last:border-0 text-xs"

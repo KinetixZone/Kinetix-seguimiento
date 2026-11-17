@@ -6,6 +6,7 @@ interface ProgressReportModalProps {
   athlete: UserProfile;
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
+  latestStrengthEval?: PhysicalEvaluationRecord | null;
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -14,6 +15,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   athlete,
   latestBodyComp,
   latestEval,
+  latestStrengthEval,
   gymLogoUrl,
   onClose,
 }) => {
@@ -24,6 +26,10 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   // Defensive validation: ensure records belong exclusively to this athlete
   const validBodyComp = latestBodyComp && latestBodyComp.userId === athlete.id ? latestBodyComp : null;
   const validEval = latestEval && latestEval.userId === athlete.id ? latestEval : null;
+  const candidateStrengthEval = latestStrengthEval && latestStrengthEval.userId === athlete.id ? latestStrengthEval : null;
+  const validStrengthEval = (validEval && (validEval.strengthRecords?.length || 0) > 0)
+    ? validEval
+    : (candidateStrengthEval && (candidateStrengthEval.strengthRecords?.length || 0) > 0 ? candidateStrengthEval : null);
 
   // Coach validator selection state (allows staff to choose who officially validates the electronic report)
   const defaultCoachName = validEval?.coachName || 'Leslie (Dirección & Coach)';
@@ -378,15 +384,30 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
                 </div>
 
                 <div className="p-4 bg-neutral-900/50 rounded-xl border border-neutral-800 space-y-2">
-                  <span className="font-semibold text-white block">Evaluación de Cargas Máximas (1RM)</span>
-                  <div className="space-y-1 text-[11px] font-mono">
-                    {validEval.strengthRecords.map(rec => (
-                      <div key={rec.exerciseId} className="flex justify-between py-0.5 border-b border-neutral-800/40 last:border-none">
-                        <span className="text-neutral-400 font-sans">{rec.exerciseName}:</span>
-                        <span className="text-white font-bold">{rec.estimated1RMKg} kg ({rec.weightKg}kg × {rec.reps})</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-white block">Evaluación de Cargas Máximas (1RM)</span>
+                    {validStrengthEval && validStrengthEval.id !== validEval.id && (
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        Toma: {validStrengthEval.evaluationDate}
+                      </span>
+                    )}
                   </div>
+                  {validStrengthEval && validStrengthEval.strengthRecords.length > 0 ? (
+                    <div className="space-y-1 text-[11px] font-mono">
+                      {validStrengthEval.strengthRecords.map(rec => (
+                        <div key={rec.exerciseId} className="flex justify-between py-0.5 border-b border-neutral-800/40 last:border-none">
+                          <span className="text-neutral-400 font-sans">{rec.exerciseName}:</span>
+                          <span className="text-white font-bold">
+                            {rec.status === 'na' ? 'NA' : rec.status === 'np' ? 'NP' : `${rec.estimated1RMKg} kg (${rec.weightKg}kg × ${rec.reps})`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-neutral-400 py-2">
+                      Jornada enfocada en pruebas aeróbicas y de resistencia (sin medición de 1RM registrada aún).
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -151,8 +151,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const preloadExpressValues = (athleteId: string, exId: string) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-    const latest = sorted[sorted.length - 1];
-    const rec = latest?.strengthRecords?.find(s => s.exerciseId === exId);
+    const latestWithStrength = [...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
+    const rec = latestWithStrength?.strengthRecords?.find(s => s.exerciseId === exId);
 
     if (rec && rec.status !== 'na' && rec.status !== 'np' && rec.weightKg > 0) {
       setExpressWeight(rec.weightKg);
@@ -200,6 +200,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Form State for New Evaluation Entry (Staff)
   const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [evalSessionMode, setEvalSessionMode] = useState<'full' | 'endurance_only'>('full');
   
   // Cooper Test State (Supports completed, NA - niños/adultos mayores, NP - no presentada/lesión)
   const [cooperStatus, setCooperStatus] = useState<EvaluationStatus>('completed');
@@ -342,8 +343,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
     const latest = customEval !== undefined ? customEval : (sorted[sorted.length - 1] || null);
+    const latestStrengthSource = customEval !== undefined
+      ? customEval
+      : ([...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null);
 
     setEvalDate(new Date().toISOString().slice(0, 10));
+    if (customEval) {
+      setEvalSessionMode((customEval.strengthRecords?.length || 0) === 0 ? 'endurance_only' : 'full');
+    } else {
+      setEvalSessionMode('full');
+    }
     if (latest) {
       // Cooper Test state
       const cpStatus = latest.cooperTest.status || 
@@ -372,32 +381,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         setEnduranceDifficulty(latest.enduranceTest.difficultyLevel as any);
       }
 
-      // Strength records state: EXACT measurements or 0 (no fake defaults)
-      const sq = latest.strengthRecords?.find(s => s.exerciseId === 'squats');
+      // Strength records state: EXACT measurements or 0 (using latestStrengthSource so endurance-only months don't clear 1RM baseline)
+      const sq = latestStrengthSource?.strengthRecords?.find(s => s.exerciseId === 'squats');
       setSquatStatus(sq?.status || (sq && sq.weightKg === 0 && sq.notes?.includes('NA') ? 'na' : 'completed'));
       setSquatReason(sq?.statusReason || (sq?.notes?.includes('NA') ? sq.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setSquatWeight(sq ? sq.weightKg : 0);
       setSquatReps(sq ? sq.reps : 1);
 
-      const dl = latest.strengthRecords?.find(s => s.exerciseId === 'deadlift');
+      const dl = latestStrengthSource?.strengthRecords?.find(s => s.exerciseId === 'deadlift');
       setDeadliftStatus(dl?.status || (dl && dl.weightKg === 0 && dl.notes?.includes('NA') ? 'na' : 'completed'));
       setDeadliftReason(dl?.statusReason || (dl?.notes?.includes('NA') ? dl.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setDeadliftWeight(dl ? dl.weightKg : 0);
       setDeadliftReps(dl ? dl.reps : 1);
 
-      const ht = latest.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
+      const ht = latestStrengthSource?.strengthRecords?.find(s => s.exerciseId === 'hip_thrust');
       setHipThrustStatus(ht?.status || (ht && ht.weightKg === 0 && ht.notes?.includes('NA') ? 'na' : 'completed'));
       setHipThrustReason(ht?.statusReason || (ht?.notes?.includes('NA') ? ht.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setHipThrustWeight(ht ? ht.weightKg : 0);
       setHipThrustReps(ht ? ht.reps : 1);
 
-      const pr = latest.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
+      const pr = latestStrengthSource?.strengthRecords?.find(s => s.exerciseId === 'horizontal_press');
       setPressStatus(pr?.status || (pr && pr.weightKg === 0 && pr.notes?.includes('NA') ? 'na' : 'completed'));
       setPressReason(pr?.statusReason || (pr?.notes?.includes('NA') ? pr.notes.replace(/^NA:\s*/i, '').trim() : ''));
       setPressWeight(pr ? pr.weightKg : 0);
       setPressReps(pr ? pr.reps : 1);
 
-      const rw = latest.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
+      const rw = latestStrengthSource?.strengthRecords?.find(s => s.exerciseId === 'pullups_or_rows');
       setRowStatus(rw?.status || (rw && rw.weightKg === 0 && rw.notes?.includes('NA') ? 'na' : 'completed'));
       setRowReason(rw?.statusReason || (rw?.notes?.includes('NA') ? rw.notes.replace(/^NA:\s*/i, '').trim() : ''));
       if (rw) {
@@ -542,7 +551,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       statusReason: enduranceReason,
     };
 
-    const strengthRecordsList: StrengthMaxRecord[] = [
+    const strengthRecordsList: StrengthMaxRecord[] = evalSessionMode === 'endurance_only' ? [] : [
       {
         exerciseId: 'squats',
         exerciseName: 'Sentadillas',
@@ -825,6 +834,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       const userPastEvals = evaluations.filter(e => e.userId === targetId);
       const sortedPast = [...userPastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
       const latestPast = sortedPast[sortedPast.length - 1] || null;
+      const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null;
 
       const baseExercises: ('squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows')[] = [
         'squats', 'deadlift', 'hip_thrust', 'horizontal_press', 'pullups_or_rows'
@@ -832,7 +842,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
       const baseStrength: StrengthMaxRecord[] = baseExercises.map(exId => {
         if (exId === expressExerciseId) return newRec;
-        const existing = latestPast?.strengthRecords?.find(s => s.exerciseId === exId);
+        const existing = latestPastStrength?.strengthRecords?.find(s => s.exerciseId === exId);
         if (existing) return existing;
         return {
           exerciseId: exId,
@@ -914,6 +924,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   const latestEval = sortedEvals[sortedEvals.length - 1] || null;
   const prevEval = sortedEvals.length > 1 ? sortedEvals[sortedEvals.length - 2] : null;
+  const evalsWithStrength = sortedEvals.filter(e => (e.strengthRecords?.length || 0) > 0);
+  const latestStrengthEval = evalsWithStrength[evalsWithStrength.length - 1] || null;
+  const prevStrengthEval = evalsWithStrength.length > 1 ? evalsWithStrength[evalsWithStrength.length - 2] : null;
 
   const prevEnduranceSeconds = prevEval ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : null;
   const currentEnduranceSeconds = latestEval ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : null;
@@ -1631,21 +1644,35 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           {/* TARJETA COMPARATIVA 3: FUERZA 1RM (5 EJERCICIOS) */}
           <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Dumbbell className="w-4 h-4 text-[#ff5500]" />
-                <span>3. Fuerza Máxima 1RM (5 Ejercicios Pilares)</span>
-              </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Dumbbell className="w-4 h-4 text-[#ff5500]" />
+                  <span>3. Fuerza Máxima 1RM (5 Ejercicios Pilares)</span>
+                </span>
+                {latestStrengthEval && latestStrengthEval.id !== latestEval.id && (
+                  <span className="text-[10px] text-emerald-400 font-mono block mt-0.5">
+                    Última toma 1RM conservada: {latestStrengthEval.evaluationDate} (jornada reciente enfocada en resistencia)
+                  </span>
+                )}
+              </div>
               {(() => {
-                if (!prevEval || !prevEval.strengthRecords || prevEval.strengthRecords.length === 0) {
+                if (!latestStrengthEval) {
+                  return (
+                    <span className="text-[10px] text-neutral-400 font-semibold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
+                      Sin toma de 1RM aún
+                    </span>
+                  );
+                }
+                if (!prevStrengthEval || !prevStrengthEval.strengthRecords || prevStrengthEval.strengthRecords.length === 0) {
                   return (
                     <span className="text-[10px] text-blue-400 font-semibold bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/30">
                       Evaluación Base Oficial
                     </span>
                   );
                 }
-                const totalCurrent = latestEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
-                const totalPrev = prevEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
+                const totalCurrent = latestStrengthEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
+                const totalPrev = prevStrengthEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
                 const diff = totalCurrent - totalPrev;
                 return (
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
@@ -1657,10 +1684,41 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               })()}
             </div>
 
-            <div className="space-y-2">
-              {latestEval.strengthRecords.map((rec) => {
-                if (rec.status === 'na' || rec.status === 'np') {
-                  const isNA = rec.status === 'na';
+            {!latestStrengthEval ? (
+              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 text-xs text-neutral-400">
+                Las evaluaciones recientes se enfocaron en resistencia aeróbica. Cuando se capture una jornada con 1RM, tus marcas aparecerán aquí.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {latestStrengthEval.strengthRecords.map((rec) => {
+                  if (rec.status === 'na' || rec.status === 'np') {
+                    const isNA = rec.status === 'na';
+                    return (
+                      <div
+                        key={rec.exerciseId}
+                        className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <div className="font-bold text-white flex items-center gap-1.5">
+                            <span className="text-neutral-400">{rec.exerciseName}</span>
+                          </div>
+                          <div className="text-[10px] text-neutral-500">
+                            {rec.statusReason || (isNA ? 'No aplica por prescripción médica / edad' : 'No realizada en esta sesión')}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          isNA ? 'bg-neutral-800 text-neutral-400 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {isNA ? '🚫 NA' : '⚠️ NP'}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const prevRec = prevStrengthEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
+                  const hasPrev = Boolean(prevRec);
+                  const deltaKg = hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? rec.weightKg - prevRec.weightKg : null;
+
                   return (
                     <div
                       key={rec.exerciseId}
@@ -1670,54 +1728,29 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="font-bold text-white flex items-center gap-1.5">
                           <span className="text-neutral-400">{rec.exerciseName}</span>
                         </div>
-                        <div className="text-[10px] text-neutral-500">
-                          {rec.statusReason || (isNA ? 'No aplica por prescripción médica / edad' : 'No realizada en esta sesión')}
+                        <div className="text-[10px] text-neutral-400">
+                          {hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? (
+                            <>Anterior: <strong className="text-neutral-300">{prevRec.weightKg} kg</strong> &rarr; Ahora:{' '}</>
+                          ) : (
+                            <>Marca actual:{' '}</>
+                          )}
+                          <strong className="text-white">{rec.weightKg} kg</strong> ({rec.reps} {rec.reps === 1 ? 'rep' : 'reps'})
                         </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                        isNA ? 'bg-neutral-800 text-neutral-400 border border-neutral-700' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        {isNA ? '🚫 NA' : '⚠️ NP'}
-                      </span>
+
+                      <div className="text-right">
+                        <div className="text-[10px] text-emerald-400 font-mono font-bold">
+                          {deltaKg !== null ? (deltaKg > 0 ? `+${deltaKg} kg` : `${deltaKg} kg`) : 'Base'}
+                        </div>
+                        <div className="text-xs font-extrabold text-neutral-200 font-mono">
+                          1RM: {rec.estimated1RMKg} kg
+                        </div>
+                      </div>
                     </div>
                   );
-                }
-
-                const prevRec = prevEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
-                const hasPrev = Boolean(prevRec);
-                const deltaKg = hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? rec.weightKg - prevRec.weightKg : null;
-
-                return (
-                  <div
-                    key={rec.exerciseId}
-                    className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="font-bold text-white flex items-center gap-1.5">
-                        <span className="text-neutral-400">{rec.exerciseName}</span>
-                      </div>
-                      <div className="text-[10px] text-neutral-400">
-                        {hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? (
-                          <>Anterior: <strong className="text-neutral-300">{prevRec.weightKg} kg</strong> &rarr; Ahora:{' '}</>
-                        ) : (
-                          <>Marca actual:{' '}</>
-                        )}
-                        <strong className="text-white">{rec.weightKg} kg</strong> ({rec.reps} {rec.reps === 1 ? 'rep' : 'reps'})
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-[10px] text-emerald-400 font-mono font-bold">
-                        {deltaKg !== null ? (deltaKg > 0 ? `+${deltaKg} kg` : `${deltaKg} kg`) : 'Base'}
-                      </div>
-                      <div className="text-xs font-extrabold text-neutral-200 font-mono">
-                        1RM: {rec.estimated1RMKg} kg
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                })}
+              </div>
+            )}
 
             <button
               onClick={() => setActiveTab('strength')}
@@ -2265,10 +2298,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-              5 Ejercicios de Fuerza Kinetix
-            </span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block">
+                5 Ejercicios de Fuerza Kinetix
+              </span>
+              {latestStrengthEval && latestStrengthEval.id !== latestEval.id && (
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  Marcas conservadas del {latestStrengthEval.evaluationDate}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-xl border border-neutral-800 text-xs">
               <button
                 onClick={() => setWeightUnit('kg')}
@@ -2289,8 +2329,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </div>
           </div>
 
+          {!latestStrengthEval ? (
+            <div className="p-6 rounded-2xl bg-neutral-900/80 border border-neutral-800 text-center space-y-2">
+              <Dumbbell className="w-6 h-6 text-neutral-500 mx-auto" />
+              <p className="text-xs text-neutral-300 font-semibold">Sin registros de Fuerza 1RM todavía</p>
+              <p className="text-[11px] text-neutral-400">
+                Las jornadas registradas hasta ahora corresponden solo a resistencia aeróbica.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-2.5">
-            {latestEval.strengthRecords.map((rec) => {
+            {latestStrengthEval.strengthRecords.map((rec) => {
               if (rec.status === 'na' || rec.status === 'np') {
                 const isNA = rec.status === 'na';
                 return (
@@ -2330,7 +2379,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 );
               }
 
-              const prevRec = prevEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
+              const prevRec = prevStrengthEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
               const prevWeight = prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? prevRec.weightKg : (rec.weightKg > 10 ? rec.weightKg - 10 : rec.weightKg);
               const deltaKg = rec.weightKg - prevWeight;
 
@@ -2430,6 +2479,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               );
             })}
           </div>
+          )}
         </div>
       )}
 
@@ -2514,6 +2564,14 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
                     <span className="text-[10px] text-neutral-400 block">Sentadilla 1RM</span>
                     {(() => {
+                      if (!ev.strengthRecords || ev.strengthRecords.length === 0) {
+                        return (
+                          <>
+                            <div className="font-bold text-emerald-400 text-xs">🏃 Solo Resistencia</div>
+                            <span className="text-[10px] text-neutral-500">Sin 1RM en esta fecha</span>
+                          </>
+                        );
+                      }
                       const squat = ev.strengthRecords.find(s => s.exerciseId === 'squats');
                       if (squat?.status === 'na') {
                         return <div className="font-extrabold text-neutral-400 font-mono text-sm">🚫 NA</div>;
@@ -2524,7 +2582,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       return (
                         <>
                           <div className="font-extrabold text-[#ff5500] font-mono text-sm">
-                            {squat?.weightKg || 120} kg
+                            {squat?.weightKg || 0} kg
                           </div>
                           <span className="text-[10px] text-neutral-500">1RM máx</span>
                         </>
@@ -2655,6 +2713,39 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <span className="text-[10px] text-neutral-500 block mt-1">
                   * Puedes elegir cualquier fecha de meses anteriores para cargar expedientes históricos sin perder tu progreso ganado.
                 </span>
+              </div>
+
+              {/* MODALIDAD DE LA JORNADA (Completa vs Solo Resistencia) */}
+              <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-300 font-semibold text-xs">Modalidad de esta fecha</span>
+                  <span className="text-[10px] text-neutral-400 font-mono">Opcional</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('full')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'full' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Completa (Resistencia + 1RM)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('endurance_only')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'endurance_only' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    🏃 Solo Resistencia (Sin 1RM)
+                  </button>
+                </div>
+                {evalSessionMode === 'endurance_only' && (
+                  <p className="text-[10px] text-emerald-300 leading-snug">
+                    En esta fecha solo se guardarán las pruebas aeróbicas y de resistencia. Las marcas previas de Fuerza 1RM del atleta se mantienen intactas.
+                  </p>
+                )}
               </div>
 
               {/* BANNER ACCIÓN RÁPIDA: NA GENERAL (EXENTAR CICLO COMPLETO / NUEVO INGRESO) */}
@@ -3365,6 +3456,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               </div>
 
               {/* SECCIÓN 3: FUERZA 1RM (5 EJERCICIOS CON SELECTOR NA / NP INDIVIDUAL) */}
+              {evalSessionMode === 'full' && (
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-white flex items-center gap-1.5">
@@ -3719,6 +3811,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Selector de Coach Evaluador */}
               <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-1.5">
@@ -3831,6 +3924,33 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   onChange={(e) => setEvalDate(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none"
                 />
+              </div>
+
+              {/* MODALIDAD DE LA JORNADA EN EDICIÓN */}
+              <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-300 font-semibold text-xs">Modalidad de esta fecha</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('full')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'full' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Completa (Resistencia + 1RM)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('endurance_only')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'endurance_only' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    🏃 Solo Resistencia (Sin 1RM)
+                  </button>
+                </div>
               </div>
 
               {/* BANNER ACCIÓN RÁPIDA EN EDICIÓN: NA GENERAL */}
@@ -4267,6 +4387,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               </div>
 
               {/* SECCIÓN 3: CORREGIR O EDITAR PESOS DE FUERZA (1RM) */}
+              {evalSessionMode === 'full' && (
               <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -4623,6 +4744,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
                 </div>
               </div>
+              )}
 
               <div>
                 <label className="text-neutral-300 font-medium block mb-1">Notas del Coach</label>
@@ -4653,7 +4775,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     const formattedResult = `${enduranceMinutes.toString().padStart(2, '0')}:${enduranceSeconds.toString().padStart(2, '0')} min`;
                     const levelInfo = getCooperLevelInfo(selectedCooperLevel);
 
-                    const updatedStrengthRecords: StrengthMaxRecord[] = isFormAllNA
+                    const updatedStrengthRecords: StrengthMaxRecord[] = evalSessionMode === 'endurance_only'
+                      ? []
+                      : isFormAllNA
                       ? (editingEval.strengthRecords || []).map(s => ({
                           ...s,
                           weightKg: 0,

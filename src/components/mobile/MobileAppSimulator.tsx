@@ -104,9 +104,12 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
-  const userEvals = evaluations.filter(e => e.userId === currentUser.id);
+  const userEvals = [...evaluations.filter(e => e.userId === currentUser.id)].sort(
+    (a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime()
+  );
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
+  const latestStrengthEval = [...userEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || latestEval;
 
   const handleTriggerPushBanner = (title: string, body: string) => {
     setActiveBannerNotification({ title, body });
@@ -491,6 +494,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           athlete={currentUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           onClose={() => setShowReportModal(false)}
         />
       )}
@@ -501,6 +505,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           athlete={currentUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

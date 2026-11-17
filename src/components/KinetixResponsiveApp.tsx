@@ -145,9 +145,12 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   }, [currentUser.id]);
 
   const userBodyComps = bodyCompRecords.filter(b => b.userId === effectiveUser.id);
-  const userEvals = evaluations.filter(e => e.userId === effectiveUser.id);
+  const userEvals = [...evaluations.filter(e => e.userId === effectiveUser.id)].sort(
+    (a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime()
+  );
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
+  const latestStrengthEval = [...userEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || latestEval;
 
   // Navigation handlers with History Stack
   const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
@@ -789,6 +792,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           athlete={effectiveUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowReportModal(false)}
         />
@@ -799,6 +803,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           athlete={effectiveUser}
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
+          latestStrengthEval={latestStrengthEval}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowShareStoryModal(false)}
         />
