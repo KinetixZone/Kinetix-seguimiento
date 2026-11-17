@@ -7,6 +7,7 @@ interface ProgressReportModalProps {
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
   latestStrengthEval?: PhysicalEvaluationRecord | null;
+  latestAerobicEval?: PhysicalEvaluationRecord | null;
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -16,6 +17,7 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   latestBodyComp,
   latestEval,
   latestStrengthEval,
+  latestAerobicEval,
   gymLogoUrl,
   onClose,
 }) => {
@@ -30,6 +32,13 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
   const validStrengthEval = (validEval && (validEval.strengthRecords?.length || 0) > 0)
     ? validEval
     : (candidateStrengthEval && (candidateStrengthEval.strengthRecords?.length || 0) > 0 ? candidateStrengthEval : null);
+
+  const isEvalStrengthOnly = (ev: PhysicalEvaluationRecord | null) =>
+    Boolean(ev && (ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM'));
+  const candidateAerobicEval = latestAerobicEval && latestAerobicEval.userId === athlete.id ? latestAerobicEval : null;
+  const validAerobicEval = (validEval && !isEvalStrengthOnly(validEval))
+    ? validEval
+    : (candidateAerobicEval && !isEvalStrengthOnly(candidateAerobicEval) ? candidateAerobicEval : null);
 
   // Coach validator selection state (allows staff to choose who officially validates the electronic report)
   const defaultCoachName = validEval?.coachName || 'Leslie (Dirección & Coach)';
@@ -47,12 +56,12 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
 
   // Check if Cooper test was performed in Cooper 2 (Laps) modality
   const isCooper2 = !!(
-    validEval?.cooperTest && (
-      validEval.cooperTest.variant === 'laps' ||
-      (typeof validEval.cooperTest.lapsCount === 'number' && validEval.cooperTest.lapsCount > 0) ||
-      validEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-      validEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-      validEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+    validAerobicEval?.cooperTest && (
+      validAerobicEval.cooperTest.variant === 'laps' ||
+      (typeof validAerobicEval.cooperTest.lapsCount === 'number' && validAerobicEval.cooperTest.lapsCount > 0) ||
+      validAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+      validAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+      validAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas')
     )
   );
 
@@ -332,54 +341,72 @@ export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-4 bg-neutral-900/50 rounded-xl border border-neutral-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">
-                      {isCooper2 ? 'Test Cooper 2 (Por Vueltas)' : 'Test de Cooper (12 Minutos)'}
-                    </span>
-                    {isCooper2 ? (
-                      <span className="text-amber-400 font-bold bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded text-[10px]">
-                        COOPER 2 · POR VUELTAS
-                      </span>
-                    ) : (
-                      <span className="text-[#ff5500] font-bold bg-orange-950/80 border border-orange-800/60 px-2 py-0.5 rounded text-[10px]">
-                        NIVEL {validEval.cooperTest.levelNumber || 1} DE 20
-                      </span>
-                    )}
-                  </div>
-
-                  {isCooper2 ? (
-                    <div className="space-y-1">
-                      <div className="text-sm font-mono text-neutral-200">
-                        Vueltas Completadas: <strong className="text-amber-400 font-bold text-base">{validEval.cooperTest.lapsCount || '—'} vueltas</strong>
-                      </div>
-                      <div className="text-xs font-mono text-emerald-400 font-semibold">
-                        Distancia aprox: ~{validEval.cooperTest.distanceMeters || Math.round((validEval.cooperTest.lapsCount || 0) * (validEval.cooperTest.metersPerLap || 400))} metros
-                      </div>
-                      <div className="text-[11px] text-neutral-400">
-                        Circuito: {validEval.cooperTest.lapLocation === 'outside' ? '🌳 Afuera / Pista exterior (400m)' : '🏢 Adentro / Box (250m)'}
+                  {!validAerobicEval ? (
+                    <div className="space-y-1.5">
+                      <span className="font-semibold text-white block">Capacidad Aeróbica & Resistencia</span>
+                      <div className="text-[11px] text-neutral-400 py-2">
+                        Jornada enfocada en Fuerza Máxima 1RM (sin prueba aeróbica registrada aún).
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-1">
-                      <div className="text-sm font-mono text-neutral-300">
-                        Nivel Asignado: <strong className="text-white">{validEval.cooperTest.level}</strong>
-                      </div>
-                      {validEval.cooperTest.distanceMeters ? (
-                        <div className="text-xs font-mono text-neutral-400">
-                          Distancia estimada: {validEval.cooperTest.distanceMeters} m
+                    <>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-semibold text-white">
+                          {isCooper2 ? 'Test Cooper 2 (Por Vueltas)' : 'Test de Cooper (12 Minutos)'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {validAerobicEval.id !== validEval.id && (
+                            <span className="text-[10px] text-neutral-400 font-mono">
+                              Toma: {validAerobicEval.evaluationDate}
+                            </span>
+                          )}
+                          {isCooper2 ? (
+                            <span className="text-amber-400 font-bold bg-amber-950/80 border border-amber-800/60 px-2 py-0.5 rounded text-[10px]">
+                              COOPER 2 · POR VUELTAS
+                            </span>
+                          ) : (
+                            <span className="text-[#ff5500] font-bold bg-orange-950/80 border border-orange-800/60 px-2 py-0.5 rounded text-[10px]">
+                              NIVEL {validAerobicEval.cooperTest.levelNumber || 1} DE 20
+                            </span>
+                          )}
                         </div>
-                      ) : null}
-                    </div>
-                  )}
+                      </div>
 
-                  <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/40">
-                    Diagnóstico Staff: {validEval.cooperTest.description}
-                  </div>
+                      {isCooper2 ? (
+                        <div className="space-y-1">
+                          <div className="text-sm font-mono text-neutral-200">
+                            Vueltas Completadas: <strong className="text-amber-400 font-bold text-base">{validAerobicEval.cooperTest.lapsCount || '—'} vueltas</strong>
+                          </div>
+                          <div className="text-xs font-mono text-emerald-400 font-semibold">
+                            Distancia aprox: ~{validAerobicEval.cooperTest.distanceMeters || Math.round((validAerobicEval.cooperTest.lapsCount || 0) * (validAerobicEval.cooperTest.metersPerLap || 400))} metros
+                          </div>
+                          <div className="text-[11px] text-neutral-400">
+                            Circuito: {validAerobicEval.cooperTest.lapLocation === 'outside' ? '🌳 Afuera / Pista exterior (400m)' : '🏢 Adentro / Box (250m)'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="text-sm font-mono text-neutral-300">
+                            Nivel Asignado: <strong className="text-white">{validAerobicEval.cooperTest.level}</strong>
+                          </div>
+                          {validAerobicEval.cooperTest.distanceMeters ? (
+                            <div className="text-xs font-mono text-neutral-400">
+                              Distancia estimada: {validAerobicEval.cooperTest.distanceMeters} m
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
 
-                  {validEval.enduranceTest && (
-                    <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/60">
-                      Resistencia específica: {validEval.enduranceTest.name} ({validEval.enduranceTest.result})
-                    </div>
+                      <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/40">
+                        Diagnóstico Staff: {validAerobicEval.cooperTest.description}
+                      </div>
+
+                      {validAerobicEval.enduranceTest && (
+                        <div className="text-[11px] text-neutral-400 pt-1 border-t border-neutral-800/60">
+                          Resistencia específica: {validAerobicEval.enduranceTest.name} ({validAerobicEval.enduranceTest.result})
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

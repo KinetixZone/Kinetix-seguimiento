@@ -105,7 +105,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
   onOpenIndividualEdit,
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(globalEvalDate || new Date().toISOString().slice(0, 10));
-  const [sessionMode, setSessionMode] = useState<'full' | 'endurance_only'>('full');
+  const [sessionMode, setSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30>('all');
   const [rows, setRows] = useState<Record<string, AthleteRowState>>({});
@@ -169,8 +169,9 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
 
           const totalSec = typeof end?.timeSeconds === 'number' ? end.timeSeconds : 0;
           const hasStrength = (existingInDate.strengthRecords?.length || 0) > 0;
+          const isStrengthOnly = Boolean(coop?.sessionOmitted || coop?.statusReason === 'Jornada Solo Fuerza 1RM');
 
-          const isAllNA = coop?.status === 'na' && end?.status === 'na' &&
+          const isAllNA = !isStrengthOnly && coop?.status === 'na' && end?.status === 'na' &&
             (!hasStrength || (sq?.status === 'na' && dl?.status === 'na' && ht?.status === 'na' &&
             hp?.status === 'na' && rw?.status === 'na'));
 
@@ -262,13 +263,14 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     });
   }, [isOpen, selectedDate, athletes, evaluations]);
 
-  // Detectar automáticamente si la fecha seleccionada ya tiene registros "Solo Resistencia"
+  // Detectar automáticamente si la fecha seleccionada ya tiene registros "Solo Resistencia" o "Solo Fuerza 1RM"
   useEffect(() => {
     if (!isOpen) return;
     const dateEvals = evaluations.filter(e => e.evaluationDate === selectedDate);
     if (dateEvals.length > 0) {
       const allEnduranceOnly = dateEvals.every(e => !e.strengthRecords || e.strengthRecords.length === 0);
-      setSessionMode(allEnduranceOnly ? 'endurance_only' : 'full');
+      const allStrengthOnly = dateEvals.every(e => Boolean(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM') && (e.strengthRecords?.length || 0) > 0);
+      setSessionMode(allEnduranceOnly ? 'endurance_only' : allStrengthOnly ? 'strength_only' : 'full');
     }
   }, [isOpen, selectedDate]);
 
@@ -439,10 +441,20 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
 
   // Construir el payload completo de evaluación para un atleta
   const buildEvaluationPayload = (row: AthleteRowState, athleteId: string) => {
-    // Calcular detalles de Cooper
+    // Calcular detalles de Cooper (o marcar omitido si la jornada es Solo Fuerza 1RM)
     const coopDetails = calculateCooperDetails(row);
     const isLapsType = row.cooperVariant === 'laps' || (row.cooperVariant === 'both' && row.cooperLaps > 0);
-    const cooperRecord: CooperTestRecord = {
+    const cooperRecord: CooperTestRecord = sessionMode === 'strength_only' ? {
+      level: 'No evaluado (Solo Fuerza 1RM)',
+      levelNumber: 0,
+      description: 'Jornada enfocada en Fuerza 1RM; marcas aeróbicas previas conservadas.',
+      targetZoneRecommendation: 'Control de fuerza máxima 1RM.',
+      distanceMeters: 0,
+      estimatedVo2Max: 0,
+      status: 'na',
+      statusReason: 'Jornada Solo Fuerza 1RM',
+      sessionOmitted: true,
+    } : {
       level: coopDetails.level,
       levelNumber: coopDetails.levelNumber,
       description: coopDetails.description,
@@ -470,7 +482,14 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     const totalSec = row.enduranceMinutes * 60 + row.enduranceSeconds;
     const minStr = String(row.enduranceMinutes).padStart(2, '0');
     const secStr = String(row.enduranceSeconds).padStart(2, '0');
-    const enduranceRecord: EnduranceTimeTestRecord = {
+    const enduranceRecord: EnduranceTimeTestRecord = sessionMode === 'strength_only' ? {
+      name: 'Jornada Solo Fuerza 1RM',
+      result: 'Omitido',
+      timeSeconds: 0,
+      status: 'na',
+      statusReason: 'Jornada Solo Fuerza 1RM',
+      sessionOmitted: true,
+    } : {
       name: 'Evaluación de Resistencia Funcional',
       result: row.enduranceStatus === 'completed' ? `${minStr}:${secStr} min` : (row.enduranceStatus === 'na' ? 'NA' : 'NP'),
       timeSeconds: row.enduranceStatus === 'completed' ? totalSec : 0,
@@ -678,31 +697,43 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
               />
             </div>
 
-            {/* Selector de Modalidad de Jornada (Completa vs Solo Resistencia) */}
-            <div className="flex items-center bg-neutral-950 p-1 rounded-xl border border-neutral-700 gap-1">
+            {/* Selector de Modalidad de Jornada (Completa vs Solo Resistencia vs Solo Fuerza 1RM) */}
+            <div className="flex items-center bg-neutral-950 p-1 rounded-xl border border-neutral-700 gap-1 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
                 onClick={() => setSessionMode('full')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
                   sessionMode === 'full'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-neutral-400 hover:text-white'
                 }`}
                 title="Evaluación completa: Aeróbico, Resistencia y Fuerza 1RM"
               >
-                Completa (1RM + Resistencia)
+                Completa
               </button>
               <button
                 type="button"
                 onClick={() => setSessionMode('endurance_only')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
                   sessionMode === 'endurance_only'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-neutral-400 hover:text-white'
                 }`}
                 title="Esta fecha solo registra pruebas aeróbicas y de resistencia, conservando intactos los 1RM previos"
               >
-                🏃 Solo Resistencia (Sin 1RM)
+                🏃 Solo Resistencia
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionMode('strength_only')}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                  sessionMode === 'strength_only'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Esta fecha solo registra cargas de Fuerza 1RM, conservando intactos Cooper y Resistencia previos"
+              >
+                🏋️ Solo Fuerza 1RM
               </button>
             </div>
 
@@ -809,6 +840,14 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
             <div className="flex items-center gap-2">
               <span className="font-bold text-emerald-300">🏃 Jornada Solo Resistencia activa ({selectedDate}):</span>
               <span>Solo se registrará Aeróbico (Cooper / Navette) y Resistencia. Las marcas de Fuerza 1RM previas de cada atleta se mantienen intactas.</span>
+            </div>
+          </div>
+        )}
+        {sessionMode === 'strength_only' && (
+          <div className="max-w-7xl mx-auto mt-2.5 px-3 py-2 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-[11px] flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-amber-300">🏋️ Jornada Solo Fuerza 1RM activa ({selectedDate}):</span>
+              <span>Solo se registrarán cargas 1RM. Los resultados previos de Cooper y Resistencia de cada atleta se mantienen intactos.</span>
             </div>
           </div>
         )}
@@ -983,9 +1022,9 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                   <div className={`p-3 sm:p-4 space-y-4 ${isExpanded ? 'block' : 'hidden md:block'}`}>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
                       {/* ========================================== */}
-                      {/* 1. AERÓBICO: COOPER / NAVETTE / AMBOS (Cols 4) */}
+                      {/* 1. AERÓBICO: COOPER / NAVETTE / AMBOS */}
                       {/* ========================================== */}
-                      {(() => {
+                      {sessionMode !== 'strength_only' && (() => {
                         const coopDetails = calculateCooperDetails(row);
                         return (
                           <div className={`${sessionMode === 'endurance_only' ? 'md:col-span-6' : 'md:col-span-4'} p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2`}>
@@ -1340,6 +1379,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                       {/* ========================================== */}
                       {/* 2. RESISTENCIA FUNCIONAL */}
                       {/* ========================================== */}
+                      {sessionMode !== 'strength_only' && (
                       <div className={`${sessionMode === 'endurance_only' ? 'md:col-span-6' : 'md:col-span-2'} p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2`}>
                         <div className="flex items-center justify-between">
                           <strong className="text-white text-xs flex items-center gap-1 font-bold">
@@ -1416,12 +1456,13 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                           />
                         )}
                       </div>
+                      )}
 
                       {/* ========================================== */}
-                      {/* 3. FUERZA 1RM (5 EJERCICIOS) (Solo en evaluación completa) */}
+                      {/* 3. FUERZA 1RM (5 EJERCICIOS) (Oculto en Solo Resistencia) */}
                       {/* ========================================== */}
-                      {sessionMode === 'full' && (
-                      <div className="md:col-span-6 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
+                      {sessionMode !== 'endurance_only' && (
+                      <div className={`${sessionMode === 'strength_only' ? 'md:col-span-12' : 'md:col-span-6'} p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2`}>
                         <div className="flex items-center justify-between">
                           <strong className="text-white text-xs flex items-center gap-1.5 font-bold">
                             <span>🏋️ Fuerza 1RM (5 Ejercicios)</span>

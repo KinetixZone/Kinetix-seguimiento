@@ -23,6 +23,7 @@ interface ShareableStoryModalProps {
   latestBodyComp?: BodyCompositionRecord | null;
   latestEval?: PhysicalEvaluationRecord | null;
   latestStrengthEval?: PhysicalEvaluationRecord | null;
+  latestAerobicEval?: PhysicalEvaluationRecord | null;
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -32,6 +33,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   latestBodyComp,
   latestEval,
   latestStrengthEval,
+  latestAerobicEval,
   gymLogoUrl,
   onClose,
 }) => {
@@ -44,6 +46,12 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 
   const strengthSourceEval = (latestEval?.strengthRecords?.length ? latestEval : null) ||
     (latestStrengthEval?.strengthRecords?.length ? latestStrengthEval : null);
+
+  const isCooperOmitted = (ev?: PhysicalEvaluationRecord | null) =>
+    Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+
+  const cooperSourceEval = (latestEval && !isCooperOmitted(latestEval) ? latestEval : null) ||
+    (latestAerobicEval && !isCooperOmitted(latestAerobicEval) ? latestAerobicEval : null);
 
   const strengthRecord = strengthSourceEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
     strengthSourceEval?.strengthRecords[0] || null;
@@ -61,12 +69,12 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 👤 Atleta: ${athlete.name}
 📍 @kinetix.zone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
     } else if (storyType === 'cooper') {
-      if (!latestEval?.cooperTest) {
+      if (!cooperSourceEval?.cooperTest) {
         return `🏃‍♂️ ¡Entrenando en Kinetix Functional Zone! 👤 Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional`;
       }
       return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix Functional Zone!
-⚡ Nivel Alcanzado: Nivel ${latestEval.cooperTest.levelNumber} (${latestEval.cooperTest.level})
-🎯 Distancia Recorrida: ${latestEval.cooperTest.distanceMeters} metros
+⚡ Nivel Alcanzado: Nivel ${cooperSourceEval.cooperTest.levelNumber} (${cooperSourceEval.cooperTest.level})
+🎯 Distancia Recorrida: ${cooperSourceEval.cooperTest.distanceMeters} metros
 👤 Atleta: ${athlete.name}
 📍 @kinetix.zone #CooperTest #KinetixFunctional #Resistencia`;
     } else {
@@ -209,18 +217,18 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
       ctx.font = 'bold 36px sans-serif';
       ctx.fillText('❤️ TEST DE COOPER 12 MINUTOS', 100, 500);
 
-      if (latestEval?.cooperTest) {
+      if (cooperSourceEval?.cooperTest) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 68px sans-serif';
         drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
 
         ctx.fillStyle = '#f59e0b';
         ctx.font = 'bold 140px monospace';
-        ctx.fillText(`NIVEL ${latestEval.cooperTest.levelNumber}`, 100, 820);
+        ctx.fillText(`NIVEL ${cooperSourceEval.cooperTest.levelNumber}`, 100, 820);
 
         ctx.fillStyle = '#ffffff';
         ctx.font = '46px monospace';
-        ctx.fillText(`${latestEval.cooperTest.level} · ${latestEval.cooperTest.distanceMeters} metros`, 100, 930);
+        ctx.fillText(`${cooperSourceEval.cooperTest.level} · ${cooperSourceEval.cooperTest.distanceMeters} metros`, 100, 930);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
@@ -517,7 +525,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>TEST DE COOPER 12 MIN</span>
                   </div>
 
-                  {!latestEval?.cooperTest ? (
+                  {!cooperSourceEval?.cooperTest ? (
                     <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
                       <p className="text-xs text-neutral-300 font-medium">Aún no hay Test de Cooper registrado</p>
                       <p className="text-[10px] text-neutral-500">Realiza tu test de 12 minutos con el Coach para desbloquear tu tarjeta de nivel aeróbico.</p>
@@ -527,19 +535,19 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                       <div className="space-y-1.5">
                         <div className="text-xs text-neutral-400 font-mono uppercase">Potencia Aeróbica Alcanzada</div>
                         <div className="text-4xl sm:text-5xl font-black font-brand tracking-tight text-white">
-                          NIVEL {latestEval.cooperTest.levelNumber}
+                          NIVEL {cooperSourceEval.cooperTest.levelNumber}
                         </div>
                         <div className="text-base font-bold text-red-400 font-brand">
-                          {latestEval.cooperTest.level}
+                          {cooperSourceEval.cooperTest.level}
                         </div>
                         <div className="text-xs text-neutral-300 font-mono">
-                          Distancia Recorrida: <strong className="text-white">{latestEval.cooperTest.distanceMeters} m</strong>
+                          Distancia Recorrida: <strong className="text-white">{cooperSourceEval.cooperTest.distanceMeters} m</strong>
                         </div>
                       </div>
 
                       <div className="pt-1">
                         <span className="text-[11px] text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-3 py-1 rounded-xl block max-w-[260px] mx-auto text-center leading-tight">
-                          "{latestEval.cooperTest.notes || 'Excelente resistencia cardiorrespiratoria y ritmo constante.'}"
+                          "{cooperSourceEval.cooperTest.notes || 'Excelente resistencia cardiorrespiratoria y ritmo constante.'}"
                         </span>
                       </div>
                     </>

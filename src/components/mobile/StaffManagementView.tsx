@@ -299,6 +299,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [quickEditExistingEvalId, setQuickEditExistingEvalId] = useState<string | null>(null);
   const [quickEditSuccess, setQuickEditSuccess] = useState<boolean>(false);
   const [quickEditTab, setQuickEditTab] = useState<'aerobic' | 'strength'>('aerobic');
+  const [quickSessionMode, setQuickSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
 
   // Full evaluation: Resistencia state
   const [quickEnduranceStatus, setQuickEnduranceStatus] = useState<EvaluationStatus>('completed');
@@ -655,7 +656,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       } else if (onAddEvaluation) {
         const pastEvals = evaluations.filter(e => e.userId === athId);
         const sortedPast = [...pastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-        const latestPast = sortedPast[sortedPast.length - 1];
+        const latestPast = [...sortedPast].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || sortedPast[sortedPast.length - 1];
         const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
 
         const defaultCooper: CooperTestRecord = latestPast?.cooperTest || {
@@ -1090,12 +1091,29 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       pullups_or_rows: { weightKg: 0, type: 'remo' as 'remo' | 'dominadas', status: 'completed' as EvaluationStatus, reason: '' },
     };
 
+    const isAerobicOmitted = (ev?: PhysicalEvaluationRecord | null) =>
+      Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+
     if (latest) {
       setQuickEditExistingEvalId(latest.id);
       setQuickEditEvalDate(latest.evaluationDate);
+
+      const detectedMode: 'full' | 'endurance_only' | 'strength_only' = isAerobicOmitted(latest)
+        ? 'strength_only'
+        : (!latest.strengthRecords || latest.strengthRecords.length === 0)
+        ? 'endurance_only'
+        : 'full';
+      setQuickSessionMode(detectedMode);
+
+      const aerobicSource = isAerobicOmitted(latest)
+        ? (sorted.find(e => !isAerobicOmitted(e)) || null)
+        : latest;
+      const strengthSource = (!latest.strengthRecords || latest.strengthRecords.length === 0)
+        ? (sorted.find(e => (e.strengthRecords?.length || 0) > 0) || null)
+        : latest;
       
       // Resistencia
-      const endRec = latest.enduranceTest;
+      const endRec = aerobicSource?.enduranceTest;
       setQuickEnduranceStatus(endRec?.status || 'completed');
       setQuickEnduranceReason(endRec?.statusReason || '');
       setQuickEnduranceDifficulty(endRec?.difficultyLevel || 'Intermedio');
@@ -1104,7 +1122,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickEnduranceSeconds(totalSec % 60);
 
       // Cooper
-      const coopRec = latest.cooperTest;
+      const coopRec = aerobicSource?.cooperTest;
       setQuickCooperStatus(coopRec?.status || 'completed');
       setQuickCooperReason(coopRec?.statusReason || '');
       setQuickCooperLevel(coopRec?.levelNumber || 3);
@@ -1133,7 +1151,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCoachNotes(isAuto ? '' : rawPastNotes);
 
       // Fuerza: solo cargar los pesos específicos y reales de este atleta (sin inventar números)
-      const recs = latest.strengthRecords || [];
+      const recs = strengthSource?.strengthRecords || [];
       const sq = recs.find(r => r.exerciseId === 'squats');
       const dl = recs.find(r => r.exerciseId === 'deadlift');
       const ht = recs.find(r => r.exerciseId === 'hip_thrust');
@@ -1168,9 +1186,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           reason: rw?.statusReason || '',
         },
       });
+      setQuickEditTab(detectedMode === 'strength_only' ? 'strength' : 'aerobic');
     } else {
       setQuickEditExistingEvalId(null);
       setQuickEditEvalDate(globalEvalDate || new Date().toISOString().slice(0, 10));
+      setQuickSessionMode('full');
       setQuickEnduranceStatus('completed');
       setQuickEnduranceReason('');
       setQuickEnduranceMinutes(0);
@@ -1186,10 +1206,10 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCooperMetersPerLap(400);
       setQuickCoachNotes('');
       setQuickWeights(zeroWeights);
+      setQuickEditTab('aerobic');
     }
 
     setQuickCustomNAReason(latest?.cooperTest?.statusReason || '');
-    setQuickEditTab('aerobic');
     setAthleteToEditWeights(targetUser);
     setQuickEditSuccess(false);
   };
@@ -1197,7 +1217,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const handleSaveQuickEditWeights = () => {
     if (!athleteToEditWeights) return;
 
-    const strengthRecords: StrengthMaxRecord[] = [
+    const strengthRecords: StrengthMaxRecord[] = quickSessionMode === 'endurance_only' ? [] : [
       {
         exerciseId: 'squats',
         exerciseName: 'Sentadillas',
@@ -1254,38 +1274,62 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const totalEnduranceSec = quickEnduranceMinutes * 60 + quickEnduranceSeconds;
     const formattedEndurance = `${quickEnduranceMinutes.toString().padStart(2, '0')}:${quickEnduranceSeconds.toString().padStart(2, '0')} min`;
 
-    const enduranceTestRecord: EnduranceTimeTestRecord = {
-      name: 'Resistencia Funcional',
-      result: quickEnduranceStatus === 'completed' ? formattedEndurance : (quickEnduranceStatus === 'na' ? 'NA' : 'NP'),
-      timeSeconds: quickEnduranceStatus === 'completed' ? totalEnduranceSec : 0,
-      scoreScoreLevel: quickEnduranceDifficulty === 'Avanzado' ? 'Avanzado' : quickEnduranceDifficulty === 'Principiante' ? 'Básico' : 'Intermedio',
-      difficultyLevel: quickEnduranceStatus === 'completed' ? quickEnduranceDifficulty : undefined,
-      status: quickEnduranceStatus,
-      statusReason: quickEnduranceReason || undefined,
-    };
+    const enduranceTestRecord: EnduranceTimeTestRecord = quickSessionMode === 'strength_only'
+      ? {
+          sessionOmitted: true,
+          name: 'Resistencia omitida (Solo Fuerza 1RM)',
+          result: 'Omitido',
+          timeSeconds: 0,
+          scoreScoreLevel: 'Exento',
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
+        }
+      : {
+          name: 'Resistencia Funcional',
+          result: quickEnduranceStatus === 'completed' ? formattedEndurance : (quickEnduranceStatus === 'na' ? 'NA' : 'NP'),
+          timeSeconds: quickEnduranceStatus === 'completed' ? totalEnduranceSec : 0,
+          scoreScoreLevel: quickEnduranceDifficulty === 'Avanzado' ? 'Avanzado' : quickEnduranceDifficulty === 'Principiante' ? 'Básico' : 'Intermedio',
+          difficultyLevel: quickEnduranceStatus === 'completed' ? quickEnduranceDifficulty : undefined,
+          status: quickEnduranceStatus,
+          statusReason: quickEnduranceReason || undefined,
+        };
 
     const isCooper2 = quickCooperMode === 'laps';
-    const cooperTestRecord: CooperTestRecord = {
-      level: quickCooperStatus === 'completed' 
-        ? (isCooper2 ? `Cooper 2 (${quickCooperLaps} vueltas)` : `Nivel ${quickCooperLevel}`) 
-        : (quickCooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-      levelNumber: quickCooperStatus === 'completed' ? (isCooper2 ? 0 : quickCooperLevel) : 0,
-      variant: isCooper2 ? 'laps' : 'standard',
-      lapLocation: isCooper2 ? (quickCooperTrackType === 'afuera' ? 'outside' : 'inside') : undefined,
-      lapsCount: isCooper2 ? quickCooperLaps : undefined,
-      metersPerLap: isCooper2 ? quickCooperMetersPerLap : undefined,
-      distanceMeters: quickCooperStatus === 'completed' ? quickCooperDistance : 0,
-      estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((quickCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
-      targetZoneRecommendation: isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : 'Zona 2 y Acondicionamiento funcional',
-      description: isCooper2 
-        ? `Test Cooper 2 (Por Vueltas): ${quickCooperLaps} vueltas completadas (${quickCooperMetersPerLap}m c/u = ~${quickCooperDistance}m).` 
-        : 'Evaluación de capacidad aeróbica oficial Kinetix.',
-      status: quickCooperStatus,
-      statusReason: quickCooperReason || undefined,
-      notes: quickCooperStatus === 'completed' && isCooper2 
-        ? `Cooper 2: ${quickCooperLaps} vueltas (~${quickCooperDistance}m, ${quickCooperTrackType === 'afuera' ? 'Afuera' : 'Adentro'} ${quickCooperMetersPerLap}m/v)` 
-        : undefined,
-    };
+    const cooperTestRecord: CooperTestRecord = quickSessionMode === 'strength_only'
+      ? {
+          sessionOmitted: true,
+          level: 'No evaluado (Solo Fuerza 1RM)',
+          levelNumber: 0,
+          variant: 'standard',
+          distanceMeters: 0,
+          estimatedVo2Max: 0,
+          targetZoneRecommendation: 'Control de fuerza máxima 1RM',
+          description: 'Jornada enfocada exclusivamente en Fuerza Máxima 1RM. Se conservan los registros aeróbicos previos.',
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
+          notes: 'Jornada Solo Fuerza 1RM (Aeróbico omitido)',
+        }
+      : {
+          level: quickCooperStatus === 'completed' 
+            ? (isCooper2 ? `Cooper 2 (${quickCooperLaps} vueltas)` : `Nivel ${quickCooperLevel}`) 
+            : (quickCooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+          levelNumber: quickCooperStatus === 'completed' ? (isCooper2 ? 0 : quickCooperLevel) : 0,
+          variant: isCooper2 ? 'laps' : 'standard',
+          lapLocation: isCooper2 ? (quickCooperTrackType === 'afuera' ? 'outside' : 'inside') : undefined,
+          lapsCount: isCooper2 ? quickCooperLaps : undefined,
+          metersPerLap: isCooper2 ? quickCooperMetersPerLap : undefined,
+          distanceMeters: quickCooperStatus === 'completed' ? quickCooperDistance : 0,
+          estimatedVo2Max: quickCooperStatus === 'completed' ? Math.round(((quickCooperDistance - 504.9) / 44.73) * 10) / 10 : 0,
+          targetZoneRecommendation: isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : 'Zona 2 y Acondicionamiento funcional',
+          description: isCooper2 
+            ? `Test Cooper 2 (Por Vueltas): ${quickCooperLaps} vueltas completadas (${quickCooperMetersPerLap}m c/u = ~${quickCooperDistance}m).` 
+            : 'Evaluación de capacidad aeróbica oficial Kinetix.',
+          status: quickCooperStatus,
+          statusReason: quickCooperReason || undefined,
+          notes: quickCooperStatus === 'completed' && isCooper2 
+            ? `Cooper 2: ${quickCooperLaps} vueltas (~${quickCooperDistance}m, ${quickCooperTrackType === 'afuera' ? 'Afuera' : 'Adentro'} ${quickCooperMetersPerLap}m/v)` 
+            : undefined,
+        };
 
     if (quickEditExistingEvalId && onUpdateEvaluation) {
       onUpdateEvaluation(quickEditExistingEvalId, {
@@ -3298,7 +3342,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 const athleteBodies = bodyCompRecords.filter(b => b.userId === athlete.id).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
                 const latestBody = athleteBodies[0];
 
-                const isLatestEnduranceOnly = latestEval && (!latestEval.strengthRecords || latestEval.strengthRecords.length === 0);
+                const isLatestStrengthOnly = Boolean(latestEval && (latestEval.cooperTest?.sessionOmitted || latestEval.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM'));
+                const isLatestEnduranceOnly = Boolean(latestEval && !isLatestStrengthOnly && (!latestEval.strengthRecords || latestEval.strengthRecords.length === 0));
+                const latestWithAerobic = athleteEvals.find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM'));
                 const latestWithStrength = athleteEvals.find(e => (e.strengthRecords?.length || 0) > 0);
                 const completed1RMs = latestWithStrength?.strengthRecords?.filter(s => s.status === 'completed' && s.weightKg > 0).length || 0;
 
@@ -3318,7 +3364,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                           </span>
                           <span className="text-[10px] text-neutral-400 block truncate">
                             {latestEval
-                              ? (isLatestEnduranceOnly
+                              ? (isLatestStrengthOnly
+                                  ? (latestWithAerobic
+                                      ? `🏋️ Solo Fuerza 1RM · Aeróbico previo OK`
+                                      : `🏋️ Solo Fuerza 1RM (${completed1RMs}/5)`)
+                                  : isLatestEnduranceOnly
                                   ? (completed1RMs > 0
                                       ? `🏃 Solo Resistencia · ${completed1RMs}/5 1RM previas OK`
                                       : '🏃 Solo Resistencia registrada')
@@ -5990,8 +6040,52 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
             </div>
 
+            {/* Modalidad de esta evaluación en Edición Rápida */}
+            <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-neutral-300">Modalidad de la fecha</span>
+                <span className="text-[10px] text-neutral-500 font-mono">Opcional</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setQuickSessionMode('full')}
+                  className={`py-1 px-2 rounded-md text-[10px] font-bold transition-all ${
+                    quickSessionMode === 'full' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  Completa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickSessionMode('endurance_only');
+                    setQuickEditTab('aerobic');
+                  }}
+                  className={`py-1 px-2 rounded-md text-[10px] font-bold transition-all ${
+                    quickSessionMode === 'endurance_only' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  🏃 Solo Resistencia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickSessionMode('strength_only');
+                    setQuickEditTab('strength');
+                  }}
+                  className={`py-1 px-2 rounded-md text-[10px] font-bold transition-all ${
+                    quickSessionMode === 'strength_only' ? 'bg-amber-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  🏋️ Solo Fuerza 1RM
+                </button>
+              </div>
+            </div>
+
             {/* Compact Tabs Switcher */}
             <div className="flex items-center gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800">
+              {quickSessionMode !== 'strength_only' && (
               <button
                 type="button"
                 onClick={() => setQuickEditTab('aerobic')}
@@ -6004,6 +6098,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <Clock className="w-3.5 h-3.5" />
                 <span>1. Tiempos & Cooper</span>
               </button>
+              )}
+              {quickSessionMode !== 'endurance_only' && (
               <button
                 type="button"
                 onClick={() => setQuickEditTab('strength')}
@@ -6016,6 +6112,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 <Dumbbell className="w-3.5 h-3.5" />
                 <span>2. Fuerza 1RM (5 Ejercicios)</span>
               </button>
+              )}
             </div>
 
             {/* TAB 1: RESISTENCIA, COOPER & NOTAS */}

@@ -102,6 +102,7 @@ export interface CooperTestRecord {
   lapsCount?: number; // Número de vueltas completadas
   metersPerLap?: number; // Metros que mide cada vuelta (ej. 400m afuera o 250m adentro)
   navetteLevelNumber?: number; // Nivel de Course Navette (1 al 20) si se hizo Navette o Ambos
+  sessionOmitted?: boolean; // True cuando la jornada fue Solo Fuerza 1RM
 }
 
 export type BrandTheme = 'blue' | 'red';
@@ -128,6 +129,7 @@ export interface EnduranceTimeTestRecord {
   notes?: string;
   status?: EvaluationStatus; // 'completed' | 'na' | 'np'
   statusReason?: string;
+  sessionOmitted?: boolean; // True cuando la jornada fue Solo Fuerza 1RM
 }
 
 export interface PhysicalEvaluationRecord {

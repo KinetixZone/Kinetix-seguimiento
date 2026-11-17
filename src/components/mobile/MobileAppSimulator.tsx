@@ -110,6 +110,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
   const latestStrengthEval = [...userEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || latestEval;
+  const latestAerobicEval = [...userEvals].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || latestEval;
 
   const handleTriggerPushBanner = (title: string, body: string) => {
     setActiveBannerNotification({ title, body });
@@ -495,6 +496,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
+          latestAerobicEval={latestAerobicEval}
           onClose={() => setShowReportModal(false)}
         />
       )}
@@ -506,6 +508,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
+          latestAerobicEval={latestAerobicEval}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

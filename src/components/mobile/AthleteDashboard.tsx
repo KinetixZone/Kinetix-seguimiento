@@ -96,6 +96,10 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
     return [...sortedEvals].reverse().find(ev => (ev.strengthRecords?.length || 0) > 0) || null;
   }, [sortedEvals]);
 
+  const latestAerobicEval = React.useMemo(() => {
+    return [...sortedEvals].reverse().find(ev => !(ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || null;
+  }, [sortedEvals]);
+
   const loadQuickStat = React.useMemo(() => {
     const getTotalLoad = (ev?: PhysicalEvaluationRecord) => {
       if (!ev || !ev.strengthRecords) return 0;
@@ -563,22 +567,22 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
 
         {/* Cooper / Course Navette Aerobic Capacity Card */}
         {(() => {
-          const isCooper2 = !!(latestEval?.cooperTest && (
-            latestEval.cooperTest.variant === 'laps' ||
-            (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
-            latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-            latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-            latestEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+          const isCooper2 = !!(latestAerobicEval?.cooperTest && (
+            latestAerobicEval.cooperTest.variant === 'laps' ||
+            (typeof latestAerobicEval.cooperTest.lapsCount === 'number' && latestAerobicEval.cooperTest.lapsCount > 0) ||
+            latestAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+            latestAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+            latestAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas')
           ));
 
-          const isNavette = !isCooper2 && !!(latestEval?.cooperTest && (
-            latestEval.cooperTest.variant === 'navette' ||
-            (latestEval.cooperTest.levelNumber > 0 && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')))
+          const isNavette = !isCooper2 && !!(latestAerobicEval?.cooperTest && (
+            latestAerobicEval.cooperTest.variant === 'navette' ||
+            (latestAerobicEval.cooperTest.levelNumber > 0 && (!latestAerobicEval.cooperTest.distanceMeters || latestAerobicEval.cooperTest.notes?.toLowerCase().includes('navette')))
           ));
 
-          const isNA = latestEval?.cooperTest.status === 'na';
-          const isNP = latestEval?.cooperTest.status === 'np';
-          const coachLabel = latestEval?.coachName ? `Evaluación ${latestEval.coachName}` : 'Evaluación Staff Kinetix';
+          const isNA = latestAerobicEval?.cooperTest.status === 'na';
+          const isNP = latestAerobicEval?.cooperTest.status === 'np';
+          const coachLabel = latestAerobicEval?.coachName ? `Evaluación ${latestAerobicEval.coachName}` : 'Evaluación Staff Kinetix';
 
           return (
             <div 
@@ -591,26 +595,26 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                   {isCooper2 ? 'Cooper por Vueltas' : isNavette ? 'Course Navette' : 'Test de Cooper'}
                 </span>
                 <span className="text-[10px] text-amber-400 font-bold uppercase">
-                  {isNA ? 'No Aplica (NA)' : isNP ? 'No Presentada (NP)' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} Vueltas` : isNavette ? `Nivel ${latestEval?.cooperTest.levelNumber || 1} / 20` : (latestEval?.cooperTest.level ? `Nivel ${latestEval.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar')}
+                  {isNA ? 'No Aplica (NA)' : isNP ? 'No Presentada (NP)' : isCooper2 ? `${latestAerobicEval?.cooperTest.lapsCount || 0} Vueltas` : isNavette ? `Nivel ${latestAerobicEval?.cooperTest.levelNumber || 1} / 20` : (latestAerobicEval?.cooperTest.level ? `Nivel ${latestAerobicEval?.cooperTest.levelNumber || 1} / 20` : 'Sin evaluar')}
                 </span>
               </div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-2xl font-extrabold text-white tracking-tight tabular-nums font-brand">
-                  {isNA ? 'NA' : isNP ? 'NP' : isCooper2 ? `${latestEval?.cooperTest.lapsCount || 0} VUELTAS` : (latestEval?.cooperTest ? `NIVEL ${latestEval.cooperTest.levelNumber || 1}` : '--')}
+                  {isNA ? 'NA' : isNP ? 'NP' : isCooper2 ? `${latestAerobicEval?.cooperTest.lapsCount || 0} VUELTAS` : (latestAerobicEval?.cooperTest ? `NIVEL ${latestAerobicEval?.cooperTest.levelNumber || 1}` : '--')}
                 </span>
-                {isCooper2 && latestEval?.cooperTest.distanceMeters ? (
+                {isCooper2 && latestAerobicEval?.cooperTest.distanceMeters ? (
                   <span className="text-xs font-mono text-emerald-400 font-bold">
-                    (~{latestEval.cooperTest.distanceMeters}m)
+                    (~{latestAerobicEval.cooperTest.distanceMeters}m)
                   </span>
-                ) : !isCooper2 && latestEval?.cooperTest.distanceMeters ? (
+                ) : !isCooper2 && latestAerobicEval?.cooperTest.distanceMeters ? (
                   <span className="text-xs font-mono text-blue-400 font-bold">
-                    ({latestEval.cooperTest.distanceMeters}m)
+                    ({latestAerobicEval.cooperTest.distanceMeters}m)
                   </span>
                 ) : null}
               </div>
               <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
                 <span className="text-blue-400 font-medium">
-                  {latestEval ? coachLabel : 'Pendiente de evaluar'}
+                  {latestAerobicEval ? coachLabel : 'Pendiente de evaluar'}
                 </span>
                 <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">Detalle &rarr;</span>
               </div>
@@ -620,7 +624,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
       </div>
 
       {/* Test de Resistencia (Por Tiempo) Highlight Card */}
-      {latestEval?.enduranceTest && (
+      {latestAerobicEval?.enduranceTest && (
         <div 
           onClick={() => onNavigateTab('tests')}
           className="p-3.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-emerald-500/40 transition-all cursor-pointer space-y-1.5 group shadow-sm"
@@ -638,13 +642,13 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           <div className="flex items-center justify-between pt-0.5">
             <div>
               <span className="text-[10px] text-neutral-400 block">Reto del Ciclo Actual:</span>
-              <strong className="text-white text-xs">{latestEval.enduranceTest.name}</strong>
+              <strong className="text-white text-xs">{latestAerobicEval.enduranceTest.name}</strong>
             </div>
 
             <div className="text-right">
               <span className="text-[10px] text-neutral-400 uppercase block">Tiempo Logrado</span>
               <div className="text-xl font-extrabold text-emerald-400 font-mono tracking-tight">
-                {latestEval.enduranceTest.result}
+                {latestAerobicEval.enduranceTest.result}
               </div>
             </div>
           </div>
@@ -665,17 +669,22 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               </div>
               <div className="text-[11px] text-blue-400 font-medium">
                 {(() => {
-                  const isCooper2 = !!(latestEval?.cooperTest && (
-                    latestEval.cooperTest.variant === 'laps' ||
-                    (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
-                    latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-                    latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-                    latestEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+                  const isStrengthOnlyLatest = Boolean(latestEval?.cooperTest?.sessionOmitted || latestEval?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+                  if (isStrengthOnlyLatest && !latestAerobicEval) {
+                    return `Jornada Solo Fuerza 1RM · ${latestEval.evaluationDate}`;
+                  }
+                  const aeroRef = latestAerobicEval || latestEval;
+                  const isCooper2 = !!(aeroRef?.cooperTest && (
+                    aeroRef.cooperTest.variant === 'laps' ||
+                    (typeof aeroRef.cooperTest.lapsCount === 'number' && aeroRef.cooperTest.lapsCount > 0) ||
+                    aeroRef.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                    aeroRef.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                    aeroRef.cooperTest.notes?.toLowerCase().includes('vueltas')
                   ));
                   if (isCooper2) {
-                    return `Cooper por Vueltas: ${latestEval.cooperTest.lapsCount || 0} vueltas (~${latestEval.cooperTest.distanceMeters || 0}m) · ${latestEval.evaluationDate}`;
+                    return `Cooper por Vueltas: ${aeroRef.cooperTest.lapsCount || 0} vueltas (~${aeroRef.cooperTest.distanceMeters || 0}m) · ${aeroRef.evaluationDate}`;
                   }
-                  return `Course Navette: Nivel ${latestEval.cooperTest?.levelNumber || 1} · ${latestEval.evaluationDate}`;
+                  return `Course Navette: Nivel ${aeroRef.cooperTest?.levelNumber || 1} · ${aeroRef.evaluationDate}`;
                 })()}
               </div>
             </div>

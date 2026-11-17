@@ -195,12 +195,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   }, [canEvaluate, showAddEvalModal, showExpressModal]);
 
   // Evaluaciones del atleta actual ordenadas cronológicamente
+  const isAerobicOmitted = (ev?: PhysicalEvaluationRecord | null) =>
+    Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+
   const userEvals = evaluations.filter(e => e.userId === effectiveAthlete.id);
   const sortedEvals = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
 
   // Form State for New Evaluation Entry (Staff)
   const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [evalSessionMode, setEvalSessionMode] = useState<'full' | 'endurance_only'>('full');
+  const [evalSessionMode, setEvalSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
   
   // Cooper Test State (Supports completed, NA - niños/adultos mayores, NP - no presentada/lesión)
   const [cooperStatus, setCooperStatus] = useState<EvaluationStatus>('completed');
@@ -342,14 +345,24 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const loadAthleteBaselineIntoForm = (athleteId: string, customEval?: PhysicalEvaluationRecord | null) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
     const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-    const latest = customEval !== undefined ? customEval : (sorted[sorted.length - 1] || null);
+    const latest = customEval !== undefined
+      ? (isAerobicOmitted(customEval) ? ([...sorted].reverse().find(e => !isAerobicOmitted(e)) || null) : customEval)
+      : ([...sorted].reverse().find(e => !isAerobicOmitted(e)) || sorted[sorted.length - 1] || null);
     const latestStrengthSource = customEval !== undefined
-      ? customEval
+      ? ((customEval && (!customEval.strengthRecords || customEval.strengthRecords.length === 0))
+          ? ([...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null)
+          : customEval)
       : ([...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null);
 
     setEvalDate(new Date().toISOString().slice(0, 10));
     if (customEval) {
-      setEvalSessionMode((customEval.strengthRecords?.length || 0) === 0 ? 'endurance_only' : 'full');
+      if (isAerobicOmitted(customEval)) {
+        setEvalSessionMode('strength_only');
+      } else if ((customEval.strengthRecords?.length || 0) === 0) {
+        setEvalSessionMode('endurance_only');
+      } else {
+        setEvalSessionMode('full');
+      }
     } else {
       setEvalSessionMode('full');
     }
@@ -502,54 +515,80 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       computedCooperLevelTitle = `Cooper 12m (${effectiveCooperDistance}m) + Navette Nivel ${selectedNavetteLevel}`;
     }
 
-    const cooperTestObj: CooperTestRecord = {
-      level: isCooperDone ? computedCooperLevelTitle : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-      levelNumber: isCooperDone ? (cooperVariant === 'navette' ? selectedNavetteLevel : selectedCooperLevel) : 0,
-      description: isCooperDone 
-        ? (cooperVariant === 'both'
-            ? `Ambos Tests Realizados: Cooper (${effectiveCooperDistance}m, Nivel ${selectedCooperLevel}) y Course Navette (Palier ${selectedNavetteLevel} de 20).`
-            : cooperVariant === 'navette'
-            ? `Course Navette: Nivel ${selectedNavetteLevel} de 20 (Palier completado).`
-            : cooperVariant === 'laps'
-            ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera (circuito exterior)' : 'adentro (circuito box)'} (${cooperMetersPerLap}m c/u = ${effectiveCooperDistance.toLocaleString()}m).`
-            : levelInfo.description)
-        : (cooperStatus === 'na' 
-            ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' 
-            : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
-      targetZoneRecommendation: isCooperDone ? levelInfo.coachingRecommendation : 'Acondicionamiento físico adaptado.',
-      distanceMeters: effectiveCooperDistance,
-      estimatedVo2Max: isCooperDone ? Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)) : 0,
-      rating: isCooperDone ? (selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular') : undefined,
-      notes: cooperReason 
-        ? `${cooperStatus.toUpperCase()}: ${cooperReason}` 
-        : (isCooperDone 
-            ? (cooperVariant === 'both'
-                ? `Ambos: Cooper ${effectiveCooperDistance}m (${cooperLapsCount > 0 ? `${cooperLapsCount}v ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} ${cooperMetersPerLap}m/v` : '12 min'}) + Navette Nivel ${selectedNavetteLevel}`
-                : cooperVariant === 'laps'
-                ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} = ${effectiveCooperDistance}m`
-                : cooperVariant === 'navette'
-                ? `Course Navette: Nivel ${selectedNavetteLevel} de 20`
-                : `Test Cooper (12 Min): ${optionalDistance}m (Nivel ${selectedCooperLevel})`)
-            : `Estado: ${cooperStatus.toUpperCase()}`),
-      status: cooperStatus,
-      statusReason: cooperReason,
-      variant: cooperVariant,
-      lapLocation: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapLocation : undefined,
-      lapsCount: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapsCount : undefined,
-      metersPerLap: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperMetersPerLap : undefined,
-      navetteLevelNumber: (cooperVariant === 'navette' || cooperVariant === 'both') ? selectedNavetteLevel : undefined,
-    };
+    const isStrengthOnly = evalSessionMode === 'strength_only';
 
-    const enduranceTestObj: EnduranceTimeTestRecord = {
-      name: enduranceExerciseName,
-      result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
-      timeSeconds: isEnduranceDone ? totalSec : 0,
-      scoreScoreLevel: isEnduranceDone ? enduranceScoreLevel : 'Exento',
-      difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
-      notes: enduranceReason ? `${enduranceStatus.toUpperCase()}: ${enduranceReason}` : (isEnduranceDone ? `Reto nivel ${enduranceDifficulty} completado en ${formattedResult}.` : `Estado: ${enduranceStatus.toUpperCase()}`),
-      status: enduranceStatus,
-      statusReason: enduranceReason,
-    };
+    const cooperTestObj: CooperTestRecord = isStrengthOnly
+      ? {
+          sessionOmitted: true,
+          level: 'No evaluado (Solo Fuerza 1RM)',
+          levelNumber: 0,
+          description: 'Jornada enfocada exclusivamente en Fuerza Máxima 1RM. Se conservan los registros aeróbicos previos.',
+          targetZoneRecommendation: 'Control de fuerza máxima 1RM',
+          distanceMeters: 0,
+          estimatedVo2Max: 0,
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
+          notes: 'Jornada Solo Fuerza 1RM (Aeróbico omitido)',
+        }
+      : {
+          level: isCooperDone ? computedCooperLevelTitle : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+          levelNumber: isCooperDone ? (cooperVariant === 'navette' ? selectedNavetteLevel : selectedCooperLevel) : 0,
+          description: isCooperDone 
+            ? (cooperVariant === 'both'
+                ? `Ambos Tests Realizados: Cooper (${effectiveCooperDistance}m, Nivel ${selectedCooperLevel}) y Course Navette (Palier ${selectedNavetteLevel} de 20).`
+                : cooperVariant === 'navette'
+                ? `Course Navette: Nivel ${selectedNavetteLevel} de 20 (Palier completado).`
+                : cooperVariant === 'laps'
+                ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera (circuito exterior)' : 'adentro (circuito box)'} (${cooperMetersPerLap}m c/u = ${effectiveCooperDistance.toLocaleString()}m).`
+                : levelInfo.description)
+            : (cooperStatus === 'na' 
+                ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' 
+                : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
+          targetZoneRecommendation: isCooperDone ? levelInfo.coachingRecommendation : 'Acondicionamiento físico adaptado.',
+          distanceMeters: effectiveCooperDistance,
+          estimatedVo2Max: isCooperDone ? Number((45.0 + (selectedCooperLevel * 0.9)).toFixed(1)) : 0,
+          rating: isCooperDone ? (selectedCooperLevel >= 15 ? 'Superior' : selectedCooperLevel >= 10 ? 'Excelente' : selectedCooperLevel >= 6 ? 'Bueno' : 'Regular') : undefined,
+          notes: cooperReason 
+            ? `${cooperStatus.toUpperCase()}: ${cooperReason}` 
+            : (isCooperDone 
+                ? (cooperVariant === 'both'
+                    ? `Ambos: Cooper ${effectiveCooperDistance}m (${cooperLapsCount > 0 ? `${cooperLapsCount}v ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} ${cooperMetersPerLap}m/v` : '12 min'}) + Navette Nivel ${selectedNavetteLevel}`
+                    : cooperVariant === 'laps'
+                    ? `Test Cooper 2: ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} = ${effectiveCooperDistance}m`
+                    : cooperVariant === 'navette'
+                    ? `Course Navette: Nivel ${selectedNavetteLevel} de 20`
+                    : `Test Cooper (12 Min): ${optionalDistance}m (Nivel ${selectedCooperLevel})`)
+                : `Estado: ${cooperStatus.toUpperCase()}`),
+          status: cooperStatus,
+          statusReason: cooperReason,
+          variant: cooperVariant,
+          lapLocation: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapLocation : undefined,
+          lapsCount: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperLapsCount : undefined,
+          metersPerLap: (cooperVariant === 'laps' || cooperVariant === 'both') ? cooperMetersPerLap : undefined,
+          navetteLevelNumber: (cooperVariant === 'navette' || cooperVariant === 'both') ? selectedNavetteLevel : undefined,
+        };
+
+    const enduranceTestObj: EnduranceTimeTestRecord = isStrengthOnly
+      ? {
+          sessionOmitted: true,
+          name: 'Resistencia omitida (Solo Fuerza 1RM)',
+          result: 'Omitido',
+          timeSeconds: 0,
+          scoreScoreLevel: 'Exento',
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
+          notes: 'Jornada Solo Fuerza 1RM',
+        }
+      : {
+          name: enduranceExerciseName,
+          result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
+          timeSeconds: isEnduranceDone ? totalSec : 0,
+          scoreScoreLevel: isEnduranceDone ? enduranceScoreLevel : 'Exento',
+          difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
+          notes: enduranceReason ? `${enduranceStatus.toUpperCase()}: ${enduranceReason}` : (isEnduranceDone ? `Reto nivel ${enduranceDifficulty} completado en ${formattedResult}.` : `Estado: ${enduranceStatus.toUpperCase()}`),
+          status: enduranceStatus,
+          statusReason: enduranceReason,
+        };
 
     const strengthRecordsList: StrengthMaxRecord[] = evalSessionMode === 'endurance_only' ? [] : [
       {
@@ -833,7 +872,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       // Create new evaluation
       const userPastEvals = evaluations.filter(e => e.userId === targetId);
       const sortedPast = [...userPastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
-      const latestPast = sortedPast[sortedPast.length - 1] || null;
+      const latestPast = [...sortedPast].reverse().find(e => !isAerobicOmitted(e)) || sortedPast[sortedPast.length - 1] || null;
       const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null;
 
       const baseExercises: ('squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows')[] = [
@@ -924,12 +963,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   const latestEval = sortedEvals[sortedEvals.length - 1] || null;
   const prevEval = sortedEvals.length > 1 ? sortedEvals[sortedEvals.length - 2] : null;
+  const evalsWithAerobic = sortedEvals.filter(e => !isAerobicOmitted(e));
+  const latestAerobicEval = evalsWithAerobic[evalsWithAerobic.length - 1] || null;
+  const prevAerobicEval = evalsWithAerobic.length > 1 ? evalsWithAerobic[evalsWithAerobic.length - 2] : null;
   const evalsWithStrength = sortedEvals.filter(e => (e.strengthRecords?.length || 0) > 0);
   const latestStrengthEval = evalsWithStrength[evalsWithStrength.length - 1] || null;
   const prevStrengthEval = evalsWithStrength.length > 1 ? evalsWithStrength[evalsWithStrength.length - 2] : null;
 
-  const prevEnduranceSeconds = prevEval ? parseSecondsFromTimeStr(prevEval.enduranceTest.result) : null;
-  const currentEnduranceSeconds = latestEval ? parseSecondsFromTimeStr(latestEval.enduranceTest.result) : null;
+  const prevEnduranceSeconds = prevAerobicEval ? parseSecondsFromTimeStr(prevAerobicEval.enduranceTest.result) : null;
+  const currentEnduranceSeconds = latestAerobicEval ? parseSecondsFromTimeStr(latestAerobicEval.enduranceTest.result) : null;
   const enduranceDeltaSec = (prevEnduranceSeconds !== null && currentEnduranceSeconds !== null && prevEnduranceSeconds > currentEnduranceSeconds)
     ? (prevEnduranceSeconds - currentEnduranceSeconds)
     : 0;
@@ -1247,7 +1289,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           {/* Aviso especial si la evaluación completa es NA (ej. Nuevo ingreso posterior a pruebas o exento) */}
           {(() => {
-            const isAllNA = latestEval.cooperTest.status === 'na' && 
+            const isAllNA = !isAerobicOmitted(latestEval) &&
+              latestEval.cooperTest.status === 'na' && 
               latestEval.enduranceTest.status === 'na' && 
               (latestEval.strengthRecords?.length ? latestEval.strengthRecords.every(s => s.status === 'na') : true);
             if (!isAllNA) return null;
@@ -1273,59 +1316,85 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           {/* TARJETA COMPARATIVA 1: TEST DE COOPER (NORMAL vs COOPER 2) */}
           {(() => {
-            const isLatestCooper2 = latestEval.cooperTest.variant === 'laps' ||
-              (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
-              latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-              latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-              latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+            if (!latestAerobicEval) {
+              return (
+                <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Heart className="w-4 h-4 text-red-500" />
+                      <span>1. Test de Cooper / Capacidad Aeróbica</span>
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      Solo Fuerza 1RM
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400">
+                    La jornada reciente se enfocó en Fuerza 1RM. Cuando se registre un Test de Cooper, tu nivel aparecerá aquí.
+                  </p>
+                </div>
+              );
+            }
 
-            const isPrevCooper2 = prevEval ? (
-              prevEval.cooperTest.variant === 'laps' ||
-              (typeof prevEval.cooperTest.lapsCount === 'number' && prevEval.cooperTest.lapsCount > 0) ||
-              prevEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-              prevEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-              prevEval.cooperTest.notes?.toLowerCase().includes('vueltas')
+            const isLatestCooper2 = latestAerobicEval.cooperTest.variant === 'laps' ||
+              (typeof latestAerobicEval.cooperTest.lapsCount === 'number' && latestAerobicEval.cooperTest.lapsCount > 0) ||
+              latestAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+              latestAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+              latestAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+
+            const isPrevCooper2 = prevAerobicEval ? (
+              prevAerobicEval.cooperTest.variant === 'laps' ||
+              (typeof prevAerobicEval.cooperTest.lapsCount === 'number' && prevAerobicEval.cooperTest.lapsCount > 0) ||
+              prevAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+              prevAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+              prevAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas')
             ) : false;
 
             const isSameCircuit = isLatestCooper2 && isPrevCooper2 && 
-              (latestEval.cooperTest.lapLocation || 'outside') === (prevEval?.cooperTest.lapLocation || 'outside');
+              (latestAerobicEval.cooperTest.lapLocation || 'outside') === (prevAerobicEval?.cooperTest.lapLocation || 'outside');
 
             // True calculations without dummy fallbacks
-            const latestMetersPerLap = latestEval.cooperTest.metersPerLap || (latestEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
-            const latestDist = latestEval.cooperTest.distanceMeters || 
-              (isLatestCooper2 ? Math.round((latestEval.cooperTest.lapsCount || 0) * latestMetersPerLap) : 0);
+            const latestMetersPerLap = latestAerobicEval.cooperTest.metersPerLap || (latestAerobicEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+            const latestDist = latestAerobicEval.cooperTest.distanceMeters || 
+              (isLatestCooper2 ? Math.round((latestAerobicEval.cooperTest.lapsCount || 0) * latestMetersPerLap) : 0);
 
-            const prevMetersPerLap = prevEval ? (prevEval.cooperTest.metersPerLap || (prevEval.cooperTest.lapLocation === 'inside' ? 250 : 400)) : 400;
-            const prevDist = prevEval ? (prevEval.cooperTest.distanceMeters || 
-              (isPrevCooper2 ? Math.round((prevEval.cooperTest.lapsCount || 0) * prevMetersPerLap) : 0)) : null;
+            const prevMetersPerLap = prevAerobicEval ? (prevAerobicEval.cooperTest.metersPerLap || (prevAerobicEval.cooperTest.lapLocation === 'inside' ? 250 : 400)) : 400;
+            const prevDist = prevAerobicEval ? (prevAerobicEval.cooperTest.distanceMeters || 
+              (isPrevCooper2 ? Math.round((prevAerobicEval.cooperTest.lapsCount || 0) * prevMetersPerLap) : 0)) : null;
 
             const distDelta = prevDist !== null ? latestDist - prevDist : null;
-            const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestEval.cooperTest.lapsCount === 'number' && typeof prevEval?.cooperTest.lapsCount === 'number')
-              ? Math.round((latestEval.cooperTest.lapsCount - prevEval.cooperTest.lapsCount) * 10) / 10
+            const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestAerobicEval.cooperTest.lapsCount === 'number' && typeof prevAerobicEval?.cooperTest.lapsCount === 'number')
+              ? Math.round((latestAerobicEval.cooperTest.lapsCount - prevAerobicEval.cooperTest.lapsCount) * 10) / 10
               : null;
-            const levelDelta = (!isLatestCooper2 && !isPrevCooper2 && prevEval)
-              ? (latestEval.cooperTest.levelNumber || 0) - (prevEval.cooperTest.levelNumber || 0)
+            const levelDelta = (!isLatestCooper2 && !isPrevCooper2 && prevAerobicEval)
+              ? (latestAerobicEval.cooperTest.levelNumber || 0) - (prevAerobicEval.cooperTest.levelNumber || 0)
               : null;
 
             return (
               <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-1">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Heart className="w-4 h-4 text-red-500" />
-                    <span>
-                      {isLatestCooper2 
-                        ? '1. Cooper por Vueltas (Circuito)' 
-                        : (latestEval.cooperTest.levelNumber && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')))
-                        ? '1. Course Navette / Cooper (Niveles 1 al 20)' 
-                        : '1. Test de Cooper (12 Minutos)'}
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Heart className="w-4 h-4 text-red-500" />
+                      <span>
+                        {isLatestCooper2 
+                          ? '1. Cooper por Vueltas (Circuito)' 
+                          : (latestAerobicEval.cooperTest.levelNumber && (!latestAerobicEval.cooperTest.distanceMeters || latestAerobicEval.cooperTest.notes?.toLowerCase().includes('navette')))
+                          ? '1. Course Navette / Cooper (Niveles 1 al 20)' 
+                          : '1. Test de Cooper (12 Minutos)'}
+                      </span>
                     </span>
-                  </span>
+                    {latestAerobicEval.id !== latestEval.id && (
+                      <span className="text-[10px] text-amber-400 font-mono block mt-0.5">
+                        Última toma aeróbica conservada: {latestAerobicEval.evaluationDate} (jornada reciente de Solo Fuerza 1RM)
+                      </span>
+                    )}
+                  </div>
 
-                  {latestEval.cooperTest.status === 'na' ? (
+                  {latestAerobicEval.cooperTest.status === 'na' ? (
                     <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
                       🚫 No Aplica (NA)
                     </span>
-                  ) : latestEval.cooperTest.status === 'np' ? (
+                  ) : latestAerobicEval.cooperTest.status === 'np' ? (
                     <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
                       ⚠️ No Presentada (NP)
                     </span>
@@ -1358,7 +1427,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     )
                   ) : (
                     // Cooper Normal (Escala 1 al 20)
-                    !isPrevCooper2 && prevEval && levelDelta !== null ? (
+                    !isPrevCooper2 && prevAerobicEval && levelDelta !== null ? (
                       levelDelta > 0 ? (
                         <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
                           <TrendingUp className="w-3.5 h-3.5" />
@@ -1375,26 +1444,26 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       )
                     ) : (
                       <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/30">
-                        {prevEval ? 'Escala 1 al 20' : 'Nivel Inicial'}
+                        {prevAerobicEval ? 'Escala 1 al 20' : 'Nivel Inicial'}
                       </span>
                     )
                   )}
                 </div>
 
-                {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
+                {latestAerobicEval.cooperTest.status === 'na' || latestAerobicEval.cooperTest.status === 'np' ? (
                   <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
                     <div>
                       <span className="text-[10px] font-bold uppercase text-neutral-400">
-                        {latestEval.cooperTest.status === 'na' ? 'Prueba No Aplicable' : 'Prueba No Presentada'}
+                        {latestAerobicEval.cooperTest.status === 'na' ? 'Prueba No Aplicable' : 'Prueba No Presentada'}
                       </span>
                       <p className="text-xs text-neutral-300 mt-0.5">
-                        {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na' ? 'Adaptación por perfil de edad o condición médica.' : 'Sin registro en esta sesión.')}
+                        {latestAerobicEval.cooperTest.statusReason || (latestAerobicEval.cooperTest.status === 'na' ? 'Adaptación por perfil de edad o condición médica.' : 'Sin registro en esta sesión.')}
                       </p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                      latestEval.cooperTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      latestAerobicEval.cooperTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                     }`}>
-                      {latestEval.cooperTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
+                      {latestAerobicEval.cooperTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
                     </span>
                   </div>
                 ) : (
@@ -1403,25 +1472,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       {/* CAJA ANTERIOR */}
                       <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
                         <span className="text-[10px] text-neutral-400 block font-medium">
-                          En el anterior sacaste ({prevEval ? prevEval.evaluationDate : 'Base inicial'}):
+                          En el anterior sacaste ({prevAerobicEval ? prevAerobicEval.evaluationDate : 'Base inicial'}):
                         </span>
-                        {prevEval ? (
+                        {prevAerobicEval ? (
                           isPrevCooper2 ? (
                             <>
                               <div className="text-2xl font-extrabold text-neutral-300 font-brand">
-                                {prevEval.cooperTest.lapsCount || '—'} VUELTAS
+                                {prevAerobicEval.cooperTest.lapsCount || '—'} VUELTAS
                               </div>
                               <div className="text-[10px] text-neutral-400 font-mono">
-                                ~{prevDist}m ({prevEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} {prevMetersPerLap}m/v)
+                                ~{prevDist}m ({prevAerobicEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} {prevMetersPerLap}m/v)
                               </div>
                             </>
                           ) : (
                             <>
                               <div className="text-2xl font-extrabold text-neutral-300 font-brand">
-                                NIVEL {prevEval.cooperTest.levelNumber || '—'}
+                                NIVEL {prevAerobicEval.cooperTest.levelNumber || '—'}
                               </div>
                               <div className="text-[10px] text-neutral-400 font-mono">
-                                {prevEval.cooperTest.distanceMeters ? `${prevEval.cooperTest.distanceMeters} m recorridos` : 'Escala 1 al 20'}
+                                {prevAerobicEval.cooperTest.distanceMeters ? `${prevAerobicEval.cooperTest.distanceMeters} m recorridos` : 'Escala 1 al 20'}
                               </div>
                             </>
                           )
@@ -1442,13 +1511,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         isLatestCooper2 ? 'bg-amber-950/30 border-amber-800/50' : 'bg-blue-950/40 border-blue-800/60'
                       }`}>
                         <span className={`text-[10px] block font-semibold ${isLatestCooper2 ? 'text-amber-400' : 'text-blue-400'}`}>
-                          Ahora sacaste ({latestEval.evaluationDate}):
+                          Ahora sacaste ({latestAerobicEval.evaluationDate}):
                         </span>
 
                         {isLatestCooper2 ? (
                           <>
                             <div className="text-2xl font-extrabold text-amber-300 font-brand">
-                              {latestEval.cooperTest.lapsCount || '—'} VUELTAS
+                              {latestAerobicEval.cooperTest.lapsCount || '—'} VUELTAS
                             </div>
                             <div className="text-[10px] text-neutral-300 font-mono flex flex-col gap-0.5">
                               <span className="font-semibold text-emerald-400">
@@ -1460,14 +1529,14 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                                 )}
                               </span>
                               <span className="text-[9px] text-neutral-400">
-                                {latestEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} ({latestMetersPerLap}m/v)
+                                {latestAerobicEval.cooperTest.lapLocation === 'inside' ? '🏢 Adentro' : '🌳 Afuera'} ({latestMetersPerLap}m/v)
                               </span>
                             </div>
                           </>
                         ) : (
                           <>
                             <div className="text-2xl font-extrabold text-blue-300 font-brand">
-                              NIVEL {latestEval.cooperTest.levelNumber || 1}
+                              NIVEL {latestAerobicEval.cooperTest.levelNumber || 1}
                             </div>
                             <div className="text-[10px] text-emerald-400 font-mono font-semibold flex items-center gap-1">
                               <span>{latestDist > 0 ? `${latestDist}m` : 'Cooper 12 min'}</span>
@@ -1483,23 +1552,23 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     </div>
 
                     {/* Explicación de comparabilidad técnica */}
-                    {prevEval && isLatestCooper2 !== isPrevCooper2 && (
+                    {prevAerobicEval && isLatestCooper2 !== isPrevCooper2 && (
                       <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 flex items-start gap-1.5 leading-snug">
                         <span className="text-amber-400 font-bold shrink-0">ℹ️ Nota técnica:</span>
                         <span>
                           {isLatestCooper2 
                             ? `El test anterior fue en Escala Cooper Tradicional (Niveles 1-20) y el actual en Cooper 2 por Vueltas. Se muestran ambas marcas para seguimiento sin comparativa directa.`
-                            : `El test anterior fue en Cooper 2 por Vueltas y el actual en Escala Cooper Tradicional (Nivel ${latestEval.cooperTest.levelNumber}).`
+                            : `El test anterior fue en Cooper 2 por Vueltas y el actual en Escala Cooper Tradicional (Nivel ${latestAerobicEval.cooperTest.levelNumber}).`
                           }
                         </span>
                       </div>
                     )}
 
-                    {prevEval && isLatestCooper2 && isPrevCooper2 && !isSameCircuit && (
+                    {prevAerobicEval && isLatestCooper2 && isPrevCooper2 && !isSameCircuit && (
                       <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 flex items-start gap-1.5 leading-snug">
                         <span className="text-amber-400 font-bold shrink-0">ℹ️ Nota técnica:</span>
                         <span>
-                          Circuito de pista distinto ({prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'}). Por trazado y dimensiones, se visualizan ambas marcas pero no se comparan directamente.
+                          Circuito de pista distinto ({prevAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'}). Por trazado y dimensiones, se visualizan ambas marcas pero no se comparan directamente.
                         </span>
                       </div>
                     )}
@@ -1510,9 +1579,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div className="flex justify-between text-[10px] text-neutral-400 font-mono">
                           <span>Nivel 1 (Base)</span>
                           <span className="text-emerald-400 font-bold">
-                            {prevEval && !isPrevCooper2 && prevEval.cooperTest.levelNumber 
-                              ? `Nivel ${prevEval.cooperTest.levelNumber} → Nivel ${latestEval.cooperTest.levelNumber || 1}` 
-                              : `Nivel Actual: ${latestEval.cooperTest.levelNumber || 1}`}
+                            {prevAerobicEval && !isPrevCooper2 && prevAerobicEval.cooperTest.levelNumber 
+                              ? `Nivel ${prevAerobicEval.cooperTest.levelNumber} → Nivel ${latestAerobicEval.cooperTest.levelNumber || 1}` 
+                              : `Nivel Actual: ${latestAerobicEval.cooperTest.levelNumber || 1}`}
                           </span>
                           <span className="text-blue-400 font-bold">Nivel 20 (Ultra Élite)</span>
                         </div>
@@ -1521,7 +1590,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                           style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: '2px' }}
                         >
                           {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
-                            const currentLvl = latestEval.cooperTest.levelNumber || 1;
+                            const currentLvl = latestAerobicEval.cooperTest.levelNumber || 1;
                             const isReached = lvl <= currentLvl;
                             return (
                               <div
@@ -1539,7 +1608,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 flex items-center justify-between text-[11px] font-mono">
                         <span className="text-neutral-400">Volumen en 12 Min:</span>
                         <span className="text-amber-400 font-bold">
-                          {latestEval.cooperTest.lapsCount || 0} vueltas (~{latestDist}m totales)
+                          {latestAerobicEval.cooperTest.lapsCount || 0} vueltas (~{latestDist}m totales)
                         </span>
                       </div>
                     )}
@@ -1558,16 +1627,27 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
           {/* TARJETA COMPARATIVA 2: TEST DE RESISTENCIA (POR TIEMPO) */}
           <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-red-500" />
-                <span>2. Test de Resistencia Funcional (Por Tiempo)</span>
-              </span>
-              {latestEval.enduranceTest.status === 'na' ? (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-red-500" />
+                  <span>2. Test de Resistencia Funcional (Por Tiempo)</span>
+                </span>
+                {latestAerobicEval && latestAerobicEval.id !== latestEval.id && (
+                  <span className="text-[10px] text-amber-400 font-mono block mt-0.5">
+                    Último reto conservado: {latestAerobicEval.evaluationDate} (jornada reciente de Solo Fuerza 1RM)
+                  </span>
+                )}
+              </div>
+              {!latestAerobicEval ? (
+                <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                  Solo Fuerza 1RM
+                </span>
+              ) : latestAerobicEval.enduranceTest.status === 'na' ? (
                 <span className="text-[10px] text-neutral-300 font-bold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
                   🚫 No Aplica (NA)
                 </span>
-              ) : latestEval.enduranceTest.status === 'np' ? (
+              ) : latestAerobicEval.enduranceTest.status === 'np' ? (
                 <span className="text-[10px] text-amber-400 font-bold bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
                   ⚠️ No Presentada (NP)
                 </span>
@@ -1578,53 +1658,57 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </span>
               ) : (
                 <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/30">
-                  {latestEval.enduranceTest.name}
+                  {latestAerobicEval.enduranceTest.name}
                 </span>
               )}
             </div>
 
-            {latestEval.enduranceTest.status === 'na' || latestEval.enduranceTest.status === 'np' ? (
+            {!latestAerobicEval ? (
+              <p className="text-xs text-neutral-400">
+                La jornada reciente corresponde a Fuerza 1RM. Al capturar un reto por tiempo, aparecerá aquí.
+              </p>
+            ) : latestAerobicEval.enduranceTest.status === 'na' || latestAerobicEval.enduranceTest.status === 'np' ? (
               <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-[10px] font-bold uppercase text-neutral-400">
-                    {latestEval.enduranceTest.status === 'na' ? 'Reto No Aplicable' : 'Reto No Presentado'}
+                    {latestAerobicEval.enduranceTest.status === 'na' ? 'Reto No Aplicable' : 'Reto No Presentado'}
                   </span>
                   <p className="text-xs text-neutral-300 mt-0.5">
-                    {latestEval.enduranceTest.statusReason || (latestEval.enduranceTest.status === 'na' ? 'Adaptado o exento según la condición del atleta.' : 'Sin registro en esta sesión.')}
+                    {latestAerobicEval.enduranceTest.statusReason || (latestAerobicEval.enduranceTest.status === 'na' ? 'Adaptado o exento según la condición del atleta.' : 'Sin registro en esta sesión.')}
                   </p>
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                  latestEval.enduranceTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  latestAerobicEval.enduranceTest.status === 'na' ? 'bg-neutral-800 text-neutral-300' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                 }`}>
-                  {latestEval.enduranceTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
+                  {latestAerobicEval.enduranceTest.status === 'na' ? '🚫 NA' : '⚠️ NP'}
                 </span>
               </div>
             ) : (
               <>
                 <div className="text-[11px] text-neutral-300 bg-neutral-950 p-2 rounded-xl border border-neutral-800 flex items-center justify-between">
                   <span className="text-neutral-400">Reto Evaluado:</span>
-                  <strong className="text-white">{latestEval.enduranceTest.name}</strong>
+                  <strong className="text-white">{latestAerobicEval.enduranceTest.name}</strong>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-1">
                     <span className="text-[10px] text-neutral-400 block font-medium">
-                      {prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}
+                      {prevAerobicEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}
                     </span>
                     <div className="text-xl font-extrabold text-neutral-300 font-mono">
-                      {prevEval ? prevEval.enduranceTest.result : 'Primer Reto'}
+                      {prevAerobicEval ? prevAerobicEval.enduranceTest.result : 'Primer Reto'}
                     </div>
                     <div className="text-[10px] text-neutral-500 font-mono">
-                      {prevEval ? prevEval.evaluationDate : 'Línea base registrada'}
+                      {prevAerobicEval ? prevAerobicEval.evaluationDate : 'Línea base registrada'}
                     </div>
                   </div>
 
                   <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 space-y-1">
                     <span className="text-[10px] text-emerald-400 block font-semibold">
-                      Ahora hiciste:
+                      Ahora hiciste ({latestAerobicEval.evaluationDate}):
                     </span>
                     <div className="text-xl font-extrabold text-emerald-300 font-mono">
-                      {latestEval.enduranceTest.result}
+                      {latestAerobicEval.enduranceTest.result}
                     </div>
                     <div className="text-[10px] text-emerald-400 font-medium">
                       {endurancePercentImprovement ? `Mejora del ${endurancePercentImprovement}% en velocidad muscular` : 'Tiempo oficial validado'}
@@ -1779,7 +1863,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'cooper' && latestEval && (
         <div className="space-y-4">
-          {latestEval.cooperTest.status === 'na' || latestEval.cooperTest.status === 'np' ? (
+          {!latestAerobicEval ? (
+            <div className="p-6 rounded-3xl bg-neutral-900/90 border border-neutral-800 text-center space-y-2">
+              <Heart className="w-7 h-7 text-red-500 mx-auto" />
+              <p className="text-xs text-white font-semibold">Sin Test de Cooper registrado aún</p>
+              <p className="text-[11px] text-neutral-400 max-w-sm mx-auto">
+                Las jornadas registradas hasta ahora corresponden únicamente a Fuerza 1RM. Cuando se capture un Test de Cooper, tu nivel aparecerá aquí.
+              </p>
+            </div>
+          ) : latestAerobicEval.cooperTest.status === 'na' || latestAerobicEval.cooperTest.status === 'np' ? (
             <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
@@ -1787,25 +1879,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   Test de Cooper (12 Minutos) · Exención / Adaptación
                 </span>
                 <span className="text-[10px] text-neutral-400 font-mono">
-                  {latestEval.evaluationDate}
+                  {latestAerobicEval.evaluationDate}
                 </span>
               </div>
 
               <div className="text-center py-6 space-y-2.5">
                 <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  latestEval.cooperTest.status === 'na'
+                  latestAerobicEval.cooperTest.status === 'na'
                     ? 'bg-neutral-800 text-neutral-200 border border-neutral-700'
                     : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                 }`}>
-                  {latestEval.cooperTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
+                  {latestAerobicEval.cooperTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
                 </span>
                 <div className="text-2xl font-bold text-white">
-                  {latestEval.cooperTest.status === 'na'
+                  {latestAerobicEval.cooperTest.status === 'na'
                     ? 'Prueba no requerida para este atleta'
                     : 'Prueba no presentada en esta fecha'}
                 </div>
                 <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                  {latestEval.cooperTest.statusReason || (latestEval.cooperTest.status === 'na'
+                  {latestAerobicEval.cooperTest.statusReason || (latestAerobicEval.cooperTest.status === 'na'
                     ? 'Adaptación cardiovascular por categoría de edad (adulto mayor, niño) o prescripción física del coach.'
                     : 'El atleta no realizó o reprogramó esta prueba de campo en esta sesión.')}
                 </p>
@@ -1819,31 +1911,38 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               </div>
             </div>
           ) : (() => {
-            const isCooper2 = latestEval.cooperTest.variant === 'laps' || 
-              (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) || 
-              latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') || 
-              latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') || 
-              latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+            const isCooper2 = latestAerobicEval.cooperTest.variant === 'laps' || 
+              (typeof latestAerobicEval.cooperTest.lapsCount === 'number' && latestAerobicEval.cooperTest.lapsCount > 0) || 
+              latestAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') || 
+              latestAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') || 
+              latestAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas');
 
-            const isNavette = latestEval.cooperTest.variant === 'navette' || 
-              (latestEval.cooperTest.levelNumber > 0 && (!latestEval.cooperTest.distanceMeters || latestEval.cooperTest.notes?.toLowerCase().includes('navette')));
+            const isNavette = latestAerobicEval.cooperTest.variant === 'navette' || 
+              (latestAerobicEval.cooperTest.levelNumber > 0 && (!latestAerobicEval.cooperTest.distanceMeters || latestAerobicEval.cooperTest.notes?.toLowerCase().includes('navette')));
 
             return (
               /* Main Level Showcase Card */
               <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
                 <div className="absolute -right-12 -top-12 w-40 h-40 bg-blue-600/15 rounded-full blur-2xl pointer-events-none" />
 
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-                    <Heart className="w-4 h-4 text-red-500" />
-                    {isCooper2 
-                      ? 'Cooper por Vueltas · Resultado Oficial' 
-                      : isNavette 
-                      ? 'Course Navette (20m / Léger) · Resultado Oficial' 
-                      : 'Test de Cooper (12 Minutos) · Resultado Oficial'}
-                  </span>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                      <Heart className="w-4 h-4 text-red-500" />
+                      {isCooper2 
+                        ? 'Cooper por Vueltas · Resultado Oficial' 
+                        : isNavette 
+                        ? 'Course Navette (20m / Léger) · Resultado Oficial' 
+                        : 'Test de Cooper (12 Minutos) · Resultado Oficial'}
+                    </span>
+                    {latestAerobicEval.id !== latestEval.id && (
+                      <span className="text-[10px] text-amber-400 font-mono block mt-0.5">
+                        Marca conservada del {latestAerobicEval.evaluationDate}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-neutral-400 font-mono">
-                    {latestEval.evaluationDate}
+                    {latestAerobicEval.evaluationDate}
                   </span>
                 </div>
 
@@ -1854,15 +1953,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     </span>
                     
                     <div className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight font-brand">
-                      {latestEval.cooperTest.lapsCount ? `${latestEval.cooperTest.lapsCount} VUELTAS` : 'POR VUELTAS'}
+                      {latestAerobicEval.cooperTest.lapsCount ? `${latestAerobicEval.cooperTest.lapsCount} VUELTAS` : 'POR VUELTAS'}
                     </div>
 
                     <div className="flex items-center justify-center gap-2 flex-wrap">
                       <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-950/70 border border-amber-500/40 text-xs font-bold text-amber-300">
-                        <span>Distancia aprox: ~{latestEval.cooperTest.distanceMeters || Math.round((latestEval.cooperTest.lapsCount || 0) * (latestEval.cooperTest.metersPerLap || 400))} metros</span>
+                        <span>Distancia aprox: ~{latestAerobicEval.cooperTest.distanceMeters || Math.round((latestAerobicEval.cooperTest.lapsCount || 0) * (latestAerobicEval.cooperTest.metersPerLap || 400))} metros</span>
                       </div>
                       <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
-                        <span>{latestEval.cooperTest.lapLocation === 'outside' ? '🌳 Circuito exterior (400m)' : '🏢 Circuito interior (250m)'}</span>
+                        <span>{latestAerobicEval.cooperTest.lapLocation === 'outside' ? '🌳 Circuito exterior (400m)' : '🏢 Circuito interior (250m)'}</span>
                       </div>
                     </div>
                   </div>
@@ -1874,19 +1973,19 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </span>
                       
                       <div className="text-5xl font-extrabold text-white tracking-tight font-brand">
-                        {latestEval.cooperTest.levelNumber ? `NIVEL ${latestEval.cooperTest.levelNumber}` : 'NIVEL 5'}
+                        {latestAerobicEval.cooperTest.levelNumber ? `NIVEL ${latestAerobicEval.cooperTest.levelNumber}` : 'NIVEL 5'}
                       </div>
 
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-red-400">
                         <Flame className="w-3.5 h-3.5 text-red-500" />
-                        <span>{latestEval.cooperTest.level ? latestEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Excelente / Élite Kinetix'}</span>
+                        <span>{latestAerobicEval.cooperTest.level ? latestAerobicEval.cooperTest.level.replace(/Nivel \d\s*\(/, '').replace(/\)/, '') : 'Excelente / Élite Kinetix'}</span>
                       </div>
 
                       <div className="flex items-center justify-center">
                         <div className="inline-flex items-center gap-1.5 text-xs text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/30">
                           <span>{isNavette ? '🏃 Course Navette / Léger (20m)' : '🏃 Test Cooper Normal (12 min)'}</span>
-                          {latestEval.cooperTest.distanceMeters ? (
-                            <span className="text-neutral-400 font-mono">· {latestEval.cooperTest.distanceMeters}m</span>
+                          {latestAerobicEval.cooperTest.distanceMeters ? (
+                            <span className="text-neutral-400 font-mono">· {latestAerobicEval.cooperTest.distanceMeters}m</span>
                           ) : null}
                         </div>
                       </div>
@@ -1904,7 +2003,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: '2px' }}
                       >
                         {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => {
-                          const currentLvl = latestEval.cooperTest.levelNumber || 10;
+                          const currentLvl = latestAerobicEval.cooperTest.levelNumber || 10;
                           const isReached = lvl <= currentLvl;
                           const isCurrent = lvl === currentLvl;
                           return (
@@ -1927,34 +2026,34 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 )}
 
               {/* Comparativa Visual Directa con Test Anterior */}
-              {prevEval && (() => {
-                const isLatestCooper2 = latestEval.cooperTest.variant === 'laps' ||
-                  (typeof latestEval.cooperTest.lapsCount === 'number' && latestEval.cooperTest.lapsCount > 0) ||
-                  latestEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-                  latestEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-                  latestEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+              {prevAerobicEval && (() => {
+                const isLatestCooper2 = latestAerobicEval.cooperTest.variant === 'laps' ||
+                  (typeof latestAerobicEval.cooperTest.lapsCount === 'number' && latestAerobicEval.cooperTest.lapsCount > 0) ||
+                  latestAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                  latestAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                  latestAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas');
 
-                const isPrevCooper2 = prevEval.cooperTest.variant === 'laps' ||
-                  (typeof prevEval.cooperTest.lapsCount === 'number' && prevEval.cooperTest.lapsCount > 0) ||
-                  prevEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
-                  prevEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
-                  prevEval.cooperTest.notes?.toLowerCase().includes('vueltas');
+                const isPrevCooper2 = prevAerobicEval.cooperTest.variant === 'laps' ||
+                  (typeof prevAerobicEval.cooperTest.lapsCount === 'number' && prevAerobicEval.cooperTest.lapsCount > 0) ||
+                  prevAerobicEval.cooperTest.level?.toLowerCase().includes('cooper 2') ||
+                  prevAerobicEval.cooperTest.notes?.toLowerCase().includes('cooper 2') ||
+                  prevAerobicEval.cooperTest.notes?.toLowerCase().includes('vueltas');
 
                 const isSameCircuit = isLatestCooper2 && isPrevCooper2 && 
-                  (latestEval.cooperTest.lapLocation || 'outside') === (prevEval.cooperTest.lapLocation || 'outside');
+                  (latestAerobicEval.cooperTest.lapLocation || 'outside') === (prevAerobicEval.cooperTest.lapLocation || 'outside');
 
-                const latestM = latestEval.cooperTest.metersPerLap || (latestEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
-                const prevM = prevEval.cooperTest.metersPerLap || (prevEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+                const latestM = latestAerobicEval.cooperTest.metersPerLap || (latestAerobicEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
+                const prevM = prevAerobicEval.cooperTest.metersPerLap || (prevAerobicEval.cooperTest.lapLocation === 'inside' ? 250 : 400);
 
-                const latestDist = latestEval.cooperTest.distanceMeters || (isLatestCooper2 ? Math.round((latestEval.cooperTest.lapsCount || 0) * latestM) : 0);
-                const prevDist = prevEval.cooperTest.distanceMeters || (isPrevCooper2 ? Math.round((prevEval.cooperTest.lapsCount || 0) * prevM) : 0);
+                const latestDist = latestAerobicEval.cooperTest.distanceMeters || (isLatestCooper2 ? Math.round((latestAerobicEval.cooperTest.lapsCount || 0) * latestM) : 0);
+                const prevDist = prevAerobicEval.cooperTest.distanceMeters || (isPrevCooper2 ? Math.round((prevAerobicEval.cooperTest.lapsCount || 0) * prevM) : 0);
 
-                const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestEval.cooperTest.lapsCount === 'number' && typeof prevEval.cooperTest.lapsCount === 'number')
-                  ? Math.round((latestEval.cooperTest.lapsCount - prevEval.cooperTest.lapsCount) * 10) / 10
+                const lapsDelta = (isLatestCooper2 && isPrevCooper2 && typeof latestAerobicEval.cooperTest.lapsCount === 'number' && typeof prevAerobicEval.cooperTest.lapsCount === 'number')
+                  ? Math.round((latestAerobicEval.cooperTest.lapsCount - prevAerobicEval.cooperTest.lapsCount) * 10) / 10
                   : null;
 
                 const levelDelta = (!isLatestCooper2 && !isPrevCooper2)
-                  ? (latestEval.cooperTest.levelNumber || 0) - (prevEval.cooperTest.levelNumber || 0)
+                  ? (latestAerobicEval.cooperTest.levelNumber || 0) - (prevAerobicEval.cooperTest.levelNumber || 0)
                   : null;
 
                 return (
@@ -1965,7 +2064,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </span>
                       {isLatestCooper2 && isPrevCooper2 && !isSameCircuit && (
                         <span className="text-[9px] text-amber-400/90 font-mono">
-                          (Pistas distintas: {prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'})
+                          (Pistas distintas: {prevAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} vs {latestAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'})
                         </span>
                       )}
                     </div>
@@ -1976,23 +2075,23 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         {isPrevCooper2 ? (
                           <>
                             <div className="text-base font-bold text-neutral-300 font-brand">
-                              {prevEval.cooperTest.lapsCount || '—'} VUELTAS
+                              {prevAerobicEval.cooperTest.lapsCount || '—'} VUELTAS
                             </div>
                             <span className="text-[10px] text-neutral-400 font-mono block">
-                              ~{prevDist}m ({prevEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {prevM}m/v)
+                              ~{prevDist}m ({prevAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {prevM}m/v)
                             </span>
                           </>
                         ) : (
                           <>
                             <div className="text-base font-bold text-neutral-300 font-brand">
-                              NIVEL {prevEval.cooperTest.levelNumber || '—'}
+                              NIVEL {prevAerobicEval.cooperTest.levelNumber || '—'}
                             </div>
                             <span className="text-[10px] text-neutral-400 font-mono block">
-                              {prevEval.cooperTest.distanceMeters ? `${prevEval.cooperTest.distanceMeters}m` : 'Escala 1 al 20'}
+                              {prevAerobicEval.cooperTest.distanceMeters ? `${prevAerobicEval.cooperTest.distanceMeters}m` : 'Escala 1 al 20'}
                             </span>
                           </>
                         )}
-                        <span className="text-[9px] text-neutral-500 font-mono block mt-0.5">{prevEval.evaluationDate}</span>
+                        <span className="text-[9px] text-neutral-500 font-mono block mt-0.5">{prevAerobicEval.evaluationDate}</span>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-blue-950/50 border border-blue-800/60">
@@ -2000,16 +2099,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         {isLatestCooper2 ? (
                           <>
                             <div className="text-base font-bold text-amber-300 font-brand">
-                              {latestEval.cooperTest.lapsCount || '—'} VUELTAS
+                              {latestAerobicEval.cooperTest.lapsCount || '—'} VUELTAS
                             </div>
                             <span className="text-[10px] text-neutral-300 font-mono block">
-                              ~{latestDist}m ({latestEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {latestM}m/v)
+                              ~{latestDist}m ({latestAerobicEval.cooperTest.lapLocation === 'inside' ? 'Adentro' : 'Afuera'} {latestM}m/v)
                             </span>
                           </>
                         ) : (
                           <>
                             <div className="text-base font-bold text-blue-300 font-brand">
-                              NIVEL {latestEval.cooperTest.levelNumber || '—'}
+                              NIVEL {latestAerobicEval.cooperTest.levelNumber || '—'}
                             </div>
                             <span className="text-[10px] text-neutral-300 font-mono block">
                               {latestDist > 0 ? `${latestDist}m` : 'Escala 1 al 20'}
@@ -2059,16 +2158,16 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     Diagnóstico Fisiológico
                   </span>
                   <p className="text-neutral-300 text-[11px] leading-relaxed">
-                    {latestEval.cooperTest.description}
+                    {latestAerobicEval.cooperTest.description}
                   </p>
                 </div>
 
-                {latestEval.cooperTest.targetZoneRecommendation && (
+                {latestAerobicEval.cooperTest.targetZoneRecommendation && (
                   <div className="p-3 rounded-2xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200">
                     <strong className="text-white block mb-0.5">
-                      Pauta Técnica del Entrenador ({latestEval.coachName || 'Staff Kinetix'}):
+                      Pauta Técnica del Entrenador ({latestAerobicEval.coachName || 'Staff Kinetix'}):
                     </strong>
-                    {latestEval.cooperTest.targetZoneRecommendation}
+                    {latestAerobicEval.cooperTest.targetZoneRecommendation}
                   </div>
                 )}
               </div>
@@ -2083,7 +2182,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'endurance' && latestEval && (
         <div className="space-y-4">
-          {latestEval.enduranceTest.status === 'na' || latestEval.enduranceTest.status === 'np' ? (
+          {!latestAerobicEval ? (
+            <div className="p-6 rounded-3xl bg-neutral-900/90 border border-neutral-800 text-center space-y-2">
+              <Flame className="w-7 h-7 text-red-500 mx-auto" />
+              <p className="text-xs text-white font-semibold">Sin Test de Resistencia registrado aún</p>
+              <p className="text-[11px] text-neutral-400 max-w-sm mx-auto">
+                Las jornadas registradas hasta ahora corresponden únicamente a Fuerza 1RM. Al capturar una evaluación de resistencia, aparecerá aquí.
+              </p>
+            </div>
+          ) : latestAerobicEval.enduranceTest.status === 'na' || latestAerobicEval.enduranceTest.status === 'np' ? (
             <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
@@ -2091,25 +2198,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   Test de Resistencia Funcional · Exención / Adaptación
                 </span>
                 <span className="text-[10px] text-neutral-400 font-mono">
-                  {latestEval.evaluationDate}
+                  {latestAerobicEval.evaluationDate}
                 </span>
               </div>
 
               <div className="text-center py-6 space-y-2.5">
                 <span className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  latestEval.enduranceTest.status === 'na'
+                  latestAerobicEval.enduranceTest.status === 'na'
                     ? 'bg-neutral-800 text-neutral-200 border border-neutral-700'
                     : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                 }`}>
-                  {latestEval.enduranceTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
+                  {latestAerobicEval.enduranceTest.status === 'na' ? '🚫 NA — No Aplica' : '⚠️ NP — No Presentada'}
                 </span>
                 <div className="text-2xl font-bold text-white">
-                  {latestEval.enduranceTest.status === 'na'
+                  {latestAerobicEval.enduranceTest.status === 'na'
                     ? 'Reto adaptado / No requerido'
                     : 'Reto no presentado en esta sesión'}
                 </div>
                 <p className="text-xs text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                  {latestEval.enduranceTest.statusReason || (latestEval.enduranceTest.status === 'na'
+                  {latestAerobicEval.enduranceTest.statusReason || (latestAerobicEval.enduranceTest.status === 'na'
                     ? 'Adaptación funcional neuromuscular específica según la edad o prescripción del coach.'
                     : 'Prueba no realizada en esta sesión evaluativa.')}
                 </p>
@@ -2125,13 +2232,20 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           ) : (
             /* Main Endurance Card */
             <div className="p-5 rounded-3xl bg-neutral-900/90 border border-neutral-800 space-y-4 relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 text-red-500" />
-                  <span>Test de Resistencia Funcional (Por Tiempo)</span>
-                </span>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-red-500" />
+                    <span>Test de Resistencia Funcional (Por Tiempo)</span>
+                  </span>
+                  {latestAerobicEval.id !== latestEval.id && (
+                    <span className="text-[10px] text-amber-400 font-mono block mt-0.5">
+                      Marca conservada del {latestAerobicEval.evaluationDate}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-neutral-400 font-mono">
-                  {latestEval.evaluationDate}
+                  {latestAerobicEval.evaluationDate}
                 </span>
               </div>
 
@@ -2142,25 +2256,25 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </span>
                 
                 <div className="text-5xl font-extrabold text-emerald-400 tracking-tight font-mono">
-                  {latestEval.enduranceTest.result}
+                  {latestAerobicEval.enduranceTest.result}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-950 border border-neutral-800 text-xs font-semibold text-white">
                     <Activity className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Reto: <strong className="text-blue-300">{latestEval.enduranceTest.name}</strong></span>
+                    <span>Reto: <strong className="text-blue-300">{latestAerobicEval.enduranceTest.name}</strong></span>
                   </div>
 
-                  {(latestEval.enduranceTest.difficultyLevel || latestEval.enduranceTest.scoreScoreLevel) && (
+                  {(latestAerobicEval.enduranceTest.difficultyLevel || latestAerobicEval.enduranceTest.scoreScoreLevel) && (
                     <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                      (latestEval.enduranceTest.difficultyLevel === 'Avanzado' || latestEval.enduranceTest.scoreScoreLevel === 'Avanzado')
+                      (latestAerobicEval.enduranceTest.difficultyLevel === 'Avanzado' || latestAerobicEval.enduranceTest.scoreScoreLevel === 'Avanzado')
                         ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                        : (latestEval.enduranceTest.difficultyLevel === 'Principiante' || latestEval.enduranceTest.scoreScoreLevel === 'Básico')
+                        : (latestAerobicEval.enduranceTest.difficultyLevel === 'Principiante' || latestAerobicEval.enduranceTest.scoreScoreLevel === 'Básico')
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                     }`}>
                       <span>
-                        {(latestEval.enduranceTest.difficultyLevel === 'Avanzado' || latestEval.enduranceTest.scoreScoreLevel === 'Avanzado') ? '🔥' : (latestEval.enduranceTest.difficultyLevel === 'Principiante' || latestEval.enduranceTest.scoreScoreLevel === 'Básico') ? '🌱' : '⚡'} Nivel: {latestEval.enduranceTest.difficultyLevel || latestEval.enduranceTest.scoreScoreLevel}
+                        {(latestAerobicEval.enduranceTest.difficultyLevel === 'Avanzado' || latestAerobicEval.enduranceTest.scoreScoreLevel === 'Avanzado') ? '🔥' : (latestAerobicEval.enduranceTest.difficultyLevel === 'Principiante' || latestAerobicEval.enduranceTest.scoreScoreLevel === 'Básico') ? '🌱' : '⚡'} Nivel: {latestAerobicEval.enduranceTest.difficultyLevel || latestAerobicEval.enduranceTest.scoreScoreLevel}
                       </span>
                     </div>
                   )}
@@ -2182,17 +2296,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800">
-                    <span className="text-[10px] text-neutral-400 block">{prevEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}</span>
+                    <span className="text-[10px] text-neutral-400 block">{prevAerobicEval ? 'En el anterior hiciste:' : 'Historial comparativo:'}</span>
                     <div className="text-base font-bold text-neutral-300 font-mono mt-0.5">
-                      {prevEval ? prevEval.enduranceTest.result : 'Primer Test'}
+                      {prevAerobicEval ? prevAerobicEval.enduranceTest.result : 'Primer Test'}
                     </div>
-                    <span className="text-[10px] text-neutral-500 font-mono">{prevEval ? prevEval.evaluationDate : 'Línea base registrada'}</span>
+                    <span className="text-[10px] text-neutral-500 font-mono">{prevAerobicEval ? prevAerobicEval.evaluationDate : 'Línea base registrada'}</span>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60">
                     <span className="text-[10px] text-emerald-400 block font-semibold">Ahora hiciste:</span>
                     <div className="text-base font-bold text-emerald-300 font-mono mt-0.5">
-                      {latestEval.enduranceTest.result}
+                      {latestAerobicEval.enduranceTest.result}
                     </div>
                     <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
                       <TrendingUp className="w-3 h-3" />
@@ -2535,30 +2649,48 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     <span className="text-[10px] text-neutral-400 block">
                       {ev.cooperTest.variant === 'laps' || (typeof ev.cooperTest.lapsCount === 'number' && ev.cooperTest.lapsCount > 0) ? 'Cooper 2' : 'Nivel Cooper'}
                     </span>
-                    <div className="font-extrabold text-blue-400 font-brand text-sm">
-                      {ev.cooperTest.status === 'na' 
-                        ? '🚫 NA' 
-                        : ev.cooperTest.status === 'np' 
-                        ? '⚠️ NP' 
-                        : (ev.cooperTest.variant === 'laps' || (typeof ev.cooperTest.lapsCount === 'number' && ev.cooperTest.lapsCount > 0))
-                        ? `${ev.cooperTest.lapsCount || 0} vueltas`
-                        : `Nivel ${ev.cooperTest.levelNumber || 5}`}
-                    </div>
-                    <span className="text-[10px] text-neutral-500 font-mono truncate block">
-                      {ev.cooperTest.status === 'na' || ev.cooperTest.status === 'np' 
-                        ? (ev.cooperTest.statusReason || 'Exento') 
-                        : `~${ev.cooperTest.distanceMeters || ((ev.cooperTest.lapsCount || 0) * (ev.cooperTest.metersPerLap || 400))}m`}
-                    </span>
+                    {isAerobicOmitted(ev) ? (
+                      <>
+                        <div className="font-bold text-amber-400 text-xs">🏋️ Solo Fuerza 1RM</div>
+                        <span className="text-[10px] text-neutral-500">Sin aeróbico en fecha</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-extrabold text-blue-400 font-brand text-sm">
+                          {ev.cooperTest.status === 'na' 
+                            ? '🚫 NA' 
+                            : ev.cooperTest.status === 'np' 
+                            ? '⚠️ NP' 
+                            : (ev.cooperTest.variant === 'laps' || (typeof ev.cooperTest.lapsCount === 'number' && ev.cooperTest.lapsCount > 0))
+                            ? `${ev.cooperTest.lapsCount || 0} vueltas`
+                            : `Nivel ${ev.cooperTest.levelNumber || 5}`}
+                        </div>
+                        <span className="text-[10px] text-neutral-500 font-mono truncate block">
+                          {ev.cooperTest.status === 'na' || ev.cooperTest.status === 'np' 
+                            ? (ev.cooperTest.statusReason || 'Exento') 
+                            : `~${ev.cooperTest.distanceMeters || ((ev.cooperTest.lapsCount || 0) * (ev.cooperTest.metersPerLap || 400))}m`}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
                     <span className="text-[10px] text-neutral-400 block truncate">Resistencia</span>
-                    <div className="font-extrabold text-emerald-400 font-mono text-sm">
-                      {ev.enduranceTest.status === 'na' ? '🚫 NA' : ev.enduranceTest.status === 'np' ? '⚠️ NP' : ev.enduranceTest.result}
-                    </div>
-                    <span className="text-[10px] text-neutral-500 truncate block">
-                      {ev.enduranceTest.status === 'na' || ev.enduranceTest.status === 'np' ? (ev.enduranceTest.statusReason || 'Exento') : ev.enduranceTest.name}
-                    </span>
+                    {isAerobicOmitted(ev) ? (
+                      <>
+                        <div className="font-bold text-amber-400 text-xs">🏋️ Solo Fuerza 1RM</div>
+                        <span className="text-[10px] text-neutral-500">Sin aeróbico en fecha</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-extrabold text-emerald-400 font-mono text-sm">
+                          {ev.enduranceTest.status === 'na' ? '🚫 NA' : ev.enduranceTest.status === 'np' ? '⚠️ NP' : ev.enduranceTest.result}
+                        </div>
+                        <span className="text-[10px] text-neutral-500 truncate block">
+                          {ev.enduranceTest.status === 'na' || ev.enduranceTest.status === 'np' ? (ev.enduranceTest.statusReason || 'Exento') : ev.enduranceTest.name}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
@@ -2715,30 +2847,39 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 </span>
               </div>
 
-              {/* MODALIDAD DE LA JORNADA (Completa vs Solo Resistencia) */}
+              {/* MODALIDAD DE LA JORNADA (Completa vs Solo Resistencia vs Solo Fuerza 1RM) */}
               <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-neutral-300 font-semibold text-xs">Modalidad de esta fecha</span>
                   <span className="text-[10px] text-neutral-400 font-mono">Opcional</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
+                <div className="grid grid-cols-3 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
                   <button
                     type="button"
                     onClick={() => setEvalSessionMode('full')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
                       evalSessionMode === 'full' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    Completa (Resistencia + 1RM)
+                    Completa
                   </button>
                   <button
                     type="button"
                     onClick={() => setEvalSessionMode('endurance_only')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
                       evalSessionMode === 'endurance_only' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    🏃 Solo Resistencia (Sin 1RM)
+                    🏃 Solo Resistencia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('strength_only')}
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'strength_only' ? 'bg-amber-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    🏋️ Solo Fuerza 1RM
                   </button>
                 </div>
                 {evalSessionMode === 'endurance_only' && (
@@ -2746,9 +2887,15 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     En esta fecha solo se guardarán las pruebas aeróbicas y de resistencia. Las marcas previas de Fuerza 1RM del atleta se mantienen intactas.
                   </p>
                 )}
+                {evalSessionMode === 'strength_only' && (
+                  <p className="text-[10px] text-amber-300 leading-snug">
+                    En esta fecha solo se evaluará Fuerza 1RM. Los resultados previos de Test de Cooper y Resistencia del atleta se conservan intactos.
+                  </p>
+                )}
               </div>
 
               {/* BANNER ACCIÓN RÁPIDA: NA GENERAL (EXENTAR CICLO COMPLETO / NUEVO INGRESO) */}
+              {evalSessionMode !== 'strength_only' && (
               <div className={`p-3 rounded-2xl border transition-all ${
                 isFormAllNA 
                   ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-950/20' 
@@ -2869,8 +3016,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   )}
                 </div>
               </div>
+              )}
 
               {/* SECCIÓN 1: TEST DE COOPER (NIVELES 1 AL 20 / NA / NP) */}
+              {evalSessionMode !== 'strength_only' && (
+              <>
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="font-bold text-white flex items-center gap-1.5">
@@ -3454,9 +3604,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
                 )}
               </div>
+              </>
+              )}
 
               {/* SECCIÓN 3: FUERZA 1RM (5 EJERCICIOS CON SELECTOR NA / NP INDIVIDUAL) */}
-              {evalSessionMode === 'full' && (
+              {evalSessionMode !== 'endurance_only' && (
               <div className="p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-white flex items-center gap-1.5">
@@ -3931,29 +4083,44 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-neutral-300 font-semibold text-xs">Modalidad de esta fecha</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
+                <div className="grid grid-cols-3 gap-1.5 bg-neutral-900 p-1 rounded-xl border border-neutral-800">
                   <button
                     type="button"
                     onClick={() => setEvalSessionMode('full')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
                       evalSessionMode === 'full' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    Completa (Resistencia + 1RM)
+                    Completa
                   </button>
                   <button
                     type="button"
                     onClick={() => setEvalSessionMode('endurance_only')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
                       evalSessionMode === 'endurance_only' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    🏃 Solo Resistencia (Sin 1RM)
+                    🏃 Solo Resistencia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEvalSessionMode('strength_only')}
+                    className={`py-1.5 px-2 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all ${
+                      evalSessionMode === 'strength_only' ? 'bg-amber-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    🏋️ Solo Fuerza 1RM
                   </button>
                 </div>
+                {evalSessionMode === 'strength_only' && (
+                  <p className="text-[10px] text-amber-300 leading-snug">
+                    Modo Solo Fuerza 1RM: Cooper y Resistencia se omiten en esta fecha conservando los registros anteriores.
+                  </p>
+                )}
               </div>
 
               {/* BANNER ACCIÓN RÁPIDA EN EDICIÓN: NA GENERAL */}
+              {evalSessionMode !== 'strength_only' && (
               <div className={`p-3 rounded-2xl border transition-all ${
                 isFormAllNA 
                   ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-950/20' 
@@ -4014,8 +4181,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   ))}
                 </div>
               </div>
+              )}
 
               {/* SECCIÓN 1: COOPER EN EDICIÓN */}
+              {evalSessionMode !== 'strength_only' && (
+              <>
               <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-1">
                   <label className="text-neutral-300 font-medium">Test de Cooper (12 Minutos)</label>
@@ -4385,9 +4555,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   />
                 )}
               </div>
+              </>
+              )}
 
               {/* SECCIÓN 3: CORREGIR O EDITAR PESOS DE FUERZA (1RM) */}
-              {evalSessionMode === 'full' && (
+              {evalSessionMode !== 'endurance_only' && (
               <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -4858,53 +5030,81 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       editCooperLevel = `Cooper 2 (${cooperLapsCount} vueltas)`;
                     }
 
+                    const isStrengthOnlyMode = evalSessionMode === 'strength_only';
+
                     onUpdateEvaluation(editingEval.id, {
                       evaluationDate: evalDate,
-                      cooperTest: {
-                        ...editingEval.cooperTest,
-                        status: cooperStatus,
-                        statusReason: cooperReason,
-                        variant: cooperVariant,
-                        lapLocation: isLapsType ? cooperLapLocation : undefined,
-                        lapsCount: isLapsType ? cooperLapsCount : undefined,
-                        metersPerLap: isLapsType ? cooperMetersPerLap : undefined,
-                        navetteLevelNumber: (isNavette || isBoth) ? selectedNavetteLevel : undefined,
-                        distanceMeters: effectiveCooperDist,
-                        level: isCooperDone 
-                          ? editCooperLevel 
-                          : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
-                        levelNumber: isCooperDone ? (isNavette ? selectedNavetteLevel : selectedCooperLevel) : 0,
-                        description: isCooperDone 
-                          ? (isBoth
-                              ? `Ambos Tests: Cooper (${effectiveCooperDist}m) y Course Navette Nivel ${selectedNavetteLevel}.`
-                              : isNavette
-                              ? `Course Navette: Nivel ${selectedNavetteLevel} completado.`
-                              : isCooper2 
-                              ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} (~${effectiveCooperDist}m).`
-                              : levelInfo.description) 
-                          : (cooperStatus === 'na' ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
-                        targetZoneRecommendation: isCooperDone 
-                          ? (isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : levelInfo.coachingRecommendation) 
-                          : 'Acondicionamiento físico adaptado.',
-                        notes: isCooperDone 
-                          ? (isBoth
-                              ? `Ambos: Cooper ${effectiveCooperDist}m + Navette Nivel ${selectedNavetteLevel}`
-                              : isCooper2
-                              ? `Cooper 2: ${cooperLapsCount} vueltas (~${effectiveCooperDist}m, ${cooperLapLocation === 'outside' ? 'Afuera' : 'Adentro'})`
-                              : isNavette
-                              ? `Navette Nivel ${selectedNavetteLevel}`
-                              : `Cooper 12m: ${effectiveCooperDist}m`)
-                          : undefined,
-                      },
-                      enduranceTest: {
-                        ...editingEval.enduranceTest,
-                        status: enduranceStatus,
-                        statusReason: enduranceReason,
-                        name: enduranceExerciseName,
-                        result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
-                        timeSeconds: isEnduranceDone ? (enduranceMinutes * 60 + enduranceSeconds) : 0,
-                        difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
-                      },
+                      cooperTest: isStrengthOnlyMode
+                        ? {
+                            sessionOmitted: true,
+                            level: 'No evaluado (Solo Fuerza 1RM)',
+                            levelNumber: 0,
+                            description: 'Jornada enfocada exclusivamente en Fuerza Máxima 1RM. Se conservan los registros aeróbicos previos.',
+                            targetZoneRecommendation: 'Control de fuerza máxima 1RM',
+                            distanceMeters: 0,
+                            estimatedVo2Max: 0,
+                            status: 'na',
+                            statusReason: 'Jornada Solo Fuerza 1RM',
+                            notes: 'Jornada Solo Fuerza 1RM (Aeróbico omitido)',
+                          }
+                        : {
+                            ...editingEval.cooperTest,
+                            sessionOmitted: false,
+                            status: cooperStatus,
+                            statusReason: cooperReason,
+                            variant: cooperVariant,
+                            lapLocation: isLapsType ? cooperLapLocation : undefined,
+                            lapsCount: isLapsType ? cooperLapsCount : undefined,
+                            metersPerLap: isLapsType ? cooperMetersPerLap : undefined,
+                            navetteLevelNumber: (isNavette || isBoth) ? selectedNavetteLevel : undefined,
+                            distanceMeters: effectiveCooperDist,
+                            level: isCooperDone 
+                              ? editCooperLevel 
+                              : (cooperStatus === 'na' ? 'NA (No Aplica)' : 'NP (No Presentada)'),
+                            levelNumber: isCooperDone ? (isNavette ? selectedNavetteLevel : selectedCooperLevel) : 0,
+                            description: isCooperDone 
+                              ? (isBoth
+                                  ? `Ambos Tests: Cooper (${effectiveCooperDist}m) y Course Navette Nivel ${selectedNavetteLevel}.`
+                                  : isNavette
+                                  ? `Course Navette: Nivel ${selectedNavetteLevel} completado.`
+                                  : isCooper2 
+                                  ? `Test Cooper 2 (Por Vueltas): ${cooperLapsCount} vueltas ${cooperLapLocation === 'outside' ? 'afuera' : 'adentro'} (~${effectiveCooperDist}m).`
+                                  : levelInfo.description) 
+                              : (cooperStatus === 'na' ? 'Prueba exenta por etapa formativa o edad (Niños / Adultos mayores).' : 'Prueba no presentada por enfermedad, lesión o prescripción médica.'),
+                            targetZoneRecommendation: isCooperDone 
+                              ? (isCooper2 ? 'Capacidad aeróbica funcional por vueltas' : levelInfo.coachingRecommendation) 
+                              : 'Acondicionamiento físico adaptado.',
+                            notes: isCooperDone 
+                              ? (isBoth
+                                  ? `Ambos: Cooper ${effectiveCooperDist}m + Navette Nivel ${selectedNavetteLevel}`
+                                  : isCooper2
+                                  ? `Cooper 2: ${cooperLapsCount} vueltas (~${effectiveCooperDist}m, ${cooperLapLocation === 'outside' ? 'Afuera' : 'Adentro'})`
+                                  : isNavette
+                                  ? `Navette Nivel ${selectedNavetteLevel}`
+                                  : `Cooper 12m: ${effectiveCooperDist}m`)
+                              : undefined,
+                          },
+                      enduranceTest: isStrengthOnlyMode
+                        ? {
+                            sessionOmitted: true,
+                            name: 'Resistencia omitida (Solo Fuerza 1RM)',
+                            result: 'Omitido',
+                            timeSeconds: 0,
+                            scoreScoreLevel: 'Exento',
+                            status: 'na',
+                            statusReason: 'Jornada Solo Fuerza 1RM',
+                            notes: 'Jornada Solo Fuerza 1RM',
+                          }
+                        : {
+                            ...editingEval.enduranceTest,
+                            sessionOmitted: false,
+                            status: enduranceStatus,
+                            statusReason: enduranceReason,
+                            name: enduranceExerciseName,
+                            result: isEnduranceDone ? formattedResult : (enduranceStatus === 'na' ? 'NA' : 'NP'),
+                            timeSeconds: isEnduranceDone ? (enduranceMinutes * 60 + enduranceSeconds) : 0,
+                            difficultyLevel: isEnduranceDone ? enduranceDifficulty : undefined,
+                          },
                       strengthRecords: updatedStrengthRecords,
                       generalCoachNotes: coachNotes.trim(),
                     });

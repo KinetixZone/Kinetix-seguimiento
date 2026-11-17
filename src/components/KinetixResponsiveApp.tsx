@@ -151,6 +151,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;
   const latestStrengthEval = [...userEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || latestEval;
+  const latestAerobicEval = [...userEvals].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || latestEval;
 
   // Navigation handlers with History Stack
   const handleNavigateTab = (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => {
@@ -793,6 +794,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
+          latestAerobicEval={latestAerobicEval}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowReportModal(false)}
         />
@@ -804,6 +806,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           latestBodyComp={latestBodyComp}
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
+          latestAerobicEval={latestAerobicEval}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowShareStoryModal(false)}
         />
