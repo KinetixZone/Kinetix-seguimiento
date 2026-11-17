@@ -16,6 +16,13 @@ import {
   getStrengthTier,
   kgToLbs
 } from '../../utils/fitnessCalculations';
+import {
+  formatRelativeEvalTime,
+  isEnduranceCompletedEval,
+  isCooperCompletedEval,
+  getEffectiveStrength1RMKg,
+  resolveLatestStrengthPillars,
+} from '../../utils/evaluationHelpers';
 import { 
   Heart, 
   Dumbbell, 
@@ -91,6 +98,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   // Sub-tabs: 'evolution' (Visión General), 'cooper', 'endurance' (Resistencia por tiempo), 'strength' (1RM), 'history' (Historial Staff)
   const [activeTab, setActiveTab] = useState<'evolution' | 'cooper' | 'endurance' | 'strength' | 'history'>('evolution');
   const [chartMetricTab, setChartMetricTab] = useState<'strength' | 'cooper' | 'endurance'>('strength');
+  const [chartStrengthEx, setChartStrengthEx] = useState<'all' | 'squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('all');
   const [periodFilter, setPeriodFilter] = useState<'3m' | '6m' | 'year' | 'all'>('all');
   const [historyMonthFilter, setHistoryMonthFilter] = useState<string>('all');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
@@ -889,32 +897,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           : existingEval.generalCoachNotes
       });
     } else {
-      // Create new evaluation
-      const userPastEvals = evaluations.filter(e => e.userId === targetId);
-      const sortedPast = [...userPastEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
-      const latestPast = [...sortedPast].reverse().find(e => !isAerobicOmitted(e)) || sortedPast[sortedPast.length - 1] || null;
-      const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null;
-
-      const baseExercises: ('squats' | 'deadlift' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows')[] = [
-        'squats', 'deadlift', 'hip_thrust', 'horizontal_press', 'pullups_or_rows'
-      ];
-
-      const baseStrength: StrengthMaxRecord[] = baseExercises.map(exId => {
-        if (exId === expressExerciseId) return newRec;
-        const existing = latestPastStrength?.strengthRecords?.find(s => s.exerciseId === exId);
-        if (existing) return existing;
-        return {
-          exerciseId: exId,
-          exerciseName: exerciseNameMap[exId] || exId,
-          weightKg: 0,
-          reps: 0,
-          estimated1RMKg: 0,
-          weightUnit: 'kg',
-          status: 'na' as EvaluationStatus,
-          statusReason: 'Pendiente en jornada Express',
-        };
-      });
-
+      // Create new Solo Fuerza 1RM Express evaluation without cloning past Cooper/Endurance/Strength dates
       const assignedCoachId = evaluatingCoachName.includes('Leslie') 
         ? 'user-staff-leslie' 
         : evaluatingCoachName.includes('Gus') 
@@ -926,7 +909,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         evaluationDate: expressDate,
         coachId: assignedCoachId,
         coachName: evaluatingCoachName,
-        cooperTest: latestPast?.cooperTest || {
+        cooperTest: {
           sessionOmitted: true,
           level: 'No evaluado (Solo Fuerza 1RM)',
           levelNumber: 0,
@@ -937,7 +920,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           status: 'na',
           statusReason: 'Jornada Solo Fuerza 1RM',
         },
-        enduranceTest: latestPast?.enduranceTest || {
+        enduranceTest: {
           sessionOmitted: true,
           name: 'Resistencia omitida (Solo Fuerza 1RM)',
           result: 'Omitido',
@@ -946,7 +929,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           status: 'na',
           statusReason: 'Jornada Solo Fuerza 1RM',
         },
-        strengthRecords: baseStrength,
+        strengthRecords: [newRec],
         generalCoachNotes: expressNotes ? `Marca rápida: ${expressNotes}` : 'Captura express de fuerza en clase.',
       };
 
@@ -992,17 +975,32 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const evalsWithAerobic = sortedEvals.filter(e => !isAerobicOmitted(e));
   const latestAerobicEval = evalsWithAerobic[evalsWithAerobic.length - 1] || null;
   const prevAerobicEval = evalsWithAerobic.length > 1 ? evalsWithAerobic[evalsWithAerobic.length - 2] : null;
+  const evalsWithCooperCompleted = sortedEvals.filter(isCooperCompletedEval);
+  const latestCompletedCooperEval = evalsWithCooperCompleted[evalsWithCooperCompleted.length - 1] || null;
+  const evalsWithEnduranceCompleted = sortedEvals.filter(isEnduranceCompletedEval);
+  const latestCompletedEnduranceEval = evalsWithEnduranceCompleted[evalsWithEnduranceCompleted.length - 1] || null;
+  const prevCompletedEnduranceEval = evalsWithEnduranceCompleted.length > 1 ? evalsWithEnduranceCompleted[evalsWithEnduranceCompleted.length - 2] : null;
+
   const evalsWithStrength = sortedEvals.filter(e => (e.strengthRecords?.length || 0) > 0);
   const latestStrengthEval = evalsWithStrength[evalsWithStrength.length - 1] || null;
   const prevStrengthEval = evalsWithStrength.length > 1 ? evalsWithStrength[evalsWithStrength.length - 2] : null;
+  const resolvedStrengthPillars = resolveLatestStrengthPillars(sortedEvals);
+  const latestStrengthDate = resolvedStrengthPillars.length > 0
+    ? resolvedStrengthPillars.reduce((maxD, p) => (p.evaluationDate > maxD ? p.evaluationDate : maxD), resolvedStrengthPillars[0].evaluationDate)
+    : (latestStrengthEval?.evaluationDate || null);
 
-  const prevEnduranceSeconds = prevAerobicEval ? parseSecondsFromTimeStr(prevAerobicEval.enduranceTest.result) : null;
-  const currentEnduranceSeconds = latestAerobicEval ? parseSecondsFromTimeStr(latestAerobicEval.enduranceTest.result) : null;
-  const enduranceDeltaSec = (prevEnduranceSeconds !== null && currentEnduranceSeconds !== null && prevEnduranceSeconds > currentEnduranceSeconds)
+  const isLatestEnduranceCompleted = isEnduranceCompletedEval(latestAerobicEval);
+  const prevEnduranceSeconds = (isLatestEnduranceCompleted && prevCompletedEnduranceEval)
+    ? parseSecondsFromTimeStr(prevCompletedEnduranceEval.enduranceTest.result)
+    : null;
+  const currentEnduranceSeconds = isLatestEnduranceCompleted && latestAerobicEval
+    ? parseSecondsFromTimeStr(latestAerobicEval.enduranceTest.result)
+    : null;
+  const enduranceDeltaSec = (prevEnduranceSeconds !== null && prevEnduranceSeconds > 0 && currentEnduranceSeconds !== null && currentEnduranceSeconds > 0 && prevEnduranceSeconds > currentEnduranceSeconds)
     ? (prevEnduranceSeconds - currentEnduranceSeconds)
     : 0;
 
-  const endurancePercentImprovement = (prevEnduranceSeconds && currentEnduranceSeconds && prevEnduranceSeconds > currentEnduranceSeconds)
+  const endurancePercentImprovement = (prevEnduranceSeconds && prevEnduranceSeconds > 0 && currentEnduranceSeconds && currentEnduranceSeconds > 0 && prevEnduranceSeconds > currentEnduranceSeconds)
     ? Math.round(((prevEnduranceSeconds - currentEnduranceSeconds) / prevEnduranceSeconds) * 100)
     : null;
 
@@ -1313,6 +1311,71 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </p>
           </div>
 
+          {/* VIGENCIA DE ÚLTIMAS PRUEBAS POR DISCIPLINA */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('cooper')}
+              className="p-2.5 rounded-2xl bg-neutral-900/90 border border-neutral-800 hover:border-blue-500/40 text-left space-y-0.5 transition-colors"
+            >
+              <span className="text-[10px] text-neutral-400 font-semibold block truncate">❤️ Últ. Cooper</span>
+              <strong className="text-xs text-white font-mono block truncate">
+                {latestCompletedCooperEval ? latestCompletedCooperEval.evaluationDate : (latestAerobicEval ? latestAerobicEval.evaluationDate : 'Pendiente')}
+              </strong>
+              <span className={`text-[10px] font-bold block truncate ${
+                latestCompletedCooperEval
+                  ? (formatRelativeEvalTime(latestCompletedCooperEval.evaluationDate).includes('mes') ? 'text-amber-400' : 'text-blue-400')
+                  : 'text-neutral-500'
+              }`}>
+                {latestCompletedCooperEval
+                  ? formatRelativeEvalTime(latestCompletedCooperEval.evaluationDate)
+                  : latestAerobicEval
+                  ? `${latestAerobicEval.cooperTest.status?.toUpperCase() || 'NA'} · ${formatRelativeEvalTime(latestAerobicEval.evaluationDate)}`
+                  : 'Sin registro'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('endurance')}
+              className="p-2.5 rounded-2xl bg-neutral-900/90 border border-neutral-800 hover:border-emerald-500/40 text-left space-y-0.5 transition-colors"
+            >
+              <span className="text-[10px] text-neutral-400 font-semibold block truncate">⏱️ Últ. Resistencia</span>
+              <strong className="text-xs text-white font-mono block truncate">
+                {latestCompletedEnduranceEval ? latestCompletedEnduranceEval.evaluationDate : (latestAerobicEval ? latestAerobicEval.evaluationDate : 'Pendiente')}
+              </strong>
+              <span className={`text-[10px] font-bold block truncate ${
+                latestCompletedEnduranceEval
+                  ? (formatRelativeEvalTime(latestCompletedEnduranceEval.evaluationDate).includes('mes') ? 'text-amber-400' : 'text-emerald-400')
+                  : 'text-neutral-500'
+              }`}>
+                {latestCompletedEnduranceEval
+                  ? formatRelativeEvalTime(latestCompletedEnduranceEval.evaluationDate)
+                  : latestAerobicEval
+                  ? `${latestAerobicEval.enduranceTest.status?.toUpperCase() || 'NA'} · ${formatRelativeEvalTime(latestAerobicEval.evaluationDate)}`
+                  : 'Sin registro'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('strength')}
+              className="p-2.5 rounded-2xl bg-neutral-900/90 border border-neutral-800 hover:border-orange-500/40 text-left space-y-0.5 transition-colors"
+            >
+              <span className="text-[10px] text-neutral-400 font-semibold block truncate">🏋️ Últ. Fuerza 1RM</span>
+              <strong className="text-xs text-white font-mono block truncate">
+                {latestStrengthDate || 'Pendiente'}
+              </strong>
+              <span className={`text-[10px] font-bold block truncate ${
+                latestStrengthDate
+                  ? (formatRelativeEvalTime(latestStrengthDate).includes('mes') ? 'text-amber-400' : 'text-orange-400')
+                  : 'text-neutral-500'
+              }`}>
+                {latestStrengthDate ? formatRelativeEvalTime(latestStrengthDate) : 'Sin registro'}
+              </span>
+            </button>
+          </div>
+
           {/* GRÁFICA MULTI-MES DE PROGRESO (Fuerza 1RM · Cooper · Resistencia) */}
           {(() => {
             const todayStr = getLocalTodayStr();
@@ -1326,41 +1389,63 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               return `${y}-${m}-${day}`;
             };
 
-            const periodEvals = sortedEvals.filter((ev) => {
-              if (periodFilter === '3m') return ev.evaluationDate >= cutoffMonths(3);
-              if (periodFilter === '6m') return ev.evaluationDate >= cutoffMonths(6);
-              if (periodFilter === 'year') return ev.evaluationDate.startsWith(currentYear);
+            const isInPeriod = (dateStr: string) => {
+              if (periodFilter === '3m') return dateStr >= cutoffMonths(3);
+              if (periodFilter === '6m') return dateStr >= cutoffMonths(6);
+              if (periodFilter === 'year') return dateStr.startsWith(currentYear);
               return true;
-            });
+            };
 
             type ChartPoint = { date: string; value: number; label: string };
             const points: ChartPoint[] = [];
 
             if (chartMetricTab === 'strength') {
-              periodEvals.forEach((ev) => {
-                const completedRecs = (ev.strengthRecords || []).filter(
-                  (r) => r.status !== 'na' && r.status !== 'np' && (r.estimated1RMKg > 0 || r.weightKg > 0)
-                );
-                if (completedRecs.length === 0) return;
-                const totalKg = Math.round(
-                  completedRecs.reduce((sum, r) => sum + (r.estimated1RMKg > 0 ? r.estimated1RMKg : r.weightKg), 0)
-                );
-                const val = weightUnit === 'kg' ? totalKg : kgToLbs(totalKg);
-                points.push({ date: ev.evaluationDate, value: val, label: `${val}${weightUnit}` });
-              });
+              if (chartStrengthEx === 'all') {
+                // Carry forward latest known 1RM per pillar only up to each evaluation date that logged strength,
+                // so a 1-exercise Express PR does not drop a 5-lift total to 1 lift.
+                const runningMax: Record<string, number> = {};
+                sortedEvals.forEach((ev) => {
+                  const completedRecs = (ev.strengthRecords || []).filter(
+                    (r) => r.status !== 'na' && r.status !== 'np' && getEffectiveStrength1RMKg(r) > 0
+                  );
+                  if (completedRecs.length === 0) return;
+                  completedRecs.forEach((r) => {
+                    runningMax[r.exerciseId] = getEffectiveStrength1RMKg(r);
+                  });
+                  if (!isInPeriod(ev.evaluationDate)) return;
+                  const totalKg = Math.round(Object.values(runningMax).reduce((a, b) => a + b, 0));
+                  const val = weightUnit === 'kg' ? totalKg : kgToLbs(totalKg);
+                  points.push({ date: ev.evaluationDate, value: val, label: `${val}${weightUnit}` });
+                });
+              } else {
+                sortedEvals.forEach((ev) => {
+                  if (!isInPeriod(ev.evaluationDate)) return;
+                  const rec = (ev.strengthRecords || []).find((r) => r.exerciseId === chartStrengthEx);
+                  if (!rec || rec.status === 'na' || rec.status === 'np') return;
+                  const kg = getEffectiveStrength1RMKg(rec);
+                  if (kg <= 0) return;
+                  const val = weightUnit === 'kg' ? Math.round(kg) : kgToLbs(kg);
+                  points.push({ date: ev.evaluationDate, value: val, label: `${val}${weightUnit}` });
+                });
+              }
             } else if (chartMetricTab === 'cooper') {
-              periodEvals.forEach((ev) => {
-                if (isAerobicOmitted(ev)) return;
+              sortedEvals.forEach((ev) => {
+                if (!isInPeriod(ev.evaluationDate) || isAerobicOmitted(ev)) return;
                 const c = ev.cooperTest;
                 if (!c || c.status === 'na' || c.status === 'np') return;
                 const metersPerLap = c.metersPerLap || (c.lapLocation === 'inside' ? 250 : 400);
-                const dist = c.distanceMeters || ((c.lapsCount || 0) * metersPerLap) || ((c.levelNumber || 0) * 100);
+                const isNav = c.variant === 'navette' || Boolean(c.notes?.toLowerCase().includes('navette'));
+                const dist = c.distanceMeters || ((c.lapsCount || 0) * metersPerLap) || ((c.levelNumber || 0) * (isNav ? 140 : 100));
                 if (dist <= 0) return;
-                points.push({ date: ev.evaluationDate, value: dist, label: `${dist}m` });
+                points.push({
+                  date: ev.evaluationDate,
+                  value: dist,
+                  label: isNav && !c.distanceMeters ? `Nv.${c.navetteLevelNumber || c.levelNumber}` : `${dist}m`,
+                });
               });
             } else {
-              periodEvals.forEach((ev) => {
-                if (isAerobicOmitted(ev)) return;
+              sortedEvals.forEach((ev) => {
+                if (!isInPeriod(ev.evaluationDate) || isAerobicOmitted(ev)) return;
                 const end = ev.enduranceTest;
                 if (!end || end.status === 'na' || end.status === 'np') return;
                 const sec = typeof end.timeSeconds === 'number' && end.timeSeconds > 0
@@ -1420,8 +1505,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
                       <span>Gráfica de Progreso entre Meses</span>
                     </h4>
-                    <span className="text-[10px] text-neutral-400">
-                      Omite jornadas parciales/NA para no distorsionar tu tendencia real
+                    <span className="text-[10px] text-neutral-400 block">
+                      {lastPt
+                        ? `Última marca en esta prueba: ${lastPt.date} (${formatRelativeEvalTime(lastPt.date)})`
+                        : 'Solo grafica las fechas en que realizaste esta prueba'}
                     </span>
                   </div>
 
@@ -1480,9 +1567,38 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </button>
                 </div>
 
+                {/* Sub-selector por ejercicio en Fuerza 1RM */}
+                {chartMetricTab === 'strength' && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                    {(
+                      [
+                        { id: 'all', label: 'Total 5 Pilares' },
+                        { id: 'squats', label: 'Sentadilla' },
+                        { id: 'deadlift', label: 'Peso Muerto' },
+                        { id: 'hip_thrust', label: 'Hip Thrust' },
+                        { id: 'horizontal_press', label: 'Press Horiz.' },
+                        { id: 'pullups_or_rows', label: 'Remo / Dom.' },
+                      ] as const
+                    ).map((ex) => (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        onClick={() => setChartStrengthEx(ex.id)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
+                          chartStrengthEx === ex.id
+                            ? 'bg-orange-500/20 text-orange-300 border-orange-500/40 font-bold'
+                            : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white'
+                        }`}
+                      >
+                        {ex.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {points.length === 0 ? (
                   <div className="py-6 text-center text-xs text-neutral-500 bg-neutral-950/60 rounded-xl border border-neutral-800/70">
-                    Sin registros suficientes en este periodo para graficar esta métrica.
+                    Sin registros en este periodo para esta prueba. Cambia a "Todo" para ver tu historial completo.
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-neutral-950/80 border border-neutral-800/80 p-2 sm:p-3 space-y-2">
@@ -1542,9 +1658,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       </svg>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-neutral-800/80 px-1">
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-neutral-800/80 px-1 gap-2 flex-wrap">
                       <span className="text-neutral-400">
-                        {points.length} {points.length === 1 ? 'evaluación' : 'evaluaciones'} ({firstPt.date.slice(0, 7)} → {lastPt.date.slice(0, 7)})
+                        {points.length} {points.length === 1 ? 'fecha evaluada' : 'fechas evaluadas'} ({firstPt.date.slice(0, 7)} → {lastPt.date.slice(0, 7)})
                       </span>
                       {points.length > 1 ? (
                         <span className={`font-mono font-bold ${
@@ -1557,7 +1673,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                             : (delta >= 0 ? `+${delta}${chartMetricTab === 'cooper' ? 'm' : ` ${weightUnit}`}` : `${delta}${chartMetricTab === 'cooper' ? 'm' : ` ${weightUnit}`}`)}
                         </span>
                       ) : (
-                        <span className="text-blue-400 font-mono font-semibold">Línea base: {lastPt.label}</span>
+                        <span className="text-blue-400 font-mono font-semibold">
+                          Única marca: {lastPt.label} ({formatRelativeEvalTime(lastPt.date)})
+                        </span>
                       )}
                     </div>
                   </div>
@@ -2013,30 +2131,34 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   <Dumbbell className="w-4 h-4 text-[#ff5500]" />
                   <span>3. Fuerza Máxima 1RM (5 Ejercicios Pilares)</span>
                 </span>
-                {latestStrengthEval && latestStrengthEval.id !== latestEval.id && (
+                {latestStrengthDate && latestStrengthDate !== latestEval.evaluationDate && (
                   <span className="text-[10px] text-emerald-400 font-mono block mt-0.5">
-                    Última toma 1RM conservada: {latestStrengthEval.evaluationDate} (jornada reciente enfocada en resistencia)
+                    Última toma 1RM conservada: {latestStrengthDate} ({formatRelativeEvalTime(latestStrengthDate)})
                   </span>
                 )}
               </div>
               {(() => {
-                if (!latestStrengthEval) {
+                if (resolvedStrengthPillars.length === 0) {
                   return (
                     <span className="text-[10px] text-neutral-400 font-semibold bg-neutral-800 px-2.5 py-0.5 rounded-full border border-neutral-700">
                       Sin toma de 1RM aún
                     </span>
                   );
                 }
-                if (!prevStrengthEval || !prevStrengthEval.strengthRecords || prevStrengthEval.strengthRecords.length === 0) {
+                const comparablePillars = resolvedStrengthPillars.filter(
+                  (p) => p.record.status !== 'na' && p.record.status !== 'np' && p.previousRecord && p.previousRecord.status !== 'na' && p.previousRecord.status !== 'np'
+                );
+                if (comparablePillars.length === 0) {
                   return (
                     <span className="text-[10px] text-blue-400 font-semibold bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/30">
                       Evaluación Base Oficial
                     </span>
                   );
                 }
-                const totalCurrent = latestStrengthEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
-                const totalPrev = prevStrengthEval.strengthRecords.reduce((acc, r) => acc + (r.status === 'na' || r.status === 'np' ? 0 : r.weightKg), 0);
-                const diff = totalCurrent - totalPrev;
+                const diff = comparablePillars.reduce(
+                  (acc, p) => acc + (p.record.weightKg - (p.previousRecord?.weightKg || 0)),
+                  0
+                );
                 return (
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
                     diff >= 0 ? 'text-orange-400 bg-orange-500/15 border-orange-500/30' : 'text-neutral-400 bg-neutral-800 border-neutral-700'
@@ -2047,13 +2169,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               })()}
             </div>
 
-            {!latestStrengthEval ? (
+            {resolvedStrengthPillars.length === 0 ? (
               <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 text-xs text-neutral-400">
                 Las evaluaciones recientes se enfocaron en resistencia aeróbica. Cuando se capture una jornada con 1RM, tus marcas aparecerán aquí.
               </div>
             ) : (
               <div className="space-y-2">
-                {latestStrengthEval.strengthRecords.map((rec) => {
+                {resolvedStrengthPillars.map(({ record: rec, evaluationDate, previousRecord: prevRec }) => {
                   if (rec.status === 'na' || rec.status === 'np') {
                     const isNA = rec.status === 'na';
                     return (
@@ -2064,6 +2186,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         <div>
                           <div className="font-bold text-white flex items-center gap-1.5">
                             <span className="text-neutral-400">{rec.exerciseName}</span>
+                            {latestStrengthDate && evaluationDate !== latestStrengthDate && (
+                              <span className="text-[9px] text-neutral-500 font-mono">({evaluationDate})</span>
+                            )}
                           </div>
                           <div className="text-[10px] text-neutral-500">
                             {rec.statusReason || (isNA ? 'No aplica por prescripción médica / edad' : 'No realizada en esta sesión')}
@@ -2078,9 +2203,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     );
                   }
 
-                  const prevRec = prevStrengthEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
-                  const hasPrev = Boolean(prevRec);
-                  const deltaKg = hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? rec.weightKg - prevRec.weightKg : null;
+                  const hasPrev = Boolean(prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' && prevRec.weightKg > 0);
+                  const deltaKg = hasPrev && prevRec ? rec.weightKg - prevRec.weightKg : null;
 
                   return (
                     <div
@@ -2090,9 +2214,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       <div>
                         <div className="font-bold text-white flex items-center gap-1.5">
                           <span className="text-neutral-400">{rec.exerciseName}</span>
+                          {latestStrengthDate && evaluationDate !== latestStrengthDate && (
+                            <span className="text-[9px] text-amber-400/90 font-mono">({evaluationDate})</span>
+                          )}
                         </div>
                         <div className="text-[10px] text-neutral-400">
-                          {hasPrev && prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? (
+                          {hasPrev && prevRec ? (
                             <>Anterior: <strong className="text-neutral-300">{prevRec.weightKg} kg</strong> &rarr; Ahora:{' '}</>
                           ) : (
                             <>Marca actual:{' '}</>
@@ -2696,9 +2823,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block">
                 5 Ejercicios de Fuerza Kinetix
               </span>
-              {latestStrengthEval && latestStrengthEval.id !== latestEval.id && (
+              {latestStrengthDate && latestStrengthDate !== latestEval.evaluationDate && (
                 <span className="text-[10px] text-emerald-400 font-mono">
-                  Marcas conservadas del {latestStrengthEval.evaluationDate}
+                  Marcas vigentes del {latestStrengthDate} ({formatRelativeEvalTime(latestStrengthDate)})
                 </span>
               )}
             </div>
@@ -2722,7 +2849,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </div>
           </div>
 
-          {!latestStrengthEval ? (
+          {resolvedStrengthPillars.length === 0 ? (
             <div className="p-6 rounded-2xl bg-neutral-900/80 border border-neutral-800 text-center space-y-2">
               <Dumbbell className="w-6 h-6 text-neutral-500 mx-auto" />
               <p className="text-xs text-neutral-300 font-semibold">Sin registros de Fuerza 1RM todavía</p>
@@ -2732,7 +2859,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             </div>
           ) : (
           <div className="space-y-2.5">
-            {latestStrengthEval.strengthRecords.map((rec) => {
+            {resolvedStrengthPillars.map(({ record: rec, evaluationDate, previousRecord: prevRec, previousDate }) => {
               if (rec.status === 'na' || rec.status === 'np') {
                 const isNA = rec.status === 'na';
                 return (
@@ -2744,7 +2871,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                       <div>
                         <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                           <Dumbbell className="w-3.5 h-3.5 text-neutral-400" />
-                          {rec.exerciseName}
+                          <span>{rec.exerciseName}</span>
+                          <span className="text-[9px] text-neutral-500 font-mono font-normal">({evaluationDate})</span>
                         </h4>
                         <span className="text-[10px] text-neutral-500">
                           {rec.statusReason || (isNA ? 'Ejercicio exento por edad, condición física o prescripción médica.' : 'Prueba pospuesta o no realizada en esta sesión.')}
@@ -2772,7 +2900,6 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                 );
               }
 
-              const prevRec = prevStrengthEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
               const hasPrevValid = Boolean(prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' && prevRec.weightKg > 0);
               const prevWeight = hasPrevValid && prevRec ? prevRec.weightKg : 0;
               const deltaKg = hasPrevValid ? rec.weightKg - prevWeight : null;
@@ -2791,10 +2918,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     <div>
                       <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Dumbbell className="w-3.5 h-3.5 text-[#ff5500]" />
-                        {rec.exerciseName}
+                        <span>{rec.exerciseName}</span>
+                        <span className="text-[9px] text-neutral-400 font-mono font-normal">({evaluationDate})</span>
                       </h4>
                       <span className="text-[10px] text-neutral-400">
                         {displayWeight} {weightUnit} × {rec.reps} {rec.reps === 1 ? 'rep máx' : 'reps'}
+                        {previousDate ? ` · Prev: ${previousDate}` : ''}
                       </span>
                     </div>
 
@@ -3020,29 +3149,38 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-0.5">
-                    <span className="text-[10px] text-neutral-400 block">Sentadilla 1RM</span>
                     {(() => {
                       if (!ev.strengthRecords || ev.strengthRecords.length === 0) {
                         return (
                           <>
+                            <span className="text-[10px] text-neutral-400 block">Fuerza 1RM</span>
                             <div className="font-bold text-emerald-400 text-xs">🏃 Solo Resistencia</div>
                             <span className="text-[10px] text-neutral-500">Sin 1RM en esta fecha</span>
                           </>
                         );
                       }
-                      const squat = ev.strengthRecords.find(s => s.exerciseId === 'squats');
-                      if (squat?.status === 'na') {
-                        return <div className="font-extrabold text-neutral-400 font-mono text-sm">🚫 NA</div>;
-                      }
-                      if (squat?.status === 'np') {
-                        return <div className="font-extrabold text-amber-400 font-mono text-sm">⚠️ NP</div>;
-                      }
+                      const featured = ev.strengthRecords.find(s => s.exerciseId === 'squats' && s.status !== 'na')
+                        || ev.strengthRecords.find(s => s.status === 'completed' && s.weightKg > 0)
+                        || ev.strengthRecords[0];
                       return (
                         <>
-                          <div className="font-extrabold text-[#ff5500] font-mono text-sm">
-                            {squat?.weightKg || 0} kg
-                          </div>
-                          <span className="text-[10px] text-neutral-500">1RM máx</span>
+                          <span className="text-[10px] text-neutral-400 block truncate">
+                            {featured?.exerciseName || 'Fuerza 1RM'}
+                          </span>
+                          {featured?.status === 'na' ? (
+                            <div className="font-extrabold text-neutral-400 font-mono text-sm">🚫 NA</div>
+                          ) : featured?.status === 'np' ? (
+                            <div className="font-extrabold text-amber-400 font-mono text-sm">⚠️ NP</div>
+                          ) : (
+                            <>
+                              <div className="font-extrabold text-[#ff5500] font-mono text-sm">
+                                {featured?.weightKg || 0} kg
+                              </div>
+                              <span className="text-[10px] text-neutral-500">
+                                {ev.strengthRecords.length === 1 ? 'Express 1RM' : '1RM máx'}
+                              </span>
+                            </>
+                          )}
                         </>
                       );
                     })()}
@@ -5472,7 +5610,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             <div className="space-y-1">
               <h3 className="text-base font-bold text-white">¿Eliminar esta evaluación?</h3>
               <p className="text-xs text-neutral-400 leading-relaxed">
-                Se eliminará el registro del <strong>{evalToDelete.evaluationDate}</strong> de {currentUser.name}. Esta acción no se puede deshacer.
+                Se eliminará el registro del <strong>{evalToDelete.evaluationDate}</strong> de <strong>{effectiveAthlete.name}</strong>. Esta acción no se puede deshacer.
               </p>
             </div>
 

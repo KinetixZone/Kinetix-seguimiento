@@ -326,7 +326,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
         [userId]: {
           ...current,
           ...updates,
-          isModified: true,
+          isModified: updates.isModified !== undefined ? updates.isModified : true,
         }
       };
     });

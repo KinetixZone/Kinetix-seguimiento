@@ -33,6 +33,7 @@ interface AthleteDashboardProps {
 }
 
 import { calculateDaysUntilExpiry } from '../../utils/fitnessCalculations';
+import { formatRelativeEvalTime, resolveLatestStrengthPillars } from '../../utils/evaluationHelpers';
 
 export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
   currentUser,
@@ -92,9 +93,17 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
     return list.sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
   }, [evaluations, latestEval]);
 
-  const latestStrengthEval = React.useMemo(() => {
-    return [...sortedEvals].reverse().find(ev => (ev.strengthRecords?.length || 0) > 0) || null;
+  const resolvedStrengthPillars = React.useMemo(() => {
+    return resolveLatestStrengthPillars(sortedEvals);
   }, [sortedEvals]);
+
+  const latestStrengthDate = React.useMemo(() => {
+    if (resolvedStrengthPillars.length > 0) {
+      return resolvedStrengthPillars.reduce((maxD, p) => (p.evaluationDate > maxD ? p.evaluationDate : maxD), resolvedStrengthPillars[0].evaluationDate);
+    }
+    const fallback = [...sortedEvals].reverse().find(ev => (ev.strengthRecords?.length || 0) > 0);
+    return fallback?.evaluationDate || null;
+  }, [resolvedStrengthPillars, sortedEvals]);
 
   const latestAerobicEval = React.useMemo(() => {
     return [...sortedEvals].reverse().find(ev => !(ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || null;
@@ -612,11 +621,13 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                   </span>
                 ) : null}
               </div>
-              <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between">
-                <span className="text-blue-400 font-medium">
-                  {latestAerobicEval ? coachLabel : 'Pendiente de evaluar'}
+              <div className="text-[11px] text-neutral-400 pt-1 flex items-center justify-between gap-1">
+                <span className="text-blue-400 font-medium truncate">
+                  {latestAerobicEval
+                    ? `${latestAerobicEval.evaluationDate} (${formatRelativeEvalTime(latestAerobicEval.evaluationDate)})`
+                    : 'Pendiente de evaluar'}
                 </span>
-                <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors">Detalle &rarr;</span>
+                <span className="text-[10px] text-neutral-500 group-hover:text-blue-400 transition-colors shrink-0">Detalle &rarr;</span>
               </div>
             </div>
           );
@@ -641,7 +652,9 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
 
           <div className="flex items-center justify-between pt-0.5">
             <div>
-              <span className="text-[10px] text-neutral-400 block">Reto del Ciclo Actual:</span>
+              <span className="text-[10px] text-neutral-400 block">
+                Último registro ({latestAerobicEval.evaluationDate} · <strong className="text-amber-300">{formatRelativeEvalTime(latestAerobicEval.evaluationDate)}</strong>):
+              </span>
               <strong className="text-white text-xs">{latestAerobicEval.enduranceTest.name}</strong>
             </div>
 
@@ -670,8 +683,8 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               <div className="text-[11px] text-blue-400 font-medium">
                 {(() => {
                   const isStrengthOnlyLatest = Boolean(latestEval?.cooperTest?.sessionOmitted || latestEval?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
-                  if (isStrengthOnlyLatest && !latestAerobicEval) {
-                    return `Jornada Solo Fuerza 1RM · ${latestEval.evaluationDate}`;
+                  if (isStrengthOnlyLatest) {
+                    return `Última visita: Solo Fuerza 1RM (${latestEval.evaluationDate})${latestAerobicEval ? ` · Últ. Cooper: ${formatRelativeEvalTime(latestAerobicEval.evaluationDate)}` : ''}`;
                   }
                   const aeroRef = latestAerobicEval || latestEval;
                   const isCooper2 = !!(aeroRef?.cooperTest && (
@@ -684,7 +697,8 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
                   if (isCooper2) {
                     return `Cooper por Vueltas: ${aeroRef.cooperTest.lapsCount || 0} vueltas (~${aeroRef.cooperTest.distanceMeters || 0}m) · ${aeroRef.evaluationDate}`;
                   }
-                  return `Course Navette: Nivel ${aeroRef.cooperTest?.levelNumber || 1} · ${aeroRef.evaluationDate}`;
+                  const isNavette = aeroRef?.cooperTest?.variant === 'navette' || aeroRef?.cooperTest?.notes?.toLowerCase().includes('navette');
+                  return `${isNavette ? 'Course Navette' : 'Test de Cooper'}: Nivel ${aeroRef.cooperTest?.levelNumber || 1} · ${aeroRef.evaluationDate}`;
                 })()}
               </div>
             </div>
@@ -738,12 +752,12 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
             <Dumbbell className="w-3.5 h-3.5 text-cyan-400" />
             Pruebas Recientes de Fuerza Máxima
           </h3>
-          <span className="text-[11px] font-mono text-neutral-500">
-            {latestStrengthEval ? latestStrengthEval.evaluationDate : displayMonth}
+          <span className="text-[11px] font-mono text-neutral-400">
+            {latestStrengthDate ? `${latestStrengthDate} · ${formatRelativeEvalTime(latestStrengthDate)}` : displayMonth}
           </span>
         </div>
 
-        {(!latestStrengthEval || !latestStrengthEval.strengthRecords || latestStrengthEval.strengthRecords.length === 0) ? (
+        {resolvedStrengthPillars.length === 0 ? (
           <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800 text-center text-xs text-neutral-400">
             {latestEval
               ? 'Tu evaluación más reciente fue enfocada solo en resistencia. Cuando realices pruebas 1RM aparecerán aquí.'
@@ -751,20 +765,31 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {latestStrengthEval.strengthRecords.slice(0, 4).map((rec) => (
+            {resolvedStrengthPillars.slice(0, 4).map(({ record: rec, evaluationDate }) => (
               <div 
                 key={rec.exerciseId}
                 className="flex items-center justify-between py-2 border-b border-neutral-800/60 last:border-0 text-xs"
               >
-                <span className="text-neutral-300 font-medium">{rec.exerciseName}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-mono font-bold tabular-nums">
-                    {rec.weightKg} {rec.weightUnit}
-                  </span>
-                  <span className="text-[10px] text-neutral-500 font-mono">
-                    (1RM {rec.estimated1RMKg}kg)
-                  </span>
+                <div>
+                  <span className="text-neutral-300 font-medium block">{rec.exerciseName}</span>
+                  {latestStrengthDate && evaluationDate !== latestStrengthDate && (
+                    <span className="text-[9px] text-neutral-500 font-mono">Del {evaluationDate}</span>
+                  )}
                 </div>
+                {rec.status === 'na' || rec.status === 'np' ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-neutral-800 text-neutral-300">
+                    {rec.status === 'na' ? 'NA' : 'NP'}
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-mono font-bold tabular-nums">
+                      {rec.weightKg} {rec.weightUnit}
+                    </span>
+                    <span className="text-[10px] text-neutral-500 font-mono">
+                      (1RM {rec.estimated1RMKg}kg)
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

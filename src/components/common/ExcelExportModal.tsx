@@ -165,17 +165,37 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
       rows.push(headers);
 
       targetAthletes.forEach(ath => {
-        const athComps = bodyCompRecords.filter(b => b.userId === ath.id && isDateInFilter(b.recordedAt));
+        const athComps = bodyCompRecords
+          .filter(b => b.userId === ath.id && isDateInFilter(b.recordedAt))
+          .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
         const latestComp = athComps[athComps.length - 1];
 
-        const athEvals = evaluations.filter(e => e.userId === ath.id && isDateInFilter(e.evaluationDate));
-        const latestEval = athEvals[athEvals.length - 1];
+        const athEvals = evaluations
+          .filter(e => e.userId === ath.id && isDateInFilter(e.evaluationDate))
+          .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+        const latestAerobic = [...athEvals].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM'));
+        const latestStrength = [...athEvals].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
+
+        const formatCooperCell = (ev?: PhysicalEvaluationRecord) => {
+          if (!ev) return 'Sin evaluar';
+          if (ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM') return 'Omitido (Solo Fuerza 1RM)';
+          if (ev.cooperTest?.status === 'na') return 'NA';
+          if (ev.cooperTest?.status === 'np') return 'NP';
+          if (ev.cooperTest?.variant === 'laps' || (ev.cooperTest?.lapsCount || 0) > 0) {
+            return `${ev.cooperTest.lapsCount || 0} vueltas`;
+          }
+          return `Nivel ${ev.cooperTest.levelNumber || 1}`;
+        };
+
+        const formatLiftCell = (ev: PhysicalEvaluationRecord | undefined, id: string) => {
+          const rec = ev?.strengthRecords?.find(s => s.exerciseId === id);
+          if (!rec) return 'N/A';
+          if (rec.status === 'na') return 'NA';
+          if (rec.status === 'np') return 'NP';
+          return String(rec.estimated1RMKg || rec.weightKg || 0);
+        };
 
         const pg = getPaymentGroup(ath.membership.billingDayOfMonth);
-
-        const squat = latestEval?.strengthRecords.find(s => s.exerciseId === 'squats')?.estimated1RMKg || 'N/A';
-        const deadlift = latestEval?.strengthRecords.find(s => s.exerciseId === 'deadlift')?.estimated1RMKg || 'N/A';
-        const press = latestEval?.strengthRecords.find(s => s.exerciseId === 'horizontal_press')?.estimated1RMKg || 'N/A';
 
         const row = [
           ath.id,
@@ -193,12 +213,12 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
           latestComp ? `${latestComp.bodyFatPercent}%` : 'N/A',
           latestComp ? `${latestComp.muscleMassPercent}%` : 'N/A',
           latestComp ? `Nivel ${latestComp.visceralFatLevel}` : 'N/A',
-          latestEval ? `Nivel ${latestEval.cooperTest.levelNumber || 1}` : 'Sin evaluar',
-          String(squat),
-          String(deadlift),
-          String(press),
-          latestEval ? latestEval.enduranceTest.name : 'N/A',
-          latestEval ? latestEval.enduranceTest.result : 'N/A'
+          formatCooperCell(latestAerobic),
+          formatLiftCell(latestStrength, 'squats'),
+          formatLiftCell(latestStrength, 'deadlift'),
+          formatLiftCell(latestStrength, 'horizontal_press'),
+          latestAerobic ? latestAerobic.enduranceTest.name : 'N/A',
+          latestAerobic ? latestAerobic.enduranceTest.result : 'N/A'
         ];
 
         if (includePasswords) {
@@ -225,7 +245,9 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
       ]);
 
       targetAthletes.forEach(ath => {
-        const comps = bodyCompRecords.filter(b => b.userId === ath.id && isDateInFilter(b.recordedAt));
+        const comps = bodyCompRecords
+          .filter(b => b.userId === ath.id && isDateInFilter(b.recordedAt))
+          .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
         comps.forEach(c => {
           rows.push([
             c.id,
@@ -265,13 +287,28 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
       ]);
 
       targetAthletes.forEach(ath => {
-        const evals = evaluations.filter(e => e.userId === ath.id && isDateInFilter(e.evaluationDate));
+        const evals = evaluations
+          .filter(e => e.userId === ath.id && isDateInFilter(e.evaluationDate))
+          .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
         evals.forEach(ev => {
-          const sq = ev.strengthRecords.find(s => s.exerciseId === 'squats')?.estimated1RMKg || 'N/A';
-          const dl = ev.strengthRecords.find(s => s.exerciseId === 'deadlift')?.estimated1RMKg || 'N/A';
-          const ht = ev.strengthRecords.find(s => s.exerciseId === 'hip_thrust')?.estimated1RMKg || 'N/A';
-          const pr = ev.strengthRecords.find(s => s.exerciseId === 'horizontal_press')?.estimated1RMKg || 'N/A';
-          const rw = ev.strengthRecords.find(s => s.exerciseId === 'pullups_or_rows')?.estimated1RMKg || 'N/A';
+          const isOmittedAero = Boolean(ev.cooperTest?.sessionOmitted || ev.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+          const formatLift = (id: string) => {
+            if (!ev.strengthRecords || ev.strengthRecords.length === 0) return 'Omitido (Solo Resistencia)';
+            const r = ev.strengthRecords.find(s => s.exerciseId === id);
+            if (!r) return 'N/A';
+            if (r.status === 'na') return 'NA';
+            if (r.status === 'np') return 'NP';
+            return String(r.estimated1RMKg || r.weightKg || 0);
+          };
+          const cooperLabel = isOmittedAero
+            ? 'Omitido (Solo Fuerza 1RM)'
+            : ev.cooperTest.status === 'na'
+            ? 'NA'
+            : ev.cooperTest.status === 'np'
+            ? 'NP'
+            : (ev.cooperTest.variant === 'laps' || (ev.cooperTest.lapsCount || 0) > 0)
+            ? `${ev.cooperTest.lapsCount || 0} vueltas`
+            : `Nivel ${ev.cooperTest.levelNumber || 1}`;
 
           rows.push([
             ev.id,
@@ -279,15 +316,15 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
             ath.name,
             ev.evaluationDate,
             ev.coachName,
-            `Nivel ${ev.cooperTest.levelNumber || 1}`,
-            String(ev.cooperTest.distanceMeters || 'N/A'),
-            ev.enduranceTest.name,
-            ev.enduranceTest.result,
-            String(sq),
-            String(dl),
-            String(ht),
-            String(pr),
-            String(rw),
+            cooperLabel,
+            isOmittedAero ? 'N/A' : String(ev.cooperTest.distanceMeters || 'N/A'),
+            isOmittedAero ? 'Omitido (Solo Fuerza 1RM)' : ev.enduranceTest.name,
+            isOmittedAero ? 'Omitido' : ev.enduranceTest.result,
+            formatLift('squats'),
+            formatLift('deadlift'),
+            formatLift('hip_thrust'),
+            formatLift('horizontal_press'),
+            formatLift('pullups_or_rows'),
             ev.generalCoachNotes || ''
           ]);
         });

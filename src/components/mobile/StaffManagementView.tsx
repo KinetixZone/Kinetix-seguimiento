@@ -421,6 +421,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const isToday = latest.evaluationDate === todayStr;
     const isThisMonth = latest.evaluationDate.slice(0, 7) === todayStr.slice(0, 7);
     const isEvaluatedThisCycle = isToday || isThisMonth;
+    const isStrengthOnly = Boolean(latest.cooperTest?.sessionOmitted || latest.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+    const isEnduranceOnly = !isStrengthOnly && (!latest.strengthRecords || latest.strengthRecords.length === 0);
+    const partialSuffix = isStrengthOnly ? ' · Solo 1RM' : isEnduranceOnly ? ' · Solo Resist.' : '';
 
     return {
       hasEvaluations: true,
@@ -428,7 +431,11 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       lastDateStr: latest.evaluationDate,
       diffDays,
       isEvaluatedThisCycle,
-      badgeText: isToday ? '✅ Evaluado hoy' : isEvaluatedThisCycle ? `✅ Evaluado (${latest.evaluationDate.slice(5)})` : `⏳ Pendiente (${latest.evaluationDate.slice(5)})`,
+      badgeText: isToday
+        ? `✅ Evaluado hoy${partialSuffix}`
+        : isEvaluatedThisCycle
+        ? `✅ Evaluado (${latest.evaluationDate.slice(5)})${partialSuffix}`
+        : `⏳ Pendiente (${latest.evaluationDate.slice(5)})`,
       badgeColor: isEvaluatedThisCycle ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     };
   };
@@ -675,12 +682,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           strengthRecords: updatedRecs,
         });
       } else if (onAddEvaluation) {
-        const pastEvals = evaluations.filter(e => e.userId === athId);
-        const sortedPast = [...pastEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
-        const latestPast = [...sortedPast].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || sortedPast[sortedPast.length - 1];
-        const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
-
-        const defaultCooper: CooperTestRecord = latestPast?.cooperTest || {
+        const defaultCooper: CooperTestRecord = {
           sessionOmitted: true,
           level: 'No evaluado (Solo Fuerza 1RM)',
           levelNumber: 0,
@@ -692,7 +694,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           statusReason: 'Jornada Solo Fuerza 1RM',
         };
 
-        const defaultEndurance: EnduranceTimeTestRecord = latestPast?.enduranceTest || {
+        const defaultEndurance: EnduranceTimeTestRecord = {
           sessionOmitted: true,
           name: 'Resistencia omitida (Solo Fuerza 1RM)',
           result: 'Omitido',
@@ -702,15 +704,6 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           statusReason: 'Jornada Solo Fuerza 1RM',
         };
 
-        const baseStrength: StrengthMaxRecord[] = latestPastStrength?.strengthRecords?.map(s => {
-          if (s.exerciseId === expressExerciseId) return newRec;
-          return s;
-        }) || [newRec];
-
-        if (!baseStrength.some(s => s.exerciseId === expressExerciseId)) {
-          baseStrength.push(newRec);
-        }
-
         onAddEvaluation({
           userId: athId,
           evaluationDate: expressDate,
@@ -718,7 +711,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           coachName: activeStaff.name,
           cooperTest: defaultCooper,
           enduranceTest: defaultEndurance,
-          strengthRecords: baseStrength,
+          strengthRecords: [newRec],
           generalCoachNotes: expressNotes.trim(),
         });
       }
