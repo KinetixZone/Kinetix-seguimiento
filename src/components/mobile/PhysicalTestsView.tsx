@@ -68,6 +68,7 @@ interface PhysicalTestsViewProps {
   initialOpenAddModal?: boolean;
   allAthletes?: UserProfile[];
   onSelectNextAthlete?: (next: UserProfile) => void;
+  onReturnToStaff?: () => void;
 }
 
 export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
@@ -82,6 +83,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   initialOpenAddModal,
   allAthletes,
   onSelectNextAthlete,
+  onReturnToStaff,
 }) => {
   // Evaluations are strictly conducted by Staff/Coaches
   const canEvaluate = Boolean(isStaffUser || loggedStaffUser?.role === 'staff');
@@ -171,12 +173,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
       setExpressStatus(rec.status);
       setExpressReason(rec.statusReason || '');
-      setExpressWeight(exId === 'deadlift' ? 60 : exId === 'squats' ? 50 : 40);
+      setExpressWeight(0);
       setExpressReps(1);
     } else {
       setExpressStatus('completed');
       setExpressReason('');
-      setExpressWeight(exId === 'deadlift' ? 60 : exId === 'squats' ? 50 : exId === 'hip_thrust' ? 50 : 35);
+      setExpressWeight(0);
       setExpressReps(1);
     }
   };
@@ -447,14 +449,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       setSelectedCooperLevel(5);
       setOptionalDistance(0);
       setCooperVariant('standard');
+      setCooperLapLocation('outside');
       setCooperLapsCount(0);
       setCooperMetersPerLap(400);
+      setSelectedNavetteLevel(5);
       setEnduranceStatus('completed');
       setEnduranceReason('');
       setEnduranceExerciseName('Evaluación de Resistencia Funcional');
       setEnduranceMinutes(0);
       setEnduranceSeconds(0);
       setEnduranceScoreLevel('Intermedio');
+      setEnduranceDifficulty('Intermedio');
       setSquatStatus('completed');
       setSquatReason('');
       setSquatWeight(0);
@@ -673,7 +678,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     e.preventDefault();
     onAddEvaluation(buildEvaluationPayload());
     setShowAddEvalModal(false);
-    loadAthleteBaselineIntoForm(effectiveAthlete.id);
+    if (initialOpenAddModal && onReturnToStaff) {
+      onReturnToStaff();
+    } else {
+      loadAthleteBaselineIntoForm(effectiveAthlete.id);
+    }
   };
 
   const handleSaveAndNextEvaluation = () => {
@@ -894,11 +903,12 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         return {
           exerciseId: exId,
           exerciseName: exerciseNameMap[exId] || exId,
-          weightKg: 40,
-          reps: 1,
-          estimated1RMKg: 40,
+          weightKg: 0,
+          reps: 0,
+          estimated1RMKg: 0,
           weightUnit: 'kg',
-          status: 'completed' as EvaluationStatus,
+          status: 'na' as EvaluationStatus,
+          statusReason: 'Pendiente en jornada Express',
         };
       });
 
@@ -914,20 +924,24 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
         coachId: assignedCoachId,
         coachName: evaluatingCoachName,
         cooperTest: latestPast?.cooperTest || {
-          level: 'Nivel 5',
-          levelNumber: 5,
-          description: 'Capacidad aeróbica estándar.',
-          targetZoneRecommendation: 'Zona 2 y 3',
-          distanceMeters: 2000,
-          estimatedVo2Max: 48,
-          status: 'completed',
+          sessionOmitted: true,
+          level: 'No evaluado (Solo Fuerza 1RM)',
+          levelNumber: 0,
+          description: 'Captura Express de fuerza 1RM.',
+          targetZoneRecommendation: 'Control de fuerza máxima 1RM',
+          distanceMeters: 0,
+          estimatedVo2Max: 0,
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
         },
         enduranceTest: latestPast?.enduranceTest || {
-          name: 'Evaluación de Resistencia Funcional',
-          result: '07:00 min',
-          timeSeconds: 420,
-          scoreScoreLevel: 'Intermedio',
-          status: 'completed',
+          sessionOmitted: true,
+          name: 'Resistencia omitida (Solo Fuerza 1RM)',
+          result: 'Omitido',
+          timeSeconds: 0,
+          scoreScoreLevel: 'Exento',
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
         },
         strengthRecords: baseStrength,
         generalCoachNotes: expressNotes ? `Marca rápida: ${expressNotes}` : 'Captura express de fuerza en clase.',
@@ -936,7 +950,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       onAddEvaluation(newPayload);
     }
 
-    const savedMsg = `¡${newRec.exerciseName} guardado para ${targetUser.name.split(' ')[0]}! (${expressStatus === 'completed' ? `${expressWeight}kg x ${expressReps} (${calculated1RM}kg 1RM)` : expressStatus.toUpperCase()})`;
+    const savedMsg = `¡${newRec.exerciseName} guardado para ${targetUser.name.split(' ')[0]}! (${expressStatus === 'completed' ? `${expressWeight}kg (${calculated1RM}kg 1RM)` : expressStatus.toUpperCase()})`;
 
     if (andNext && athleteList.length > 0 && onSelectNextAthlete) {
       const currentIdx = athleteList.findIndex(a => a.id === targetId);
@@ -946,6 +960,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       if (nextAthleteObj) {
         onSelectNextAthlete(nextAthleteObj);
         setExpressTargetUserId(nextAthleteObj.id);
+        setExpressNotes('');
         preloadExpressValues(nextAthleteObj.id, expressExerciseId);
         setExpressSuccessMessage(`${savedMsg} → Siguiente en clase: ${nextAthleteObj.name}`);
         setTimeout(() => setExpressSuccessMessage(null), 3500);
@@ -1162,7 +1177,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onBackToDashboard}
+              onClick={onReturnToStaff || onBackToDashboard}
               className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
               title="Ir al Panel de Staff para evaluar grupos de alumnos en tanda"
             >
@@ -2782,11 +2797,17 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                     {canEvaluate ? 'Staff Kinetix · Registro Oficial de Evaluación' : 'Registro de Marca Personal · Kinetix'}
                   </span>
                   <h3 className="text-base font-bold text-white font-brand">
-                    {canEvaluate ? `Evaluar a ${currentUser.name}` : `Registrar Mis Evaluaciones Físicas`}
+                    {canEvaluate ? `Evaluar a ${effectiveAthlete.name}` : `Registrar Mis Evaluaciones Físicas`}
                   </h3>
                 </div>
                 <button
-                  onClick={() => setShowAddEvalModal(false)}
+                  type="button"
+                  onClick={() => {
+                    setShowAddEvalModal(false);
+                    if (initialOpenAddModal && onReturnToStaff) {
+                      onReturnToStaff();
+                    }
+                  }}
                   className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -2797,7 +2818,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <div className="p-2.5 sm:p-3 rounded-2xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-2 shadow-inner">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center font-bold text-xs shrink-0">
-                    {currentUser.name.slice(0, 2).toUpperCase()}
+                    {effectiveAthlete.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10px] text-red-400 uppercase tracking-wider block font-semibold truncate">
@@ -2806,11 +2827,11 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
                         : 'Evaluando Expediente Oficial'}
                     </span>
                     <strong className="text-white text-sm block truncate">
-                      {currentUser.name}
+                      {effectiveAthlete.name}
                     </strong>
                   </div>
                 </div>
-                {canEvaluate && athleteList.length > 1 && nextAthlete && nextAthlete.id !== currentUser.id ? (
+                {canEvaluate && athleteList.length > 1 && nextAthlete && nextAthlete.id !== effectiveAthlete.id ? (
                   <div className="text-right shrink-0 bg-neutral-900 px-2 py-1 rounded-xl border border-neutral-800">
                     <span className="text-[9px] text-neutral-400 block font-mono">Siguiente:</span>
                     <span className="text-xs font-bold text-blue-400 block">
@@ -4030,17 +4051,22 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddEvalModal(false)}
+                  onClick={() => {
+                    setShowAddEvalModal(false);
+                    if (initialOpenAddModal && onReturnToStaff) {
+                      onReturnToStaff();
+                    }
+                  }}
                   className="flex-1 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium transition-colors text-xs"
                 >
-                  Cerrar
+                  {initialOpenAddModal && onReturnToStaff ? 'Volver al Panel' : 'Cerrar'}
                 </button>
                 <button
                   type="submit"
                   className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors shadow-md shadow-blue-500/20 text-xs flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Guardar Evaluación</span>
+                  <span>{initialOpenAddModal && onReturnToStaff ? 'Guardar y Volver al Panel' : 'Guardar Evaluación'}</span>
                 </button>
               </div>
             </div>

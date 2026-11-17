@@ -390,6 +390,12 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
               allAthletes={users.filter(u => u.role === 'athlete')}
               onSelectNextAthlete={(next) => setSelectedUserId(next.id)}
+              onReturnToStaff={() => {
+                setIsInspectingAthlete(false);
+                const staffUser = users.find(u => u.role === 'staff');
+                if (staffUser) setSelectedUserId(staffUser.id);
+                setCurrentTab('staff');
+              }}
             />
           )}
 

@@ -370,6 +370,12 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               onBackToDashboard={() => setCurrentSection('dashboard')}
               loggedStaffUser={users.find(u => u.role === 'staff') || null}
               isStaffUser={currentUser.role === 'staff' || isInspectingAthlete}
+              onReturnToStaff={() => {
+                setIsInspectingAthlete(false);
+                const staffUser = users.find(u => u.role === 'staff');
+                if (staffUser) setSelectedUserId(staffUser.id);
+                setCurrentSection('staff');
+              }}
             />
           )}
 

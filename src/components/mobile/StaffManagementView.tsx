@@ -556,7 +556,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     setShowExpressModal(true);
   };
 
-  const handleSaveExpressRecord = (targetAthleteIds: string[]) => {
+  const handleSaveExpressRecord = (targetAthleteIds: string[], keepModalOpen: boolean = false) => {
     if (!onAddEvaluation && !onUpdateEvaluation) {
       return;
     }
@@ -676,26 +676,30 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         });
       } else if (onAddEvaluation) {
         const pastEvals = evaluations.filter(e => e.userId === athId);
-        const sortedPast = [...pastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+        const sortedPast = [...pastEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
         const latestPast = [...sortedPast].reverse().find(e => !(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM')) || sortedPast[sortedPast.length - 1];
         const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
 
         const defaultCooper: CooperTestRecord = latestPast?.cooperTest || {
-          level: 'Nivel 5',
-          levelNumber: 5,
-          description: 'Capacidad aeróbica estándar.',
-          targetZoneRecommendation: 'Zona 2 y 3',
-          distanceMeters: 2000,
-          estimatedVo2Max: 48,
-          status: 'completed',
+          sessionOmitted: true,
+          level: 'No evaluado (Solo Fuerza 1RM)',
+          levelNumber: 0,
+          description: 'Captura Express de fuerza 1RM.',
+          targetZoneRecommendation: 'Control de fuerza máxima 1RM',
+          distanceMeters: 0,
+          estimatedVo2Max: 0,
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
         };
 
         const defaultEndurance: EnduranceTimeTestRecord = latestPast?.enduranceTest || {
-          name: 'Evaluación de Resistencia Funcional',
-          result: '07:00 min',
-          timeSeconds: 420,
-          scoreScoreLevel: 'Intermedio',
-          status: 'completed',
+          sessionOmitted: true,
+          name: 'Resistencia omitida (Solo Fuerza 1RM)',
+          result: 'Omitido',
+          timeSeconds: 0,
+          scoreScoreLevel: 'Exento',
+          status: 'na',
+          statusReason: 'Jornada Solo Fuerza 1RM',
         };
 
         const baseStrength: StrengthMaxRecord[] = latestPastStrength?.strengthRecords?.map(s => {
@@ -721,33 +725,42 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       countSaved++;
     });
 
-    const msg = countSaved === 1 
-      ? `¡Evaluación Express guardada correctamente!`
-      : `¡Evaluación Express guardada para ${countSaved} atletas!`;
-    setExpressSaveSuccessMsg(msg);
-    setTimeout(() => {
-      setExpressSaveSuccessMsg(null);
-      setShowExpressModal(false);
-    }, 1800);
+    if (!keepModalOpen) {
+      const msg = countSaved === 1 
+        ? `¡Evaluación Express guardada correctamente!`
+        : `¡Evaluación Express guardada para ${countSaved} atletas!`;
+      setExpressSaveSuccessMsg(msg);
+      setTimeout(() => {
+        setExpressSaveSuccessMsg(null);
+        setShowExpressModal(false);
+      }, 1800);
+    }
   };
 
   const handleSaveAndNextSingleExpress = () => {
     const athleteList = users.filter(u => u.role === 'athlete');
-    handleSaveExpressRecord([expressTargetSingleId]);
+    handleSaveExpressRecord([expressTargetSingleId], true);
 
     const currentIdx = athleteList.findIndex(a => a.id === expressTargetSingleId);
     const nextIdx = currentIdx !== -1 ? (currentIdx + 1) % athleteList.length : 0;
     const nextAth = athleteList[nextIdx];
     if (nextAth) {
       setExpressTargetSingleId(nextAth.id);
+      setExpressNotes('');
+      setExpressApplyAllCycleSingle(false);
       const rec = getLatestAthleteExerciseData(nextAth.id, expressExerciseId);
       if (rec && rec.status === 'completed' && rec.weightKg > 0) {
         setExpressSingleWeight(rec.weightKg);
         setExpressSingleReps(rec.reps || 1);
         setExpressSingleStatus('completed');
         setExpressSingleReason('');
+      } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+        setExpressSingleWeight(0);
+        setExpressSingleReps(1);
+        setExpressSingleStatus(rec.status);
+        setExpressSingleReason(rec.statusReason || '');
       } else {
-        setExpressSingleWeight(50);
+        setExpressSingleWeight(0);
         setExpressSingleReps(1);
         setExpressSingleStatus('completed');
         setExpressSingleReason('');
@@ -5183,7 +5196,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={() => setExpressDate(new Date().toISOString().slice(0, 10))}
+                  onClick={() => setExpressDate(getLocalTodayStr())}
                   className="text-[10px] text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-neutral-800 border border-neutral-700"
                 >
                   Hoy
@@ -5206,6 +5219,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                     onChange={(e) => {
                       const newId = e.target.value;
                       setExpressTargetSingleId(newId);
+                      setExpressNotes('');
+                      setExpressApplyAllCycleSingle(false);
                       const rec = getLatestAthleteExerciseData(newId, expressExerciseId);
                       if (rec && rec.status === 'completed' && rec.weightKg > 0) {
                         setExpressSingleWeight(rec.weightKg);
@@ -5213,8 +5228,15 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                         setExpressSingleStatus('completed');
                         setExpressSingleReason('');
                       } else if (rec && (rec.status === 'na' || rec.status === 'np')) {
+                        setExpressSingleWeight(0);
+                        setExpressSingleReps(1);
                         setExpressSingleStatus(rec.status);
                         setExpressSingleReason(rec.statusReason || '');
+                      } else {
+                        setExpressSingleWeight(0);
+                        setExpressSingleReps(1);
+                        setExpressSingleStatus('completed');
+                        setExpressSingleReason('');
                       }
                     }}
                     className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-amber-500"

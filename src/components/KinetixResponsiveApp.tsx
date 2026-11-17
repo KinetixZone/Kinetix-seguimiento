@@ -498,6 +498,11 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             initialOpenAddModal={autoOpenEvalModal}
             allAthletes={isStaff ? users.filter(u => u.role === 'athlete') : []}
             onSelectNextAthlete={isStaff ? ((next) => setInspectedAthlete(next)) : undefined}
+            onReturnToStaff={isStaff ? (() => {
+              setAutoOpenEvalModal(false);
+              setInspectedAthlete(null);
+              setCurrentTab('staff');
+            }) : undefined}
           />
         )}
 
