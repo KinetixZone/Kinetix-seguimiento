@@ -97,7 +97,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   const isStaff = currentUser.role === 'staff';
   const userBodyComps = bodyCompRecords.filter(b => b.userId === currentUser.id);
   const userEvals = [...evaluations.filter(e => e.userId === currentUser.id)].sort(
-    (a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime()
+    (a, b) => a.evaluationDate.localeCompare(b.evaluationDate)
   );
   const latestBodyComp = userBodyComps.length > 0 ? userBodyComps[userBodyComps.length - 1] : null;
   const latestEval = userEvals.length > 0 ? userEvals[userEvals.length - 1] : undefined;

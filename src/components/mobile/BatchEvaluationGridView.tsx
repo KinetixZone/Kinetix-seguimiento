@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   UserProfile, 
   PhysicalEvaluationRecord, 
@@ -92,6 +92,22 @@ interface AthleteRowState {
   existingEvalId?: string;
 }
 
+const getLocalTodayStr = (): string => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const resolveInitialBatchDate = (globalEvalDate?: string): string => {
+  const today = getLocalTodayStr();
+  if (globalEvalDate && /^\d{4}-\d{2}-\d{2}$/.test(globalEvalDate) && globalEvalDate.slice(0, 7) >= today.slice(0, 7)) {
+    return globalEvalDate;
+  }
+  return today;
+};
+
 export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = ({
   isOpen,
   onClose,
@@ -104,7 +120,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
   onSendNotification,
   onOpenIndividualEdit,
 }) => {
-  const [selectedDate, setSelectedDate] = useState<string>(globalEvalDate || new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState<string>(() => resolveInitialBatchDate(globalEvalDate));
   const [sessionMode, setSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [colorFilter, setColorFilter] = useState<'all' | 5 | 15 | 20 | 30>('all');
@@ -112,6 +128,8 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null);
+  const wasOpenRef = useRef<boolean>(false);
+  const lastSyncedDateRef = useRef<string>('');
   
   // Modal de NA General rápido por fila
   const [activeNAModalUserId, setActiveNAModalUserId] = useState<string | null>(null);
@@ -129,21 +147,32 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     return users.filter(u => u.role === 'athlete');
   }, [users]);
 
-  // Inicializar o sincronizar el estado de las filas según la fecha seleccionada
+  // Al abrir el modal de Evaluación Masiva, sincronizar siempre la fecha al ciclo vigente / hoy
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      const targetDate = resolveInitialBatchDate(globalEvalDate);
+      setSelectedDate(targetDate);
+      lastSyncedDateRef.current = '';
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen, globalEvalDate]);
+
   // Inicializar o sincronizar el estado de las filas según la fecha seleccionada
   useEffect(() => {
     if (!isOpen) return;
+
+    const isDateSwitchOrFreshOpen = lastSyncedDateRef.current !== selectedDate;
+    lastSyncedDateRef.current = selectedDate;
 
     setRows(prevRows => {
       const newRows: Record<string, AthleteRowState> = {};
 
       athletes.forEach(ath => {
-        // Si el coach ya estaba editando esta fila en la sesión actual y la fila está modificada, PRESERVARLA
-        const existingRow = prevRows[ath.id];
+        // Solo preservar ediciones sin guardar si estamos en la misma fecha dentro de la misma sesión abierta
+        const existingRow = !isDateSwitchOrFreshOpen ? prevRows[ath.id] : undefined;
 
         // 1. Buscar si ya existe una evaluación guardada en esa fecha exacta
         const existingInDate = evaluations.find(e => e.userId === ath.id && e.evaluationDate === selectedDate);
-        const isFemale = ath.gender === 'female';
 
         if (existingInDate) {
           // Si ya existe en la fecha, y el coach no la tiene en estado 'isModified', cargar los datos reales guardados
@@ -271,8 +300,10 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
       const allEnduranceOnly = dateEvals.every(e => !e.strengthRecords || e.strengthRecords.length === 0);
       const allStrengthOnly = dateEvals.every(e => Boolean(e.cooperTest?.sessionOmitted || e.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM') && (e.strengthRecords?.length || 0) > 0);
       setSessionMode(allEnduranceOnly ? 'endurance_only' : allStrengthOnly ? 'strength_only' : 'full');
+    } else {
+      setSessionMode('full');
     }
-  }, [isOpen, selectedDate]);
+  }, [isOpen, selectedDate, evaluations]);
 
   // Filtrado de atletas visibles
   const filteredAthletes = useMemo(() => {
@@ -594,7 +625,7 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
 
   // Guardar todas las evaluaciones de la evaluación masiva
   const handleSaveAllEvaluations = async () => {
-    if (!onAddEvaluation && !onUpdateEvaluation) return;
+    if ((!onAddEvaluation && !onUpdateEvaluation) || isSaving) return;
     setIsSaving(true);
 
     let savedCount = 0;
@@ -695,6 +726,16 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="bg-transparent text-white font-mono text-xs font-bold outline-none cursor-pointer"
               />
+              {selectedDate !== getLocalTodayStr() && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(getLocalTodayStr())}
+                  className="px-1.5 py-0.5 rounded-md bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-300 text-[10px] font-bold transition-colors"
+                  title="Cambiar a la fecha de hoy"
+                >
+                  Hoy
+                </button>
+              )}
             </div>
 
             {/* Selector de Modalidad de Jornada (Completa vs Solo Resistencia vs Solo Fuerza 1RM) */}

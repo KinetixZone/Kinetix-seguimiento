@@ -567,10 +567,23 @@ export default function App() {
 
   // Add Physical Evaluation
   const handleAddEvaluation = (evalRec: Omit<PhysicalEvaluationRecord, 'id'>) => {
-    const existing = evaluations.find(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
+    const existing = evalsRef.current.find(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
+    const uidSuffix = Math.random().toString(36).slice(2, 7);
+    const userSuffix = evalRec.userId.slice(-4);
     const savedEval: PhysicalEvaluationRecord = existing
-      ? { ...existing, ...evalRec }
-      : { ...evalRec, id: `eval-${Date.now()}` };
+      ? { ...existing, ...evalRec, id: existing.id }
+      : { ...evalRec, id: `eval-${Date.now()}-${uidSuffix}-${userSuffix}` };
+
+    const syncIdx = evalsRef.current.findIndex(
+      e => e.id === savedEval.id || (e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate)
+    );
+    if (syncIdx !== -1) {
+      const nextSync = [...evalsRef.current];
+      nextSync[syncIdx] = savedEval;
+      evalsRef.current = nextSync;
+    } else {
+      evalsRef.current = [...evalsRef.current, savedEval];
+    }
 
     setEvaluations(prev => {
       const idx = prev.findIndex(e => e.id === savedEval.id || (e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate));
@@ -590,7 +603,7 @@ export default function App() {
     const rmMention = topRM ? ` Récord 1RM estimado: ${topRM.exerciseName} ${topRM.estimated1RMKg} kg.` : '';
 
     const newNotif: PushNotificationSimulation = {
-      id: `notif-rm-${Date.now()}`,
+      id: `notif-rm-${Date.now()}-${uidSuffix}-${userSuffix}`,
       title: '🏋️ Nueva Valoración Técnica y 1RM Registrada',
       body: `Tu coach ha actualizado tu expediente físico oficial.${rmMention} Revisa tu pestaña Tests para ver tus marcas y porcentajes de entrenamiento.`,
       timestamp: new Date().toISOString(),
@@ -607,12 +620,14 @@ export default function App() {
 
   // Delete Physical Evaluation
   const handleDeleteEvaluation = (evalId: string) => {
+    evalsRef.current = evalsRef.current.filter(e => e.id !== evalId);
     setEvaluations(prev => prev.filter(e => e.id !== evalId));
     deleteEvaluationFromSupabase(evalId);
   };
 
   // Update Physical Evaluation
   const handleUpdateEvaluation = (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => {
+    evalsRef.current = evalsRef.current.map(e => e.id === evalId ? { ...e, ...updates } : e);
     setEvaluations(prev => {
       const next = prev.map(e => e.id === evalId ? { ...e, ...updates } : e);
       const updated = next.find(e => e.id === evalId);

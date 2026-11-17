@@ -251,12 +251,31 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   const [batchSentSuccess, setBatchSentSuccess] = useState<boolean>(false);
   const [isBatchSending, setIsBatchSending] = useState<boolean>(false);
 
+  const getLocalTodayStr = (): string => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const getEffectiveCycleDate = (candidateDate?: string | null): string => {
+    const today = getLocalTodayStr();
+    if (candidateDate && /^\d{4}-\d{2}-\d{2}$/.test(candidateDate) && candidateDate.slice(0, 7) >= today.slice(0, 7)) {
+      return candidateDate;
+    }
+    try {
+      localStorage.setItem('kinetix_global_eval_date', today);
+    } catch {}
+    return today;
+  };
+
   // EXPRESS STRENGTH EVALUATION MODULE STATE (Staff / Entrenador)
   const [showExpressModal, setShowExpressModal] = useState<boolean>(false);
   const [expressMode, setExpressMode] = useState<'single' | 'multiple' | 'all'>('single');
   const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
   const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
-  const [expressDate, setExpressDate] = useState<string>(() => localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10));
+  const [expressDate, setExpressDate] = useState<string>(() => getEffectiveCycleDate(localStorage.getItem('kinetix_global_eval_date')));
   const [expressTargetSingleId, setExpressTargetSingleId] = useState<string>('');
   const [expressSingleWeight, setExpressSingleWeight] = useState<number>(60);
   const [expressSingleReps, setExpressSingleReps] = useState<number>(1);
@@ -276,7 +295,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
   // GLOBAL GYM-WIDE EVALUATION SCHEDULE (Fecha oficial para todos)
   const [globalEvalDate, setGlobalEvalDate] = useState<string>(() => {
-    return localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10);
+    return getEffectiveCycleDate(localStorage.getItem('kinetix_global_eval_date'));
   });
   const [globalDateNotifiedSuccess, setGlobalDateNotifiedSuccess] = useState<boolean>(false);
 
@@ -295,8 +314,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     horizontal_press: { weightKg: 50, status: 'completed', reason: '' },
     pullups_or_rows: { weightKg: 50, type: 'remo', status: 'completed', reason: '' },
   });
-  const [quickEditEvalDate, setQuickEditEvalDate] = useState<string>(() => localStorage.getItem('kinetix_global_eval_date') || new Date().toISOString().slice(0, 10));
+  const [quickEditEvalDate, setQuickEditEvalDate] = useState<string>(() => getEffectiveCycleDate(localStorage.getItem('kinetix_global_eval_date')));
   const [quickEditExistingEvalId, setQuickEditExistingEvalId] = useState<string | null>(null);
+  const [quickEditLatestEval, setQuickEditLatestEval] = useState<PhysicalEvaluationRecord | null>(null);
   const [quickEditSuccess, setQuickEditSuccess] = useState<boolean>(false);
   const [quickEditTab, setQuickEditTab] = useState<'aerobic' | 'strength'>('aerobic');
   const [quickSessionMode, setQuickSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
@@ -391,15 +411,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
       };
     }
-    const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
+    const sorted = [...userEvals].sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate));
     const latest = sorted[0];
-    const evalDate = new Date(latest.evaluationDate);
-    const now = new Date();
-    const diffDays = Math.floor((now.getTime() - evalDate.getTime()) / (1000 * 60 * 60 * 24));
+    const todayStr = getLocalTodayStr();
+    const evalDateObj = new Date(`${latest.evaluationDate}T12:00:00`);
+    const nowObj = new Date(`${todayStr}T12:00:00`);
+    const diffDays = Math.floor((nowObj.getTime() - evalDateObj.getTime()) / (1000 * 60 * 60 * 24));
     
-    const isToday = diffDays === 0;
-    const isThisMonth = evalDate.getMonth() === now.getMonth() && evalDate.getFullYear() === now.getFullYear();
-    const isEvaluatedThisCycle = isToday || isThisMonth || diffDays <= 30;
+    const isToday = latest.evaluationDate === todayStr;
+    const isThisMonth = latest.evaluationDate.slice(0, 7) === todayStr.slice(0, 7);
+    const isEvaluatedThisCycle = isToday || isThisMonth;
 
     return {
       hasEvaluations: true,
@@ -482,7 +503,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
 
     setExpressMode(initialMode === 'all' ? 'multiple' : initialMode);
     setExpressSearchTerm('');
-    setExpressDate(globalEvalDate || new Date().toISOString().slice(0, 10));
+    setExpressDate(getEffectiveCycleDate(globalEvalDate));
     setExpressNotes('');
     setExpressApplyAllCycleSingle(false);
     setExpressSaveSuccessMsg(null);
@@ -1078,10 +1099,15 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   };
 
   // Quick full evaluation correction / edit handlers
-  const handleOpenQuickEditWeights = (targetUser: UserProfile) => {
-    const userEvals = evaluations.filter(e => e.userId === targetUser.id);
-    const sorted = [...userEvals].sort((a, b) => new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime());
-    const latest = sorted[0];
+  const populateQuickEditFields = (
+    targetUserId: string,
+    targetDate: string,
+    bindEvalId: string | null,
+    explicitRecord?: PhysicalEvaluationRecord | null
+  ) => {
+    const userEvals = evaluations.filter(e => e.userId === targetUserId);
+    const sorted = [...userEvals].sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate));
+    const baseEval = explicitRecord ?? sorted[0] ?? null;
 
     const zeroWeights = {
       squats: { weightKg: 0, status: 'completed' as EvaluationStatus, reason: '' },
@@ -1094,24 +1120,26 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
     const isAerobicOmitted = (ev?: PhysicalEvaluationRecord | null) =>
       Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
 
-    if (latest) {
-      setQuickEditExistingEvalId(latest.id);
-      setQuickEditEvalDate(latest.evaluationDate);
+    setQuickEditExistingEvalId(bindEvalId);
+    setQuickEditEvalDate(targetDate);
 
-      const detectedMode: 'full' | 'endurance_only' | 'strength_only' = isAerobicOmitted(latest)
+    if (baseEval) {
+      const detectedMode: 'full' | 'endurance_only' | 'strength_only' = !bindEvalId
+        ? 'full'
+        : isAerobicOmitted(baseEval)
         ? 'strength_only'
-        : (!latest.strengthRecords || latest.strengthRecords.length === 0)
+        : (!baseEval.strengthRecords || baseEval.strengthRecords.length === 0)
         ? 'endurance_only'
         : 'full';
       setQuickSessionMode(detectedMode);
 
-      const aerobicSource = isAerobicOmitted(latest)
+      const aerobicSource = isAerobicOmitted(baseEval)
         ? (sorted.find(e => !isAerobicOmitted(e)) || null)
-        : latest;
-      const strengthSource = (!latest.strengthRecords || latest.strengthRecords.length === 0)
+        : baseEval;
+      const strengthSource = (!baseEval.strengthRecords || baseEval.strengthRecords.length === 0)
         ? (sorted.find(e => (e.strengthRecords?.length || 0) > 0) || null)
-        : latest;
-      
+        : baseEval;
+
       // Resistencia
       const endRec = aerobicSource?.enduranceTest;
       setQuickEnduranceStatus(endRec?.status || 'completed');
@@ -1141,8 +1169,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         setQuickCooperDistance(coopRec?.distanceMeters || 0);
       }
 
-      // Notas: filtrar textos automáticos anteriores para dejar en blanco si no hay notas reales
-      const rawPastNotes = latest.generalCoachNotes || '';
+      // Notas: si es nueva evaluación, iniciar limpio; si se edita registro existente, conservar notas reales
+      const rawPastNotes = bindEvalId ? (baseEval.generalCoachNotes || '') : '';
       const isAuto = rawPastNotes.includes('Pesos corregidos') || 
                      rawPastNotes.includes('Evaluación actualizada') || 
                      rawPastNotes.includes('Evaluación registrada') || 
@@ -1150,7 +1178,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                      rawPastNotes.startsWith('Marca Express');
       setQuickCoachNotes(isAuto ? '' : rawPastNotes);
 
-      // Fuerza: solo cargar los pesos específicos y reales de este atleta (sin inventar números)
+      // Fuerza: cargar pesos reales previos como referencia
       const recs = strengthSource?.strengthRecords || [];
       const sq = recs.find(r => r.exerciseId === 'squats');
       const dl = recs.find(r => r.exerciseId === 'deadlift');
@@ -1187,9 +1215,8 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         },
       });
       setQuickEditTab(detectedMode === 'strength_only' ? 'strength' : 'aerobic');
+      setQuickCustomNAReason(bindEvalId ? (baseEval.cooperTest?.statusReason || '') : '');
     } else {
-      setQuickEditExistingEvalId(null);
-      setQuickEditEvalDate(globalEvalDate || new Date().toISOString().slice(0, 10));
       setQuickSessionMode('full');
       setQuickEnduranceStatus('completed');
       setQuickEnduranceReason('');
@@ -1207,9 +1234,45 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickCoachNotes('');
       setQuickWeights(zeroWeights);
       setQuickEditTab('aerobic');
+      setQuickCustomNAReason('');
+    }
+  };
+
+  const handleQuickEditDateChange = (newDate: string) => {
+    if (!athleteToEditWeights) {
+      setQuickEditEvalDate(newDate);
+      return;
+    }
+    const exactMatch = evaluations.find(e => e.userId === athleteToEditWeights.id && e.evaluationDate === newDate);
+    if (exactMatch) {
+      populateQuickEditFields(athleteToEditWeights.id, newDate, exactMatch.id, exactMatch);
+    } else {
+      setQuickEditEvalDate(newDate);
+      setQuickEditExistingEvalId(null);
+    }
+  };
+
+  const handleOpenQuickEditWeights = (targetUser: UserProfile) => {
+    const userEvals = evaluations.filter(e => e.userId === targetUser.id);
+    const sorted = [...userEvals].sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate));
+    const latest = sorted[0] || null;
+    const todayStr = getLocalTodayStr();
+    const cycleDate = getEffectiveCycleDate(globalEvalDate);
+    setQuickEditLatestEval(latest);
+
+    // Si la última evaluación es de un mes anterior (ej. septiembre mientras hoy es noviembre),
+    // abrir en modo "Nueva Evaluación" con la fecha del ciclo actual (noviembre) y precarga de marcas previas.
+    if (latest) {
+      const isCurrentMonth = latest.evaluationDate.slice(0, 7) >= todayStr.slice(0, 7);
+      if (isCurrentMonth) {
+        populateQuickEditFields(targetUser.id, latest.evaluationDate, latest.id, latest);
+      } else {
+        populateQuickEditFields(targetUser.id, cycleDate, null, latest);
+      }
+    } else {
+      populateQuickEditFields(targetUser.id, cycleDate, null, null);
     }
 
-    setQuickCustomNAReason(latest?.cooperTest?.statusReason || '');
     setAthleteToEditWeights(targetUser);
     setQuickEditSuccess(false);
   };
@@ -1331,8 +1394,23 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             : undefined,
         };
 
-    if (quickEditExistingEvalId && onUpdateEvaluation) {
-      onUpdateEvaluation(quickEditExistingEvalId, {
+    const exactDateEval = evaluations.find(
+      e => e.userId === athleteToEditWeights.id && e.evaluationDate === quickEditEvalDate
+    );
+    const boundEval = quickEditExistingEvalId
+      ? evaluations.find(e => e.id === quickEditExistingEvalId)
+      : undefined;
+
+    if (exactDateEval && onUpdateEvaluation) {
+      onUpdateEvaluation(exactDateEval.id, {
+        evaluationDate: quickEditEvalDate,
+        enduranceTest: enduranceTestRecord,
+        cooperTest: cooperTestRecord,
+        strengthRecords,
+        generalCoachNotes: quickCoachNotes.trim(),
+      });
+    } else if (boundEval && boundEval.evaluationDate === quickEditEvalDate && onUpdateEvaluation) {
+      onUpdateEvaluation(boundEval.id, {
         evaluationDate: quickEditEvalDate,
         enduranceTest: enduranceTestRecord,
         cooperTest: cooperTestRecord,
@@ -1357,6 +1435,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       setQuickEditSuccess(false);
       setAthleteToEditWeights(null);
       setQuickEditExistingEvalId(null);
+      setQuickEditLatestEval(null);
     }, 1200);
   };
 
@@ -2187,6 +2266,16 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 onChange={(e) => handleUpdateGlobalEvalDate(e.target.value)}
                 className="bg-transparent text-white font-mono text-xs font-bold outline-none cursor-pointer"
               />
+              {globalEvalDate !== getLocalTodayStr() && (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateGlobalEvalDate(getLocalTodayStr())}
+                  className="px-1.5 py-0.5 rounded-md bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-300 text-[10px] font-bold transition-colors"
+                  title="Restablecer fecha oficial al día de hoy"
+                >
+                  Hoy
+                </button>
+              )}
             </div>
 
             {onSendBatchNotification && (
@@ -5917,6 +6006,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
                 onClick={() => {
                   setAthleteToEditWeights(null);
                   setQuickEditExistingEvalId(null);
+                  setQuickEditLatestEval(null);
                 }}
                 className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800 transition-colors"
               >
@@ -5924,18 +6014,65 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </button>
             </div>
 
+            {/* Selector rápido: Nueva Evaluación vs Corregir Registro Previo */}
+            {quickEditLatestEval && (
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-neutral-950 border border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cycleDate = getEffectiveCycleDate(globalEvalDate);
+                    const matchCycle = evaluations.find(e => e.userId === athleteToEditWeights.id && e.evaluationDate === cycleDate);
+                    if (matchCycle) {
+                      populateQuickEditFields(athleteToEditWeights.id, cycleDate, matchCycle.id, matchCycle);
+                    } else {
+                      populateQuickEditFields(athleteToEditWeights.id, cycleDate, null, quickEditLatestEval);
+                    }
+                  }}
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    !quickEditExistingEvalId || quickEditExistingEvalId !== quickEditLatestEval.id
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  ➕ Nueva Evaluación ({getEffectiveCycleDate(globalEvalDate).slice(5)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => populateQuickEditFields(athleteToEditWeights.id, quickEditLatestEval.evaluationDate, quickEditLatestEval.id, quickEditLatestEval)}
+                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    quickEditExistingEvalId === quickEditLatestEval.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  ✏️ Corregir del {quickEditLatestEval.evaluationDate}
+                </button>
+              </div>
+            )}
+
             {/* Fecha de la Evaluación (Compact Bar) */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 gap-2">
               <div className="flex items-center gap-1.5 text-xs text-neutral-300">
                 <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span className="font-semibold">Fecha de Evaluación:</span>
               </div>
-              <input
-                type="date"
-                value={quickEditEvalDate}
-                onChange={(e) => setQuickEditEvalDate(e.target.value)}
-                className="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold outline-none focus:border-blue-500 cursor-pointer"
-              />
+              <div className="flex items-center gap-1.5">
+                {quickEditEvalDate !== getLocalTodayStr() && (
+                  <button
+                    type="button"
+                    onClick={() => handleQuickEditDateChange(getLocalTodayStr())}
+                    className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/35 border border-blue-500/40 text-blue-300 text-[10px] font-bold transition-colors cursor-pointer"
+                  >
+                    Hoy
+                  </button>
+                )}
+                <input
+                  type="date"
+                  value={quickEditEvalDate}
+                  onChange={(e) => handleQuickEditDateChange(e.target.value)}
+                  className="bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold outline-none focus:border-blue-500 cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* NA GENERAL (TODO EL PERIODO) - BOTÓN 1-CLIC Y MOTIVOS RÁPIDOS O PERSONALIZADO */}

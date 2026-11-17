@@ -129,10 +129,18 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
 
+  const getLocalTodayStr = (): string => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   // Express Strength/PR Capture State (Captura Rápida de Fuerza)
   const [showExpressModal, setShowExpressModal] = useState(false);
   const [expressTargetUserId, setExpressTargetUserId] = useState<string>(effectiveAthlete.id);
-  const [expressDate, setExpressDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [expressDate, setExpressDate] = useState<string>(() => getLocalTodayStr());
   const [expressExerciseId, setExpressExerciseId] = useState<'deadlift' | 'squats' | 'hip_thrust' | 'horizontal_press' | 'pullups_or_rows'>('deadlift');
   const [expressRowType, setExpressRowType] = useState<'remo' | 'dominadas'>('remo');
   const [expressStatus, setExpressStatus] = useState<EvaluationStatus>('completed');
@@ -150,7 +158,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   const preloadExpressValues = (athleteId: string, exId: string) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
-    const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const sorted = [...athleteEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
     const latestWithStrength = [...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
     const rec = latestWithStrength?.strengthRecords?.find(s => s.exerciseId === exId);
 
@@ -177,7 +185,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     const ex = preselectedExercise || expressExerciseId;
     setExpressExerciseId(ex);
     setExpressTargetUserId(effectiveAthlete.id);
-    setExpressDate(new Date().toISOString().slice(0, 10));
+    setExpressDate(getLocalTodayStr());
     setExpressStatus('completed');
     setExpressReason('');
     setExpressNotes('');
@@ -199,10 +207,10 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
 
   const userEvals = evaluations.filter(e => e.userId === effectiveAthlete.id);
-  const sortedEvals = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+  const sortedEvals = [...userEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
 
   // Form State for New Evaluation Entry (Staff)
-  const [evalDate, setEvalDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [evalDate, setEvalDate] = useState<string>(() => getLocalTodayStr());
   const [evalSessionMode, setEvalSessionMode] = useState<'full' | 'endurance_only' | 'strength_only'>('full');
   
   // Cooper Test State (Supports completed, NA - niños/adultos mayores, NP - no presentada/lesión)
@@ -344,7 +352,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
   // Loads an athlete's baseline into the form or sets pristine defaults (0 for unmeasured)
   const loadAthleteBaselineIntoForm = (athleteId: string, customEval?: PhysicalEvaluationRecord | null) => {
     const athleteEvals = evaluations.filter(e => e.userId === athleteId);
-    const sorted = [...athleteEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const sorted = [...athleteEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
     const latest = customEval !== undefined
       ? (isAerobicOmitted(customEval) ? ([...sorted].reverse().find(e => !isAerobicOmitted(e)) || null) : customEval)
       : ([...sorted].reverse().find(e => !isAerobicOmitted(e)) || sorted[sorted.length - 1] || null);
@@ -354,7 +362,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
           : customEval)
       : ([...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null);
 
-    setEvalDate(new Date().toISOString().slice(0, 10));
+    setEvalDate(customEval ? customEval.evaluationDate : getLocalTodayStr());
     if (customEval) {
       if (isAerobicOmitted(customEval)) {
         setEvalSessionMode('strength_only');
