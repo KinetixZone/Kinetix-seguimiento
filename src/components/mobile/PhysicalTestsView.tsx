@@ -90,6 +90,9 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
   // Sub-tabs: 'evolution' (Visión General), 'cooper', 'endurance' (Resistencia por tiempo), 'strength' (1RM), 'history' (Historial Staff)
   const [activeTab, setActiveTab] = useState<'evolution' | 'cooper' | 'endurance' | 'strength' | 'history'>('evolution');
+  const [chartMetricTab, setChartMetricTab] = useState<'strength' | 'cooper' | 'endurance'>('strength');
+  const [periodFilter, setPeriodFilter] = useState<'3m' | '6m' | 'year' | 'all'>('all');
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string>('all');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
 
   const [evaluatingCoachName, setEvaluatingCoachName] = useState<string>(() => {
@@ -888,7 +891,7 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
     } else {
       // Create new evaluation
       const userPastEvals = evaluations.filter(e => e.userId === targetId);
-      const sortedPast = [...userPastEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+      const sortedPast = [...userPastEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
       const latestPast = [...sortedPast].reverse().find(e => !isAerobicOmitted(e)) || sortedPast[sortedPast.length - 1] || null;
       const latestPastStrength = [...sortedPast].reverse().find(e => (e.strengthRecords?.length || 0) > 0) || null;
 
@@ -1309,6 +1312,259 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               Comparativa directa de evolución en <strong>Nivel Cooper</strong>, <strong>Resistencia por tiempo</strong> y <strong>Fuerza máxima 1RM</strong>.
             </p>
           </div>
+
+          {/* GRÁFICA MULTI-MES DE PROGRESO (Fuerza 1RM · Cooper · Resistencia) */}
+          {(() => {
+            const todayStr = getLocalTodayStr();
+            const currentYear = todayStr.slice(0, 4);
+            const nowDateObj = new Date(`${todayStr}T12:00:00`);
+            const cutoffMonths = (monthsAgo: number) => {
+              const d = new Date(nowDateObj.getFullYear(), nowDateObj.getMonth() - monthsAgo, nowDateObj.getDate());
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              return `${y}-${m}-${day}`;
+            };
+
+            const periodEvals = sortedEvals.filter((ev) => {
+              if (periodFilter === '3m') return ev.evaluationDate >= cutoffMonths(3);
+              if (periodFilter === '6m') return ev.evaluationDate >= cutoffMonths(6);
+              if (periodFilter === 'year') return ev.evaluationDate.startsWith(currentYear);
+              return true;
+            });
+
+            type ChartPoint = { date: string; value: number; label: string };
+            const points: ChartPoint[] = [];
+
+            if (chartMetricTab === 'strength') {
+              periodEvals.forEach((ev) => {
+                const completedRecs = (ev.strengthRecords || []).filter(
+                  (r) => r.status !== 'na' && r.status !== 'np' && (r.estimated1RMKg > 0 || r.weightKg > 0)
+                );
+                if (completedRecs.length === 0) return;
+                const totalKg = Math.round(
+                  completedRecs.reduce((sum, r) => sum + (r.estimated1RMKg > 0 ? r.estimated1RMKg : r.weightKg), 0)
+                );
+                const val = weightUnit === 'kg' ? totalKg : kgToLbs(totalKg);
+                points.push({ date: ev.evaluationDate, value: val, label: `${val}${weightUnit}` });
+              });
+            } else if (chartMetricTab === 'cooper') {
+              periodEvals.forEach((ev) => {
+                if (isAerobicOmitted(ev)) return;
+                const c = ev.cooperTest;
+                if (!c || c.status === 'na' || c.status === 'np') return;
+                const metersPerLap = c.metersPerLap || (c.lapLocation === 'inside' ? 250 : 400);
+                const dist = c.distanceMeters || ((c.lapsCount || 0) * metersPerLap) || ((c.levelNumber || 0) * 100);
+                if (dist <= 0) return;
+                points.push({ date: ev.evaluationDate, value: dist, label: `${dist}m` });
+              });
+            } else {
+              periodEvals.forEach((ev) => {
+                if (isAerobicOmitted(ev)) return;
+                const end = ev.enduranceTest;
+                if (!end || end.status === 'na' || end.status === 'np') return;
+                const sec = typeof end.timeSeconds === 'number' && end.timeSeconds > 0
+                  ? end.timeSeconds
+                  : parseSecondsFromTimeStr(end.result);
+                if (sec <= 0) return;
+                const mm = Math.floor(sec / 60);
+                const ss = String(sec % 60).padStart(2, '0');
+                points.push({ date: ev.evaluationDate, value: sec, label: `${mm}:${ss}` });
+              });
+            }
+
+            const firstPt = points[0];
+            const lastPt = points[points.length - 1];
+            const delta = firstPt && lastPt && points.length > 1 ? lastPt.value - firstPt.value : 0;
+
+            const vals = points.map((p) => p.value);
+            const rawMin = vals.length > 0 ? Math.min(...vals) : 0;
+            const rawMax = vals.length > 0 ? Math.max(...vals) : 100;
+            const pad = Math.max(Math.round((rawMax - rawMin) * 0.2), chartMetricTab === 'cooper' ? 150 : 20);
+            const minVal = Math.max(0, rawMin - pad);
+            const maxVal = rawMax + pad;
+            const rangeVal = Math.max(maxVal - minVal, 10);
+
+            const cLeft = 42;
+            const cRight = 332;
+            const cTop = 22;
+            const cBottom = 114;
+            const cWidth = cRight - cLeft;
+            const cHeight = cBottom - cTop;
+
+            const getX = (idx: number, len: number) =>
+              len <= 1 ? cLeft + cWidth / 2 : Number((cLeft + idx * (cWidth / (len - 1))).toFixed(1));
+            const getY = (v: number) =>
+              Number((cBottom - ((Math.min(Math.max(v, minVal), maxVal) - minVal) / rangeVal) * cHeight).toFixed(1));
+
+            const lineColor =
+              chartMetricTab === 'strength' ? '#f97316' : chartMetricTab === 'cooper' ? '#3b82f6' : '#10b981';
+
+            const polyPoints = points.map((p, idx) => `${getX(idx, points.length)},${getY(p.value)}`).join(' ');
+            const areaPath = points.length > 0
+              ? `M ${getX(0, points.length)},${cBottom} ` +
+                points.map((p, idx) => `L ${getX(idx, points.length)},${getY(p.value)}`).join(' ') +
+                ` L ${getX(points.length - 1, points.length)},${cBottom} Z`
+              : '';
+
+            const formatTickDate = (d: string) => {
+              const parts = d.split('-');
+              return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d.slice(5);
+            };
+
+            return (
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Gráfica de Progreso entre Meses</span>
+                    </h4>
+                    <span className="text-[10px] text-neutral-400">
+                      Omite jornadas parciales/NA para no distorsionar tu tendencia real
+                    </span>
+                  </div>
+
+                  {/* Period Filter */}
+                  <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 self-start sm:self-auto">
+                    {(
+                      [
+                        { id: '3m', label: '3M' },
+                        { id: '6m', label: '6M' },
+                        { id: 'year', label: 'Año' },
+                        { id: 'all', label: 'Todo' },
+                      ] as const
+                    ).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPeriodFilter(p.id)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors ${
+                          periodFilter === p.id ? 'bg-blue-600 text-white' : 'text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Metric Selector */}
+                <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setChartMetricTab('strength')}
+                    className={`py-1.5 px-2 rounded-lg font-bold transition-colors truncate ${
+                      chartMetricTab === 'strength' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    🏋️ Fuerza 1RM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMetricTab('cooper')}
+                    className={`py-1.5 px-2 rounded-lg font-bold transition-colors truncate ${
+                      chartMetricTab === 'cooper' ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    ❤️ Cooper (m)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMetricTab('endurance')}
+                    className={`py-1.5 px-2 rounded-lg font-bold transition-colors truncate ${
+                      chartMetricTab === 'endurance' ? 'bg-emerald-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    ⏱️ Resistencia
+                  </button>
+                </div>
+
+                {points.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-neutral-500 bg-neutral-950/60 rounded-xl border border-neutral-800/70">
+                    Sin registros suficientes en este periodo para graficar esta métrica.
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-neutral-950/80 border border-neutral-800/80 p-2 sm:p-3 space-y-2">
+                    <div className="h-40 w-full">
+                      <svg className="w-full h-full block" viewBox="0 0 360 144" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                          <linearGradient id="testsTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={lineColor} stopOpacity="0.32" />
+                            <stop offset="100%" stopColor={lineColor} stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        <line x1={cLeft} y1={cTop} x2={cRight} y2={cTop} stroke="#262626" strokeDasharray="3 3" />
+                        <line x1={cLeft} y1={(cTop + cBottom) / 2} x2={cRight} y2={(cTop + cBottom) / 2} stroke="#262626" strokeDasharray="3 3" />
+                        <line x1={cLeft} y1={cBottom} x2={cRight} y2={cBottom} stroke="#262626" strokeDasharray="3 3" />
+
+                        <text x={cLeft - 5} y={cTop + 3} fill="#737373" fontSize="8" className="font-mono" textAnchor="end">
+                          {chartMetricTab === 'endurance' ? `${Math.floor(maxVal / 60)}:${String(maxVal % 60).padStart(2, '0')}` : maxVal}
+                        </text>
+                        <text x={cLeft - 5} y={cBottom + 3} fill="#737373" fontSize="8" className="font-mono" textAnchor="end">
+                          {chartMetricTab === 'endurance' ? `${Math.floor(minVal / 60)}:${String(minVal % 60).padStart(2, '0')}` : minVal}
+                        </text>
+
+                        {points.length > 1 && (
+                          <>
+                            <path d={areaPath} fill="url(#testsTrendGrad)" />
+                            <polyline
+                              fill="none"
+                              stroke={lineColor}
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              points={polyPoints}
+                            />
+                          </>
+                        )}
+
+                        {points.map((pt, idx) => {
+                          const cx = getX(idx, points.length);
+                          const cy = getY(pt.value);
+                          const showLabel = points.length <= 7 || idx === 0 || idx === points.length - 1 || idx % 2 === 0;
+                          return (
+                            <g key={`${pt.date}-${idx}`}>
+                              <circle cx={cx} cy={cy} r="4" fill="#0a0a0a" stroke={lineColor} strokeWidth="2.2" />
+                              {showLabel && (
+                                <>
+                                  <text x={cx} y={Math.max(11, cy - 8)} fill="#e5e5e5" fontSize="8" fontWeight="bold" className="font-mono" textAnchor="middle">
+                                    {pt.label}
+                                  </text>
+                                  <text x={cx} y={132} fill="#737373" fontSize="8" className="font-mono" textAnchor="middle">
+                                    {formatTickDate(pt.date)}
+                                  </text>
+                                </>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-neutral-800/80 px-1">
+                      <span className="text-neutral-400">
+                        {points.length} {points.length === 1 ? 'evaluación' : 'evaluaciones'} ({firstPt.date.slice(0, 7)} → {lastPt.date.slice(0, 7)})
+                      </span>
+                      {points.length > 1 ? (
+                        <span className={`font-mono font-bold ${
+                          chartMetricTab === 'endurance'
+                            ? (delta <= 0 ? 'text-emerald-400' : 'text-amber-400')
+                            : (delta >= 0 ? 'text-emerald-400' : 'text-amber-400')
+                        }`}>
+                          {chartMetricTab === 'endurance'
+                            ? (delta <= 0 ? `${delta}s (más veloz)` : `+${delta}s`)
+                            : (delta >= 0 ? `+${delta}${chartMetricTab === 'cooper' ? 'm' : ` ${weightUnit}`}` : `${delta}${chartMetricTab === 'cooper' ? 'm' : ` ${weightUnit}`}`)}
+                        </span>
+                      ) : (
+                        <span className="text-blue-400 font-mono font-semibold">Línea base: {lastPt.label}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Aviso especial si la evaluación completa es NA (ej. Nuevo ingreso posterior a pruebas o exento) */}
           {(() => {
@@ -2517,12 +2773,13 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
               }
 
               const prevRec = prevStrengthEval?.strengthRecords.find(s => s.exerciseId === rec.exerciseId);
-              const prevWeight = prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' ? prevRec.weightKg : (rec.weightKg > 10 ? rec.weightKg - 10 : rec.weightKg);
-              const deltaKg = rec.weightKg - prevWeight;
+              const hasPrevValid = Boolean(prevRec && prevRec.status !== 'na' && prevRec.status !== 'np' && prevRec.weightKg > 0);
+              const prevWeight = hasPrevValid && prevRec ? prevRec.weightKg : 0;
+              const deltaKg = hasPrevValid ? rec.weightKg - prevWeight : null;
 
               const displayWeight = weightUnit === 'kg' ? rec.weightKg : kgToLbs(rec.weightKg);
               const display1RM = weightUnit === 'kg' ? rec.estimated1RMKg : kgToLbs(rec.estimated1RMKg);
-              const relativeRatio = calculateRelativeStrengthRatio(rec.estimated1RMKg, currentUser.heightCm > 0 ? 75 : 75);
+              const relativeRatio = calculateRelativeStrengthRatio(rec.estimated1RMKg, effectiveAthlete.heightCm > 0 ? 75 : 75);
               const strengthTier = getStrengthTier(relativeRatio);
 
               return (
@@ -2563,13 +2820,26 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
 
                   {/* Comparativa con el test anterior */}
                   <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-[11px]">
-                    <span className="text-neutral-400">
-                      Anterior: <strong className="text-neutral-300">{prevWeight} kg</strong> &rarr; Ahora:{' '}
-                      <strong className="text-white">{rec.weightKg} kg</strong>
-                    </span>
-                    <span className="text-emerald-400 font-mono font-bold">
-                      {deltaKg > 0 ? `+${deltaKg} kg ganado` : `${deltaKg} kg`}
-                    </span>
+                    {hasPrevValid ? (
+                      <>
+                        <span className="text-neutral-400">
+                          Anterior: <strong className="text-neutral-300">{prevWeight} kg</strong> &rarr; Ahora:{' '}
+                          <strong className="text-white">{rec.weightKg} kg</strong>
+                        </span>
+                        <span className={`font-mono font-bold ${(deltaKg ?? 0) >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {(deltaKg ?? 0) > 0 ? `+${deltaKg} kg ganado` : `${deltaKg} kg`}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-neutral-400">
+                          Primera marca: <strong className="text-white">{rec.weightKg} kg</strong>
+                        </span>
+                        <span className="text-blue-400 font-mono font-bold">
+                          Base inicial
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Fuerza Relativa */}
@@ -2623,27 +2893,60 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
       {/* ========================================================================= */}
       {/* TAB 5: HISTORIAL STAFF & CONTROL TOTAL (EDITAR Y ELIMINAR CUALQUIER TEST) */}
       {/* ========================================================================= */}
-      {activeTab === 'history' && (
+      {activeTab === 'history' && (() => {
+        const availableMonths = Array.from(new Set(sortedEvals.map(e => e.evaluationDate.slice(0, 7)))).sort().reverse();
+        const filteredHistory = historyMonthFilter === 'all'
+          ? sortedEvals.slice().reverse()
+          : sortedEvals.filter(e => e.evaluationDate.startsWith(historyMonthFilter)).reverse();
+
+        return (
         <div className="space-y-4">
-          <div className="p-4 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-1">
-            <div className="flex items-center justify-between">
+          <div className="p-4 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-[10px] font-mono text-red-400 uppercase tracking-wider font-semibold">
                 Control Absoluto del Staff
               </span>
               <span className="text-xs text-neutral-400">
-                {userEvals.length} evaluaciones registradas
+                {filteredHistory.length} de {userEvals.length} evaluaciones
               </span>
             </div>
             <h3 className="text-base font-bold text-white font-brand">
-              Historial de Evaluaciones de {currentUser.name}
+              Historial de Evaluaciones de {effectiveAthlete.name}
             </h3>
             <p className="text-xs text-neutral-400">
-              Aquí el Staff puede consultar, <strong>editar datos</strong> o <strong>eliminar registros erróneos</strong> para mantener el control completo.
+              Aquí se pueden consultar todos los meses guardados, filtrar por mes, <strong>editar datos</strong> o <strong>eliminar registros erróneos</strong>.
             </p>
+            {availableMonths.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <span className="text-[11px] text-neutral-400 font-medium">Filtrar mes:</span>
+                <select
+                  value={historyMonthFilter}
+                  onChange={(e) => setHistoryMonthFilter(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-700 rounded-xl px-2.5 py-1 text-xs text-white font-mono outline-none focus:border-blue-500"
+                >
+                  <option value="all">Todos los meses ({userEvals.length})</option>
+                  {availableMonths.map((ym) => (
+                    <option key={ym} value={ym}>
+                      {ym}
+                    </option>
+                  ))}
+                </select>
+                {canEvaluate && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddModal}
+                    className="ml-auto px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 transition-all"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Agregar otro mes</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
-            {sortedEvals.slice().reverse().map((ev, idx) => (
+            {filteredHistory.map((ev, idx) => (
               <div
                 key={ev.id}
                 className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3 shadow-md"
@@ -2783,7 +3086,8 @@ export const PhysicalTestsView: React.FC<PhysicalTestsViewProps> = ({
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* MODAL: REGISTRAR NUEVA EVALUACIÓN (STAFF - Mobile Bottom-Sheet) */}
       {showAddEvalModal && (

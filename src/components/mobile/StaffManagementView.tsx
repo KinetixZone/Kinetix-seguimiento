@@ -436,7 +436,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   // Helper to retrieve latest recorded strength data for an athlete in a specific exercise
   const getLatestAthleteExerciseData = (athleteId: string, exId: string) => {
     const userEvals = evaluations.filter(e => e.userId === athleteId);
-    const sorted = [...userEvals].sort((a, b) => new Date(a.evaluationDate).getTime() - new Date(b.evaluationDate).getTime());
+    const sorted = [...userEvals].sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
     const latestWithStrength = [...sorted].reverse().find(e => (e.strengthRecords?.length || 0) > 0);
     return latestWithStrength?.strengthRecords?.find(s => s.exerciseId === exId);
   };

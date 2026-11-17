@@ -128,12 +128,20 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
   // Permissions check: Is the person interacting a coach/staff member?
   const isStaffActing = Boolean(isStaffUser || loggedStaffUser?.role === 'staff');
 
+  const getLocalTodayStr = (): string => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   // New Record Form State (Initialized clean to prevent cross-account cache leakage)
   const [weight, setWeight] = useState<number | ''>('');
   const [muscleKg, setMuscleKg] = useState<number | ''>('');
   const [bodyFat, setBodyFat] = useState<number | ''>('');
   const [visceralFat, setVisceralFat] = useState<number>(3);
-  const [recordedDate, setRecordedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [recordedDate, setRecordedDate] = useState<string>(() => getLocalTodayStr());
   const [notes, setNotes] = useState<string>('');
   const [nextAthleteToast, setNextAthleteToast] = useState<string | null>(null);
 
@@ -148,7 +156,9 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
 
   // When currentUser or records change, sync form fields strictly for this athlete
   useEffect(() => {
-    const userRecords = records.filter(r => r.userId === currentUser.id);
+    const userRecords = [...records]
+      .filter(r => r.userId === currentUser.id)
+      .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
     if (userRecords.length > 0) {
       const last = userRecords[userRecords.length - 1];
       setWeight(last.weightKg);
@@ -171,7 +181,7 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
 
   // Sorting records chronologically
   const sortedRecords = [...records].sort(
-    (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+    (a, b) => a.recordedAt.localeCompare(b.recordedAt)
   );
 
   const initialRecord = sortedRecords.length > 0 ? sortedRecords[0] : null;
@@ -315,12 +325,12 @@ export const BodyCompositionView: React.FC<BodyCompositionViewProps> = ({
           <button
             type="button"
             onClick={() => {
+              setRecordedDate(getLocalTodayStr());
               if (latestRecord) {
                 setWeight(latestRecord.weightKg);
                 setMuscleKg(latestRecord.muscleMassKg ?? (latestRecord.weightKg && latestRecord.muscleMassPercent ? parseFloat(((latestRecord.weightKg * latestRecord.muscleMassPercent) / 100).toFixed(2)) : ''));
                 setBodyFat(latestRecord.bodyFatPercent);
                 setVisceralFat(latestRecord.visceralFatLevel || 3);
-                setRecordedDate(new Date().toISOString().slice(0, 10));
                 setNotes(latestRecord.notes || '');
               }
               setShowAddModal(true);
