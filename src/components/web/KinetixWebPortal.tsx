@@ -444,6 +444,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

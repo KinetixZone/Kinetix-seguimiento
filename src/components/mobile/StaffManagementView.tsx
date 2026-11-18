@@ -16,8 +16,10 @@ import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode, NO_CUTOFF_CONF
 import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { BatchEvaluationGridView } from './BatchEvaluationGridView';
+import { calculate1RM } from '../../utils/fitnessCalculations';
 import {
   getLocalTodayDateStr,
+  isAerobicOmittedEval,
   isCooperCompletedEval,
   isEnduranceCompletedEval,
   isStrengthCompletedEval,
@@ -675,7 +677,9 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         return;
       }
 
-      const calculated1RM = status === 'completed' ? weight : 0;
+      const calculated1RM = status === 'completed' && weight > 0
+        ? (reps <= 1 ? weight : calculate1RM(weight, reps))
+        : 0;
       const newRec: StrengthMaxRecord = {
         exerciseId: expressExerciseId,
         exerciseName: exerciseNameMap[expressExerciseId] || 'Fuerza',
@@ -1645,20 +1649,19 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
       ? evaluations.find(e => e.id === quickEditExistingEvalId)
       : undefined;
 
-    if (exactDateEval && onUpdateEvaluation) {
-      onUpdateEvaluation(exactDateEval.id, {
+    const targetExistingEval = exactDateEval || (boundEval && boundEval.evaluationDate === quickEditEvalDate ? boundEval : undefined);
+
+    if (targetExistingEval && onUpdateEvaluation) {
+      const keepExistingStrength =
+        quickSessionMode === 'endurance_only' && (targetExistingEval.strengthRecords?.length || 0) > 0;
+      const keepExistingAerobic =
+        quickSessionMode === 'strength_only' && !isAerobicOmittedEval(targetExistingEval);
+
+      onUpdateEvaluation(targetExistingEval.id, {
         evaluationDate: quickEditEvalDate,
-        enduranceTest: enduranceTestRecord,
-        cooperTest: cooperTestRecord,
-        strengthRecords,
-        generalCoachNotes: quickCoachNotes.trim(),
-      });
-    } else if (boundEval && boundEval.evaluationDate === quickEditEvalDate && onUpdateEvaluation) {
-      onUpdateEvaluation(boundEval.id, {
-        evaluationDate: quickEditEvalDate,
-        enduranceTest: enduranceTestRecord,
-        cooperTest: cooperTestRecord,
-        strengthRecords,
+        enduranceTest: keepExistingAerobic ? targetExistingEval.enduranceTest : enduranceTestRecord,
+        cooperTest: keepExistingAerobic ? targetExistingEval.cooperTest : cooperTestRecord,
+        strengthRecords: keepExistingStrength ? targetExistingEval.strengthRecords : strengthRecords,
         generalCoachNotes: quickCoachNotes.trim(),
       });
     } else if (onAddEvaluation) {

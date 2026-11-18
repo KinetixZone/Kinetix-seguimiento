@@ -248,9 +248,14 @@ export default function App() {
         }
       });
     }
-    if (cloud.bodyComp && cloud.bodyComp.length > 0) setBodyCompRecords(cloud.bodyComp);
-    if (cloud.evaluations && cloud.evaluations.length > 0) setEvaluations(cloud.evaluations);
-    if (cloud.notifications && cloud.notifications.length > 0) setNotifications(cloud.notifications);
+    if (cloud.bodyComp !== null) setBodyCompRecords(cloud.bodyComp);
+    if (cloud.evaluations !== null) setEvaluations(cloud.evaluations);
+    if (cloud.notifications !== null) {
+      const sortedNotifs = [...cloud.notifications].sort((a, b) =>
+        (b.timestamp || '').localeCompare(a.timestamp || '')
+      );
+      setNotifications(sortedNotifs);
+    }
   };
 
   const handleRefreshFromCloud = async (): Promise<{ ok: boolean; message: string }> => {
@@ -752,9 +757,14 @@ export default function App() {
     setUsers(prev => prev.filter(u => u.id !== userId));
     setBodyCompRecords(prev => prev.filter(b => b.userId !== userId));
     setEvaluations(prev => prev.filter(e => e.userId !== userId));
+    const removedNotifs = notifsRef.current.filter(n => n.targetUserId === userId);
+    if (removedNotifs.length > 0) {
+      setNotifications(prev => prev.filter(n => n.targetUserId !== userId));
+      removedNotifs.forEach(n => deleteNotificationFromSupabase(n.id));
+    }
     deleteUserFromSupabase(userId);
     if (currentUserId === userId) {
-      setCurrentUserId('user-staff-01');
+      setCurrentUserId('user-staff-leslie');
     }
   };
 
@@ -1038,6 +1048,7 @@ export default function App() {
       return;
     }
     setUsers(prev => prev.filter(u => u.id !== staffId));
+    deleteUserFromSupabase(staffId);
   };
 
   const handleSimulateNotification = (
@@ -1048,7 +1059,7 @@ export default function App() {
   ) => {
     const isAthlete = currentUser?.role === 'athlete';
     const newNotif: PushNotificationSimulation = {
-      id: `notif-${Date.now()}`,
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title,
       body,
       timestamp: new Date().toISOString(),
@@ -1058,15 +1069,40 @@ export default function App() {
       targetAudience: targetAudience || (isAthlete ? 'athletes' : 'staff'),
     };
     setNotifications(prev => [newNotif, ...prev]);
+    syncNotificationToSupabase(newNotif);
     setIsNotificationsOpen(true);
   };
 
   const handleMarkAllNotificationsAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const visibleIds = new Set(visibleNotifications.map(n => n.id));
+    const toSync: PushNotificationSimulation[] = [];
+    setNotifications(prev =>
+      prev.map(n => {
+        if (visibleIds.has(n.id) && !n.read) {
+          const updated = { ...n, read: true };
+          toSync.push(updated);
+          return updated;
+        }
+        return n;
+      })
+    );
+    toSync.forEach(n => syncNotificationToSupabase(n));
   };
 
   const handleMarkNotificationAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    let updatedNotif: PushNotificationSimulation | null = null;
+    setNotifications(prev =>
+      prev.map(n => {
+        if (n.id === id) {
+          updatedNotif = { ...n, read: true };
+          return updatedNotif;
+        }
+        return n;
+      })
+    );
+    if (updatedNotif) {
+      syncNotificationToSupabase(updatedNotif);
+    }
   };
 
   const handleDismissNotification = (id: string) => {
@@ -1075,9 +1111,10 @@ export default function App() {
   };
 
   const handleClearReadNotifications = () => {
-    // Dismiss all read notifications for current user
+    // Dismiss all read notifications for current user and remove from Supabase
     const readIds = new Set(visibleNotifications.filter(n => n.read).map(n => n.id));
     setNotifications(prev => prev.filter(n => !readIds.has(n.id)));
+    readIds.forEach(id => deleteNotificationFromSupabase(id));
   };
 
   // Only show notifications relevant to the logged-in user

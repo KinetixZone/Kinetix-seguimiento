@@ -815,6 +815,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           gymLogoUrl={gymLogoUrl}
           onClose={() => setShowShareStoryModal(false)}
         />

@@ -518,6 +518,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           latestEval={latestEval}
           latestStrengthEval={latestStrengthEval}
           latestAerobicEval={latestAerobicEval}
+          evaluations={userEvals}
           onClose={() => setShowShareStoryModal(false)}
         />
       )}

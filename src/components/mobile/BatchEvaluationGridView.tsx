@@ -9,6 +9,7 @@ import {
   EnduranceTimeTestRecord
 } from '../../types';
 import { COOPER_LEVELS_CATALOG } from '../../utils/fitnessCalculations';
+import { isAerobicOmittedEval } from '../../utils/evaluationHelpers';
 import { UserAvatar } from '../common/UserAvatar';
 import { 
   X, 
@@ -604,8 +605,24 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
     setSavingAthleteId(athleteId);
     const payload = buildEvaluationPayload(row, athleteId);
 
+    const mergePartialPayload = (
+      existingId: string,
+      payload: Omit<PhysicalEvaluationRecord, 'id'>
+    ): Partial<PhysicalEvaluationRecord> => {
+      const existing = evaluations.find(e => e.id === existingId);
+      if (!existing) return payload;
+      const keepExistingStrength = sessionMode === 'endurance_only' && (existing.strengthRecords?.length || 0) > 0;
+      const keepExistingAerobic = sessionMode === 'strength_only' && !isAerobicOmittedEval(existing);
+      return {
+        ...payload,
+        cooperTest: keepExistingAerobic ? existing.cooperTest : payload.cooperTest,
+        enduranceTest: keepExistingAerobic ? existing.enduranceTest : payload.enduranceTest,
+        strengthRecords: keepExistingStrength ? existing.strengthRecords : payload.strengthRecords,
+      };
+    };
+
     if (row.existingEvalId && onUpdateEvaluation) {
-      onUpdateEvaluation(row.existingEvalId, payload);
+      onUpdateEvaluation(row.existingEvalId, mergePartialPayload(row.existingEvalId, payload));
     } else if (onAddEvaluation) {
       onAddEvaluation(payload);
     }
@@ -647,7 +664,15 @@ export const BatchEvaluationGridView: React.FC<BatchEvaluationGridViewProps> = (
       const payload = buildEvaluationPayload(row, ath.id);
 
       if (row.existingEvalId && onUpdateEvaluation) {
-        onUpdateEvaluation(row.existingEvalId, payload);
+        const existing = evaluations.find(e => e.id === row.existingEvalId);
+        const keepExistingStrength = existing && sessionMode === 'endurance_only' && (existing.strengthRecords?.length || 0) > 0;
+        const keepExistingAerobic = existing && sessionMode === 'strength_only' && !isAerobicOmittedEval(existing);
+        onUpdateEvaluation(row.existingEvalId, existing ? {
+          ...payload,
+          cooperTest: keepExistingAerobic ? existing.cooperTest : payload.cooperTest,
+          enduranceTest: keepExistingAerobic ? existing.enduranceTest : payload.enduranceTest,
+          strengthRecords: keepExistingStrength ? existing.strengthRecords : payload.strengthRecords,
+        } : payload);
       } else if (onAddEvaluation) {
         onAddEvaluation(payload);
       }

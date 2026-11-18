@@ -770,6 +770,17 @@ export async function loadAllFromSupabase(): Promise<{
       client.from('notifications').select('*'),
     ]);
 
+    if (usersRes.error || bodyRes.error || evalsRes.error || notifsRes.error) {
+      console.warn('Supabase partial load error:', {
+        users: usersRes.error?.message,
+        body: bodyRes.error?.message,
+        evals: evalsRes.error?.message,
+        notifs: notifsRes.error?.message,
+      });
+    }
+
+    const hasCloudUsers = Boolean(usersRes.data && usersRes.data.length > 0);
+
     let loadedUsers: UserProfile[] | null = null;
     if (usersRes.data && usersRes.data.length > 0) {
       loadedUsers = usersRes.data.map((row: any) => ({
@@ -793,7 +804,7 @@ export async function loadAllFromSupabase(): Promise<{
     }
 
     let loadedBody: BodyCompositionRecord[] | null = null;
-    if (bodyRes.data && bodyRes.data.length > 0) {
+    if (!bodyRes.error && Array.isArray(bodyRes.data) && (bodyRes.data.length > 0 || hasCloudUsers)) {
       loadedBody = bodyRes.data.map((row: any) => ({
         id: row.id,
         userId: row.user_id,
@@ -812,7 +823,7 @@ export async function loadAllFromSupabase(): Promise<{
     }
 
     let loadedEvals: PhysicalEvaluationRecord[] | null = null;
-    if (evalsRes.data && evalsRes.data.length > 0) {
+    if (!evalsRes.error && Array.isArray(evalsRes.data) && (evalsRes.data.length > 0 || hasCloudUsers)) {
       loadedEvals = evalsRes.data.map((row: any) => ({
         id: row.id,
         userId: row.user_id,
@@ -827,13 +838,13 @@ export async function loadAllFromSupabase(): Promise<{
     }
 
     let loadedNotifs: PushNotificationSimulation[] | null = null;
-    if (notifsRes.data && notifsRes.data.length > 0) {
+    if (!notifsRes.error && Array.isArray(notifsRes.data) && (notifsRes.data.length > 0 || hasCloudUsers)) {
       loadedNotifs = notifsRes.data.map((row: any) => ({
         id: row.id,
         title: row.title,
         body: row.body,
         timestamp: row.timestamp,
-        read: row.read,
+        read: Boolean(row.read),
         type: row.type || 'payment_reminder',
         targetUserId: row.target_user_id,
         targetAudience: row.target_audience,

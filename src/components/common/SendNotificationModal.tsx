@@ -248,7 +248,7 @@ export const SendNotificationModal: React.FC<SendNotificationModalProps> = ({
                             <span className="text-[10px] text-neutral-500 font-mono truncate">{ath.email}</span>
                           </div>
                           <span className="text-[10px] text-neutral-400 font-mono shrink-0">
-                            Corte: Día {ath.membership.billingDayOfMonth || 15}
+                            {(ath.membership.billingDayOfMonth ?? 15) === 0 ? 'Sin Corte' : `Corte: Día ${ath.membership.billingDayOfMonth ?? 15}`}
                           </span>
                         </button>
                       );
@@ -266,7 +266,7 @@ export const SendNotificationModal: React.FC<SendNotificationModalProps> = ({
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   {OFFICIAL_COLORS.map(c => {
-                    const count = athletes.filter(a => (a.membership.billingDayOfMonth || 15) === c.day).length;
+                    const count = athletes.filter(a => (a.membership.billingDayOfMonth ?? 15) === c.day).length;
                     const isSelected = selectedColorDay === c.day;
                     return (
                       <button

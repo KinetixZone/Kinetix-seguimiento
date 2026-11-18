@@ -1,6 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { UserProfile, BodyCompositionRecord, PhysicalEvaluationRecord } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
+import {
+  isAerobicOmittedEval,
+  isCooperCompletedEval,
+  resolveLatestStrengthPillars,
+  getEffectiveStrength1RMKg
+} from '../../utils/evaluationHelpers';
 import { 
   X, 
   Share2, 
@@ -13,7 +19,6 @@ import {
   Instagram, 
   MessageCircle,
   Copy,
-  ExternalLink,
   Send,
   CheckCircle2
 } from 'lucide-react';
@@ -24,6 +29,7 @@ interface ShareableStoryModalProps {
   latestEval?: PhysicalEvaluationRecord | null;
   latestStrengthEval?: PhysicalEvaluationRecord | null;
   latestAerobicEval?: PhysicalEvaluationRecord | null;
+  evaluations?: PhysicalEvaluationRecord[];
   gymLogoUrl?: string | null;
   onClose: () => void;
 }
@@ -34,6 +40,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   latestEval,
   latestStrengthEval,
   latestAerobicEval,
+  evaluations,
   gymLogoUrl,
   onClose,
 }) => {
@@ -44,17 +51,58 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
   const [instagramStepActive, setInstagramStepActive] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const strengthSourceEval = (latestEval?.strengthRecords?.length ? latestEval : null) ||
-    (latestStrengthEval?.strengthRecords?.length ? latestStrengthEval : null);
+  const sortedEvalsAsc = useMemo(() => {
+    const raw = evaluations && evaluations.length > 0
+      ? evaluations
+      : [latestStrengthEval, latestAerobicEval, latestEval].filter((e): e is PhysicalEvaluationRecord => Boolean(e));
+    const unique = Array.from(new Map(raw.map(e => [e.id, e])).values());
+    return unique.sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+  }, [evaluations, latestStrengthEval, latestAerobicEval, latestEval]);
 
-  const isCooperOmitted = (ev?: PhysicalEvaluationRecord | null) =>
-    Boolean(ev?.cooperTest?.sessionOmitted || ev?.cooperTest?.statusReason === 'Jornada Solo Fuerza 1RM');
+  const completedStrengthPillars = useMemo(() => {
+    return resolveLatestStrengthPillars(sortedEvalsAsc).filter(
+      p => p.record.status !== 'na' && p.record.status !== 'np' && getEffectiveStrength1RMKg(p.record) > 0
+    );
+  }, [sortedEvalsAsc]);
 
-  const cooperSourceEval = (latestEval && !isCooperOmitted(latestEval) ? latestEval : null) ||
-    (latestAerobicEval && !isCooperOmitted(latestAerobicEval) ? latestAerobicEval : null);
+  const activeStrengthPillar =
+    completedStrengthPillars.find(p => p.record.exerciseId === selectedExercise) ||
+    completedStrengthPillars[0] ||
+    null;
 
-  const strengthRecord = strengthSourceEval?.strengthRecords.find(r => r.exerciseId === selectedExercise) || 
-    strengthSourceEval?.strengthRecords[0] || null;
+  const strengthRecord = activeStrengthPillar?.record || null;
+  const strengthCoachName = useMemo(() => {
+    if (!activeStrengthPillar) return latestStrengthEval?.coachName || latestEval?.coachName || 'Staff Kinetix';
+    const srcEval = [...sortedEvalsAsc].reverse().find(
+      e => e.evaluationDate === activeStrengthPillar.evaluationDate &&
+        e.strengthRecords?.some(r => r.exerciseId === activeStrengthPillar.record.exerciseId)
+    );
+    return srcEval?.coachName || 'Staff Kinetix';
+  }, [activeStrengthPillar, sortedEvalsAsc, latestStrengthEval, latestEval]);
+
+  const cooperSourceEval = useMemo(() => {
+    const found = [...sortedEvalsAsc].reverse().find(e => !isAerobicOmittedEval(e) && isCooperCompletedEval(e));
+    if (found) return found;
+    if (latestEval && !isAerobicOmittedEval(latestEval) && isCooperCompletedEval(latestEval)) return latestEval;
+    if (latestAerobicEval && !isAerobicOmittedEval(latestAerobicEval) && isCooperCompletedEval(latestAerobicEval)) return latestAerobicEval;
+    return null;
+  }, [sortedEvalsAsc, latestEval, latestAerobicEval]);
+
+  const cooperDisplay = useMemo(() => {
+    const c = cooperSourceEval?.cooperTest;
+    if (!c) return null;
+    const isLaps = c.variant === 'laps' || (c.lapsCount || 0) > 0;
+    const isNavette = c.variant === 'navette';
+    const headline = isLaps
+      ? `${c.lapsCount || 0} VUELTAS`
+      : isNavette
+      ? `NAVETTE NIVEL ${c.navetteLevelNumber || c.levelNumber}`
+      : `NIVEL ${c.levelNumber}`;
+    const subline = isLaps
+      ? `Cooper 2 (${c.lapLocation === 'inside' ? 'Adentro' : 'Afuera'}) · ~${c.distanceMeters || 0} m`
+      : `${c.level}${(c.distanceMeters || 0) > 0 ? ` · ${c.distanceMeters} m` : ''}`;
+    return { headline, subline, testTitle: isLaps ? 'COOPER 2 · POR VUELTAS' : isNavette ? 'COURSE NAVETTE' : 'TEST DE COOPER 12 MIN', notes: c.notes };
+  }, [cooperSourceEval]);
 
   // Preformatted text for sharing
   const generateShareText = () => {
@@ -62,19 +110,20 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
       if (!strengthRecord) {
         return `🔥 ¡Entrenando en Kinetix Functional Zone! 🏋️ Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional #Fuerza`;
       }
+      const oneRm = getEffectiveStrength1RMKg(strengthRecord);
       return `🔥 ¡Nuevo Récord Personal (PR) en Kinetix Functional Zone!
 🏋️ Ejercicio: ${strengthRecord.exerciseName}
 💪 Carga Levantada: ${strengthRecord.weightKg} ${strengthRecord.weightUnit} (${strengthRecord.reps} ${strengthRecord.reps === 1 ? 'rep' : 'reps'})
-⚡ 1RM Estimado Oficial: ${strengthRecord.estimated1RMKg} kg
+⚡ 1RM Estimado Oficial: ${oneRm} kg
 👤 Atleta: ${athlete.name}
-📍 @kinetix.zone · Validación Coach Jorge #KinetixFunctional #PR #Power`;
+📍 @kinetix.zone · Validación ${strengthCoachName} #KinetixFunctional #PR #Power`;
     } else if (storyType === 'cooper') {
-      if (!cooperSourceEval?.cooperTest) {
+      if (!cooperDisplay) {
         return `🏃‍♂️ ¡Entrenando en Kinetix Functional Zone! 👤 Atleta: ${athlete.name} 📍 @kinetix.zone #KinetixFunctional`;
       }
-      return `🏃‍♂️ ¡Test de Cooper 12 Min superado en Kinetix Functional Zone!
-⚡ Nivel Alcanzado: Nivel ${cooperSourceEval.cooperTest.levelNumber} (${cooperSourceEval.cooperTest.level})
-🎯 Distancia Recorrida: ${cooperSourceEval.cooperTest.distanceMeters} metros
+      return `🏃‍♂️ ¡Prueba Aeróbica superada en Kinetix Functional Zone!
+⚡ Resultado: ${cooperDisplay.headline}
+🎯 Detalle: ${cooperDisplay.subline}
 👤 Atleta: ${athlete.name}
 📍 @kinetix.zone #CooperTest #KinetixFunctional #Resistencia`;
     } else {
@@ -130,8 +179,8 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     return currentY + lineHeight;
   };
 
-  // Download Card as high-res PNG image (1080x1920 Instagram Story format)
-  const handleDownloadImage = (): string => {
+  // Build high-res PNG data URL (1080x1920 Instagram Story format)
+  const buildStoryCanvasDataUrl = (): string => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
@@ -188,7 +237,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
       ctx.fillText('🔥 NUEVO RÉCORD PERSONAL (PR)', 100, 500);
 
       if (strengthRecord) {
-        // Multi-line wrapped exercise name
+        const oneRm = getEffectiveStrength1RMKg(strengthRecord);
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 68px sans-serif';
         drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 610, 880, 80);
@@ -199,11 +248,11 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
 
         ctx.fillStyle = '#ffffff';
         ctx.font = '46px monospace';
-        ctx.fillText(`1RM Estimado: ${strengthRecord.estimated1RMKg} kg · ${strengthRecord.reps} reps`, 100, 930);
+        ctx.fillText(`1RM Estimado: ${oneRm} kg · ${strengthRecord.reps} reps`, 100, 930);
 
         ctx.fillStyle = '#10b981';
         ctx.font = 'bold 38px monospace';
-        ctx.fillText('✓ Fuerza Máxima Validada por Coach Jorge', 100, 1050);
+        ctx.fillText(`✓ Fuerza Máxima Validada por ${strengthCoachName}`, 100, 1050);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
@@ -215,27 +264,27 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     } else if (storyType === 'cooper') {
       ctx.fillStyle = '#ef4444';
       ctx.font = 'bold 36px sans-serif';
-      ctx.fillText('❤️ TEST DE COOPER 12 MINUTOS', 100, 500);
+      ctx.fillText(`❤️ ${cooperDisplay?.testTitle || 'TEST DE COOPER 12 MINUTOS'}`, 100, 500);
 
-      if (cooperSourceEval?.cooperTest) {
+      if (cooperDisplay) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 68px sans-serif';
         drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
 
         ctx.fillStyle = '#f59e0b';
-        ctx.font = 'bold 140px monospace';
-        ctx.fillText(`NIVEL ${cooperSourceEval.cooperTest.levelNumber}`, 100, 820);
+        ctx.font = 'bold 115px monospace';
+        ctx.fillText(cooperDisplay.headline, 100, 820);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = '46px monospace';
-        ctx.fillText(`${cooperSourceEval.cooperTest.level} · ${cooperSourceEval.cooperTest.distanceMeters} metros`, 100, 930);
+        ctx.font = '42px monospace';
+        drawWrappedText(ctx, cooperDisplay.subline, 100, 930, 880, 58);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
-        drawWrappedText(ctx, 'TEST DE COOPER PENDIENTE', 100, 610, 880, 80);
+        drawWrappedText(ctx, 'TEST AERÓBICO PENDIENTE', 100, 610, 880, 80);
         ctx.fillStyle = '#9ca3af';
         ctx.font = '40px monospace';
-        drawWrappedText(ctx, 'Inicia tu primer test de 12 minutos para medir tu nivel aeróbico.', 100, 750, 880, 60);
+        drawWrappedText(ctx, 'Inicia tu primer test aeróbico para medir tu nivel y distancia.', 100, 750, 880, 60);
       }
     } else {
       ctx.fillStyle = '#3b82f6';
@@ -280,8 +329,13 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     ctx.font = '36px monospace';
     ctx.fillText(`${athlete.membership.planName} · @kinetix.zone`, 100, 1785);
 
-    // Download file
     const dataUrl = canvas.toDataURL('image/png');
+    return dataUrl;
+  };
+
+  const handleDownloadImage = (): string => {
+    const dataUrl = buildStoryCanvasDataUrl();
+    if (!dataUrl) return '';
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = `Kinetix_Historia_${athlete.name.replace(/\s+/g, '_')}_${storyType}.png`;
@@ -313,7 +367,6 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     handleDownloadImage();
     handleCopyText();
     setInstagramStepActive(true);
-    // Open Instagram in new window/tab
     setTimeout(() => {
       window.open('https://www.instagram.com', '_blank', 'noopener,noreferrer');
     }, 400);
@@ -326,25 +379,31 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // 5. Facebook Direct Share
-  const handleOpenFacebook = () => {
-    const text = generateShareText();
-    const url = `https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}&u=${encodeURIComponent(window.location.origin)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  // 6. Native Share Sheet (Works when supported on mobile)
+  // 5. Native Share Sheet (Attaches PNG file when device supports Web Share Files)
   const handleNativeShare = async () => {
     const text = generateShareText();
     if (navigator.share) {
       try {
+        const dataUrl = buildStoryCanvasDataUrl();
+        if (dataUrl && typeof navigator.canShare === 'function') {
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `Kinetix_${athlete.name.replace(/\s+/g, '_')}_${storyType}.png`, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `Progreso Oficial Kinetix · ${athlete.name}`,
+              text,
+              files: [file],
+            });
+            return;
+          }
+        }
         await navigator.share({
           title: `Progreso Oficial Kinetix · ${athlete.name}`,
-          text: text,
+          text,
           url: window.location.href,
         });
-      } catch (err) {
-        // Fallback to copy
+      } catch {
         handleCopyText();
       }
     } else {
@@ -416,28 +475,31 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
           </button>
         </div>
 
-        {/* Exercise picker if strength (Clean wrap so Sentadillas and all exercises are 100% visible) */}
-        {storyType === 'strength' && strengthSourceEval?.strengthRecords && strengthSourceEval.strengthRecords.length > 0 && (
+        {/* Exercise picker across all 5 pillars */}
+        {storyType === 'strength' && completedStrengthPillars.length > 0 && (
           <div className="space-y-1.5 bg-neutral-950 p-2.5 rounded-2xl border border-neutral-800/80">
             <span className="text-[11px] text-neutral-300 block font-semibold">
               Selecciona el ejercicio evaluado:
             </span>
             <div className="flex flex-wrap gap-1.5 text-xs">
-              {strengthSourceEval.strengthRecords.map(rec => (
-                <button
-                  key={rec.exerciseId}
-                  type="button"
-                  onClick={() => setSelectedExercise(rec.exerciseId)}
-                  className={`px-3 py-1.5 rounded-xl border text-left transition-all ${
-                    selectedExercise === rec.exerciseId
-                      ? 'bg-blue-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:text-white'
-                  }`}
-                >
-                  <span className="block leading-tight">{rec.exerciseName}</span>
-                  <span className="text-[10px] text-blue-400 font-mono font-bold block">{rec.weightKg} {rec.weightUnit}</span>
-                </button>
-              ))}
+              {completedStrengthPillars.map(({ record: rec }) => {
+                const isSelected = activeStrengthPillar?.record.exerciseId === rec.exerciseId;
+                return (
+                  <button
+                    key={rec.exerciseId}
+                    type="button"
+                    onClick={() => setSelectedExercise(rec.exerciseId)}
+                    className={`px-3 py-1.5 rounded-xl border text-left transition-all ${
+                      isSelected
+                        ? 'bg-blue-600/20 border-blue-500 text-white font-bold ring-1 ring-blue-500'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:text-white'
+                    }`}
+                  >
+                    <span className="block leading-tight">{rec.exerciseName}</span>
+                    <span className="text-[10px] text-blue-400 font-mono font-bold block">{getEffectiveStrength1RMKg(rec)} kg 1RM</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -487,7 +549,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                     <span>NUEVO RÉCORD PERSONAL (PR)</span>
                   </div>
 
-                  {!strengthSourceEval || !strengthSourceEval.strengthRecords || strengthSourceEval.strengthRecords.length === 0 || !strengthRecord ? (
+                  {!strengthRecord ? (
                     <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
                       <p className="text-xs text-neutral-300 font-medium">Aún no hay marcas de fuerza registradas</p>
                       <p className="text-[10px] text-neutral-500">Inicia tu primera evaluación técnica con el Coach para generar tu tarjeta de 1RM.</p>
@@ -504,13 +566,13 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                         </div>
 
                         <div className="text-xs text-neutral-300 font-mono">
-                          1RM Estimado: <strong className="text-white font-bold">{strengthRecord.estimated1RMKg} kg</strong> ({strengthRecord.reps} {strengthRecord.reps === 1 ? 'rep' : 'reps'})
+                          1RM Estimado: <strong className="text-white font-bold">{getEffectiveStrength1RMKg(strengthRecord)} kg</strong> ({strengthRecord.reps} {strengthRecord.reps === 1 ? 'rep' : 'reps'})
                         </div>
                       </div>
 
                       <div className="pt-1">
                         <span className="text-[11px] text-emerald-400 font-mono bg-emerald-950/70 border border-emerald-800/80 px-3 py-1 rounded-full inline-block">
-                          ✓ Marca Verificada por Coach Jorge
+                          ✓ Marca Verificada por {strengthCoachName}
                         </span>
                       </div>
                     </>
@@ -522,32 +584,29 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                 <>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 border border-red-500/40 text-[10px] font-bold text-red-400 uppercase tracking-widest">
                     <Heart className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    <span>TEST DE COOPER 12 MIN</span>
+                    <span>{cooperDisplay?.testTitle || 'TEST DE COOPER 12 MIN'}</span>
                   </div>
 
-                  {!cooperSourceEval?.cooperTest ? (
+                  {!cooperDisplay ? (
                     <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-1">
-                      <p className="text-xs text-neutral-300 font-medium">Aún no hay Test de Cooper registrado</p>
-                      <p className="text-[10px] text-neutral-500">Realiza tu test de 12 minutos con el Coach para desbloquear tu tarjeta de nivel aeróbico.</p>
+                      <p className="text-xs text-neutral-300 font-medium">Aún no hay prueba aeróbica completada</p>
+                      <p className="text-[10px] text-neutral-500">Realiza tu test Cooper, Vueltas o Navette con el Coach para desbloquear tu tarjeta.</p>
                     </div>
                   ) : (
                     <>
                       <div className="space-y-1.5">
                         <div className="text-xs text-neutral-400 font-mono uppercase">Potencia Aeróbica Alcanzada</div>
                         <div className="text-4xl sm:text-5xl font-black font-brand tracking-tight text-white">
-                          NIVEL {cooperSourceEval.cooperTest.levelNumber}
+                          {cooperDisplay.headline}
                         </div>
-                        <div className="text-base font-bold text-red-400 font-brand">
-                          {cooperSourceEval.cooperTest.level}
-                        </div>
-                        <div className="text-xs text-neutral-300 font-mono">
-                          Distancia Recorrida: <strong className="text-white">{cooperSourceEval.cooperTest.distanceMeters} m</strong>
+                        <div className="text-sm font-bold text-red-400 font-brand">
+                          {cooperDisplay.subline}
                         </div>
                       </div>
 
                       <div className="pt-1">
                         <span className="text-[11px] text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-3 py-1 rounded-xl block max-w-[260px] mx-auto text-center leading-tight">
-                          "{cooperSourceEval.cooperTest.notes || 'Excelente resistencia cardiorrespiratoria y ritmo constante.'}"
+                          "{cooperDisplay.notes || 'Excelente resistencia cardiorrespiratoria y ritmo constante.'}"
                         </span>
                       </div>
                     </>
@@ -575,7 +634,9 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                           <span className="text-3xl font-black font-mono text-blue-400 block my-0.5">
                             {latestBodyComp.muscleMassPercent}%
                           </span>
-                          <span className="text-[10px] text-emerald-400 font-mono font-semibold">+Ganancia</span>
+                          <span className="text-[10px] text-blue-300 font-mono font-semibold">
+                            {latestBodyComp.muscleMassKg ? `${latestBodyComp.muscleMassKg} kg` : 'Renpho Pro'}
+                          </span>
                         </div>
 
                         <div className="p-3 rounded-2xl bg-neutral-900/90 border border-neutral-800">
@@ -583,7 +644,9 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
                           <span className="text-3xl font-black font-mono text-red-400 block my-0.5">
                             {latestBodyComp.bodyFatPercent}%
                           </span>
-                          <span className="text-[10px] text-emerald-400 font-mono font-semibold">-Reducción</span>
+                          <span className="text-[10px] text-neutral-400 font-mono font-semibold">
+                            Visceral Nv.{latestBodyComp.visceralFatLevel}
+                          </span>
                         </div>
                       </div>
 
