@@ -108,12 +108,14 @@ export default function App() {
     return 'user-staff-leslie';
   });
 
-  // Custom Gym Logo (Persisted in localStorage)
+  const DEFAULT_KINETIX_LOGO = '/assets/aistudio/logo.png_02f8a860.jpg';
+
+  // Custom Gym Logo (Persisted in localStorage, defaults to official Kinetix Wolf Emblem)
   const [gymLogoUrl, setGymLogoUrl] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('kinetix_gym_logo');
+      return localStorage.getItem('kinetix_gym_logo') || DEFAULT_KINETIX_LOGO;
     } catch {
-      return null;
+      return DEFAULT_KINETIX_LOGO;
     }
   });
   
@@ -487,6 +489,7 @@ export default function App() {
 
   // Update user avatar (Atletas & Coach)
   const handleUpdateAvatar = (userId: string, newAvatarUrl: string) => {
+    if (currentUser?.role !== 'staff' && userId !== currentUser?.id) return;
     setUsers(prev => {
       const next = prev.map(u => u.id === userId ? { ...u, avatarUrl: newAvatarUrl } : u);
       const updated = next.find(u => u.id === userId);
@@ -502,7 +505,8 @@ export default function App() {
 
   // Update Gym Logo (Coach/Staff)
   const handleUpdateGymLogo = (newLogoUrl: string | null) => {
-    setGymLogoUrl(newLogoUrl);
+    if (currentUser?.role !== 'staff') return;
+    setGymLogoUrl(newLogoUrl || DEFAULT_KINETIX_LOGO);
     try {
       if (newLogoUrl) {
         localStorage.setItem('kinetix_gym_logo', newLogoUrl);
@@ -536,6 +540,7 @@ export default function App() {
 
   // Add or Update Body Comp Record (Updates in-place if a record already exists on the same date)
   const handleAddBodyCompRecord = (record: Omit<BodyCompositionRecord, 'id'>) => {
+    if (currentUser?.role !== 'staff' && record.userId !== currentUser?.id) return;
     const existing = bodyCompRecords.find(b => b.userId === record.userId && b.recordedAt === record.recordedAt);
     const savedRecord: BodyCompositionRecord = existing
       ? { ...existing, ...record }
@@ -570,12 +575,16 @@ export default function App() {
 
   // Delete Body Comp Record
   const handleDeleteBodyCompRecord = (recordId: string) => {
+    const target = bodyCompRef.current.find(b => b.id === recordId);
+    if (currentUser?.role !== 'staff' && target?.userId !== currentUser?.id) return;
     setBodyCompRecords(prev => prev.filter(b => b.id !== recordId));
     deleteBodyCompFromSupabase(recordId);
   };
 
   // Update Body Comp Record
   const handleUpdateBodyCompRecord = (recordId: string, updates: Partial<BodyCompositionRecord>) => {
+    const target = bodyCompRef.current.find(b => b.id === recordId);
+    if (currentUser?.role !== 'staff' && target?.userId !== currentUser?.id) return;
     setBodyCompRecords(prev => {
       const next = prev.map(b => b.id === recordId ? { ...b, ...updates } : b);
       const updated = next.find(b => b.id === recordId);
@@ -588,6 +597,7 @@ export default function App() {
 
   // Add Physical Evaluation (Smart-merges stations on the same date so partial sessions never overwrite each other)
   const handleAddEvaluation = (evalRec: Omit<PhysicalEvaluationRecord, 'id'>) => {
+    if (currentUser?.role !== 'staff') return;
     const existing = evalsRef.current.find(e => e.userId === evalRec.userId && e.evaluationDate === evalRec.evaluationDate);
     const uidSuffix = Math.random().toString(36).slice(2, 7);
     const userSuffix = evalRec.userId.slice(-4);
@@ -677,6 +687,7 @@ export default function App() {
 
   // Delete Physical Evaluation
   const handleDeleteEvaluation = (evalId: string) => {
+    if (currentUser?.role !== 'staff') return;
     evalsRef.current = evalsRef.current.filter(e => e.id !== evalId);
     setEvaluations(prev => prev.filter(e => e.id !== evalId));
     deleteEvaluationFromSupabase(evalId);
@@ -684,6 +695,7 @@ export default function App() {
 
   // Update Physical Evaluation
   const handleUpdateEvaluation = (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => {
+    if (currentUser?.role !== 'staff') return;
     evalsRef.current = evalsRef.current.map(e => e.id === evalId ? { ...e, ...updates } : e);
     setEvaluations(prev => {
       const next = prev.map(e => e.id === evalId ? { ...e, ...updates } : e);
@@ -697,6 +709,7 @@ export default function App() {
 
   // Update Membership Status
   const handleUpdateMembershipStatus = (status: MembershipStatus, daysUntilExpiry: number) => {
+    if (currentUser?.role !== 'staff') return;
     setUsers(prev => {
       const next = prev.map(u => {
         if (u.id === currentUserId) {
@@ -726,6 +739,7 @@ export default function App() {
     newPlanName?: KinetixPlanName,
     billingDayOfMonth?: number
   ) => {
+    if (currentUser?.role !== 'staff') return;
     setUsers(prev => {
       const next = prev.map(u => {
         if (u.id === userId) {
@@ -769,6 +783,7 @@ export default function App() {
 
   // Delete Athlete
   const handleDeleteAthlete = (userId: string) => {
+    if (currentUser?.role !== 'staff') return;
     setUsers(prev => prev.filter(u => u.id !== userId));
     setBodyCompRecords(prev => prev.filter(b => b.userId !== userId));
     setEvaluations(prev => prev.filter(e => e.userId !== userId));
@@ -806,8 +821,13 @@ export default function App() {
 
   // Update Athlete or Staff Profile and sync to Supabase
   const handleUpdateAthleteProfile = (userId: string, updates: Partial<UserProfile>) => {
+    const isStaffUser = currentUser?.role === 'staff';
+    if (!isStaffUser && userId !== currentUser?.id) return;
+    const safeUpdates: Partial<UserProfile> = isStaffUser
+      ? updates
+      : (({ role: _r, membership: _m, ...rest }) => rest)(updates);
     setUsers(prev => {
-      const updated = prev.map(u => u.id === userId ? { ...u, ...updates } : u);
+      const updated = prev.map(u => u.id === userId ? { ...u, ...safeUpdates } : u);
       const userObj = updated.find(u => u.id === userId);
       if (userObj) {
         syncUserToSupabase(userObj);
@@ -1058,6 +1078,7 @@ export default function App() {
   };
 
   const handleDeleteStaffMember = (staffId: string) => {
+    if (currentUser?.role !== 'staff') return;
     if (staffId === 'user-staff-leslie' || staffId === currentUser.id) {
       alert('Por seguridad no puedes eliminar tu propia cuenta de dueña principal.');
       return;
@@ -1138,6 +1159,9 @@ export default function App() {
   const handleArchiveOldYearRecords = async (
     targetYear: string
   ): Promise<{ deletedEvals: number; deletedBody: number; deletedNotifs: number }> => {
+    if (currentUser?.role !== 'staff') {
+      return { deletedEvals: 0, deletedBody: 0, deletedNotifs: 0 };
+    }
     const protectedBodyIds = new Set<string>();
     const protectedEvalIds = new Set<string>();
 

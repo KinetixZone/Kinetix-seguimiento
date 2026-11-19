@@ -198,28 +198,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         {/* Brand Header */}
         <div className="text-center space-y-2">
           {/* Gym Logo Display */}
-          <div className="inline-flex items-center justify-center p-2 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-xl mb-1">
-            {gymLogoUrl ? (
-              <img
-                src={gymLogoUrl}
-                alt="Logo Kinetix"
-                className="w-14 h-14 object-contain rounded-2xl"
-              />
-            ) : (
-              <div className="relative w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-xl tracking-tighter shadow-lg shadow-blue-500/30 overflow-hidden">
-                <span className="relative z-10 font-brand">KZ</span>
-                <div className="absolute -right-3 -bottom-3 w-8 h-8 bg-red-600 rounded-full" />
-              </div>
-            )}
+          <div className="relative inline-flex items-center justify-center mb-2">
+            <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-tr from-cyan-500/25 via-blue-600/15 to-red-600/30 blur-xl pointer-events-none" />
+            <div className="relative p-1.5 rounded-[1.75rem] bg-[#050507] border border-cyan-500/30 shadow-[0_0_32px_rgba(6,182,212,0.16)] ring-1 ring-red-500/20">
+              {gymLogoUrl ? (
+                <img
+                  src={gymLogoUrl}
+                  alt="Logo Kinetix Functional Zone"
+                  className="w-28 h-28 object-cover rounded-[1.35rem] bg-[#050507]"
+                />
+              ) : (
+                <div className="relative w-24 h-24 rounded-[1.35rem] bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white font-extrabold text-3xl tracking-tighter shadow-lg shadow-blue-500/30 overflow-hidden">
+                  <span className="relative z-10 font-brand">KZ</span>
+                  <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-red-600 rounded-full opacity-95" />
+                </div>
+              )}
+            </div>
           </div>
 
-          <h1 className="text-2xl font-bold tracking-tight text-white font-brand">
-            KINETIX <span className="font-light text-blue-500">Functional</span> <span className="font-bold text-red-500">Zone</span>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-brand">
+            KINETIX <span className="font-light text-cyan-400">Functional</span> <span className="font-bold text-red-500">Zone</span>
           </h1>
           <p className="text-xs text-neutral-400">
             Portal Privado de Acceso · Atletas & Entrenadores
           </p>
-          <div className="flex justify-center pt-1">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <a
+              href="https://www.instagram.com/kinetix.zone/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900/90 hover:bg-neutral-800 border border-cyan-500/30 text-[11px] font-semibold text-cyan-300 transition-all"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              <span>@Kinetix.zone</span>
+            </a>
             <PWAInstallButton />
           </div>
         </div>
@@ -380,7 +392,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
         {/* Footer info & permanent privacy link */}
         <div className="text-center text-[11px] text-neutral-500 space-y-2">
-          <p>Kinetix Functional Zone · Plataforma Deportiva Oficial</p>
+          <p>
+            Kinetix Functional Zone · Etiquétanos en redes{' '}
+            <a
+              href="https://www.instagram.com/kinetix.zone/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-cyan-400 hover:text-cyan-300 font-semibold"
+            >
+              @Kinetix.zone
+            </a>
+          </p>
           {onOpenPrivacyPolicy && (
             <div>
               <button

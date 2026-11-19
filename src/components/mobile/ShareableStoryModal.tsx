@@ -356,7 +356,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     fitFontSize(ctx, athlete.name, 880, 48, 30, (s) => `bold ${s}px sans-serif`);
     ctx.fillText(athlete.name, 100, 1720);
 
-    const footerPlanText = `${athlete.membership.planName} · @kinetix.zone`;
+    const footerPlanText = `${athlete.membership.planName} · @Kinetix.zone`;
     ctx.fillStyle = '#9ca3af';
     fitFontSize(ctx, footerPlanText, 880, 34, 22, (s) => `${s}px monospace`);
     if (ctx.measureText(footerPlanText).width > 880) {
@@ -712,8 +712,8 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] font-bold text-red-500 font-brand block">@kinetix.zone</span>
-                <span className="text-[8px] text-neutral-500 font-mono">#KinetixZone</span>
+                <span className="text-[10px] font-bold text-cyan-400 font-brand block">@Kinetix.zone</span>
+                <span className="text-[8px] text-neutral-400 font-mono">#KinetixZone</span>
               </div>
             </div>
           </div>
@@ -727,7 +727,7 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
               <span>¡Tarjeta Descargada y Texto Copiado con Éxito!</span>
             </div>
             <p className="text-[11px] text-neutral-200 leading-tight">
-              1. Abre Instagram ➡️ 2. Selecciona crear Historia con la imagen descargada en tu galería ➡️ 3. Pega el texto copiado con tus marcas oficiales.
+              1. Abre Instagram ➡️ 2. Sube la imagen descargada a tu Historia y etiquétanos <strong className="text-pink-300">@Kinetix.zone</strong> ➡️ 3. Pega el texto copiado con tus marcas.
             </p>
           </div>
         )}
