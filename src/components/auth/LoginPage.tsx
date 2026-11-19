@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../../types';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 import { 
   ShieldCheck, 
   Dumbbell, 
@@ -218,6 +219,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <p className="text-xs text-neutral-400">
             Portal Privado de Acceso · Atletas & Entrenadores
           </p>
+          <div className="flex justify-center pt-1">
+            <PWAInstallButton />
+          </div>
         </div>
 
         {/* Login / Register Card */}

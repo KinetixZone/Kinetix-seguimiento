@@ -26,27 +26,206 @@ interface ExcelExportModalProps {
   bodyCompRecords: BodyCompositionRecord[];
   evaluations: PhysicalEvaluationRecord[];
   onClose: () => void;
+  restrictToAthlete?: UserProfile;
 }
 
 type CellVal = string | number | undefined | null;
+
+const escapeXmlShared = (val: CellVal): string => {
+  if (val === undefined || val === null) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
+const buildSpreadsheetXmlDoc = (sheets: { name: string; rows: CellVal[][] }[]): string => {
+  const worksheetsXml = sheets
+    .map(sheet => {
+      const safeName = escapeXmlShared(sheet.name.slice(0, 31));
+      const rowsXml = sheet.rows
+        .map((row, rowIdx) => {
+          const isHeader = rowIdx === 0;
+          const isTotal = rowIdx === sheet.rows.length - 1 && sheet.rows.length > 1;
+          const styleAttr = isHeader
+            ? ' ss:StyleID="sHeader"'
+            : isTotal
+            ? ' ss:StyleID="sTotal"'
+            : '';
+          const cellsXml = row
+            .map(cell => {
+              const isNum = typeof cell === 'number' && Number.isFinite(cell);
+              const type = isNum ? 'Number' : 'String';
+              return `<Cell${styleAttr}><Data ss:Type="${type}">${escapeXmlShared(cell)}</Data></Cell>`;
+            })
+            .join('');
+          return `<Row>${cellsXml}</Row>`;
+        })
+        .join('\n');
+      return `<Worksheet ss:Name="${safeName}"><Table>${rowsXml}</Table></Worksheet>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11"/>
+  </Style>
+  <Style ss:ID="sHeader">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#1E3A8A" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="sTotal">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#065F46"/>
+   <Interior ss:Color="#D1FAE5" ss:Pattern="Solid"/>
+  </Style>
+ </Styles>
+ ${worksheetsXml}
+</Workbook>`;
+};
+
+/**
+ * Generates and downloads a complete annual Excel XML backup for all athletes in the given year
+ * (used by Staff Annual Cleanup / Archiving flow).
+ */
+export function exportYearBackupExcelXml(
+  users: UserProfile[],
+  bodyCompRecords: BodyCompositionRecord[],
+  evaluations: PhysicalEvaluationRecord[],
+  targetYear: string
+): void {
+  const athletes = users.filter(u => u.role === 'athlete');
+  const athMap = new Map(athletes.map(a => [a.id, a]));
+
+  const yearBody = bodyCompRecords
+    .filter(b => (b.recordedAt || '').startsWith(targetYear))
+    .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+
+  const yearEvals = evaluations
+    .filter(e => (e.evaluationDate || '').startsWith(targetYear))
+    .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+
+  const summaryRows: CellVal[][] = [[
+    'ID Atleta', 'Atleta', 'Plan', 'Pesajes en ' + targetYear, 'Evaluaciones en ' + targetYear,
+    'Último Peso (kg)', 'Última Grasa (%)', 'Último Músculo (%)',
+    'Sentadilla 1RM', 'Peso Muerto 1RM', 'Hip Thrust 1RM', 'Press H. 1RM', 'Remo/Dom. 1RM'
+  ]];
+
+  athletes.forEach(ath => {
+    const athB = yearBody.filter(b => b.userId === ath.id);
+    const athE = yearEvals.filter(e => e.userId === ath.id);
+    if (athB.length === 0 && athE.length === 0) return;
+    const lastB = athB[athB.length - 1];
+    const pillars = resolveLatestStrengthPillars(athE);
+    const getP = (id: string) => {
+      const f = pillars.find(p => p.record.exerciseId === id);
+      if (!f) return 'N/A';
+      if (f.record.status === 'na') return 'NA';
+      if (f.record.status === 'np') return 'NP';
+      const kg = getEffectiveStrength1RMKg(f.record);
+      return kg > 0 ? kg : 'N/A';
+    };
+    summaryRows.push([
+      ath.id, ath.name, ath.membership.planName, athB.length, athE.length,
+      lastB ? lastB.weightKg : 'N/A', lastB ? lastB.bodyFatPercent : 'N/A', lastB ? lastB.muscleMassPercent : 'N/A',
+      getP('squats'), getP('deadlift'), getP('hip_thrust'), getP('horizontal_press'), getP('pullups_or_rows')
+    ]);
+  });
+
+  const bodyRows: CellVal[][] = [[
+    'ID Medición', 'ID Atleta', 'Nombre Atleta', 'Fecha', 'Peso (kg)', 'Músculo (%)', 'Grasa (%)', 'Visceral', 'IMC', 'Notas'
+  ]];
+  yearBody.forEach(c => {
+    bodyRows.push([
+      c.id, c.userId, athMap.get(c.userId)?.name || 'Atleta', c.recordedAt,
+      c.weightKg, c.muscleMassPercent, c.bodyFatPercent, c.visceralFatLevel, c.bmi, c.notes || ''
+    ]);
+  });
+
+  const evalRows: CellVal[][] = [[
+    'ID Evaluación', 'ID Atleta', 'Nombre Atleta', 'Fecha', 'Coach', 'Cooper/Navette', 'Reto Resistencia', 'Resultado',
+    'Sentadilla 1RM', 'Peso Muerto 1RM', 'Hip Thrust 1RM', 'Press H. 1RM', 'Remo/Dom. 1RM', 'Notas'
+  ]];
+  yearEvals.forEach(ev => {
+    const getLift = (id: string): CellVal => {
+      const r = ev.strengthRecords?.find(s => s.exerciseId === id);
+      if (!r) return 'N/A';
+      if (r.status === 'na') return 'NA';
+      if (r.status === 'np') return 'NP';
+      const kg = getEffectiveStrength1RMKg(r);
+      return kg > 0 ? kg : 'N/A';
+    };
+    const isOmitted = isAerobicOmittedEval(ev);
+    evalRows.push([
+      ev.id, ev.userId, athMap.get(ev.userId)?.name || 'Atleta', ev.evaluationDate, ev.coachName,
+      isOmitted ? 'Omitido' : (ev.cooperTest?.variant === 'navette' ? `Navette Nv.${ev.cooperTest.navetteLevelNumber || 1}` : `Nivel ${ev.cooperTest?.levelNumber || 1}`),
+      isOmitted ? 'Omitido' : (ev.enduranceTest?.name || 'N/A'),
+      isOmitted ? 'Omitido' : (ev.enduranceTest?.result || 'N/A'),
+      getLift('squats'), getLift('deadlift'), getLift('hip_thrust'), getLift('horizontal_press'), getLift('pullups_or_rows'),
+      ev.generalCoachNotes || ''
+    ]);
+  });
+
+  const xml = buildSpreadsheetXmlDoc([
+    { name: `Resumen_${targetYear}`, rows: summaryRows },
+    { name: `Bioimpedancia_${targetYear}`, rows: bodyRows },
+    { name: `Pruebas_1RM_${targetYear}`, rows: evalRows },
+  ]);
+
+  const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Kinetix_Respaldo_Anual_${targetYear}.xls`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   users,
   bodyCompRecords,
   evaluations,
   onClose,
+  restrictToAthlete,
 }) => {
-  const [athleteScope, setAthleteScope] = useState<'all' | 'selected' | 'single' | 'color'>('all');
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string>('');
+  const isAthleteMode = Boolean(restrictToAthlete);
+  const [athleteScope, setAthleteScope] = useState<'all' | 'selected' | 'single' | 'color'>(isAthleteMode ? 'single' : 'all');
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(restrictToAthlete?.id || '');
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>([]);
   const [selectedColorDay, setSelectedColorDay] = useState<number>(15);
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   const [reportType, setReportType] = useState<'consolidated' | 'credentials' | 'body_comp' | 'evaluations'>('consolidated');
   const [exportFormat, setExportFormat] = useState<'xml' | 'csv'>('xml');
-  const [dateFilter, setDateFilter] = useState<'all' | 'current_month' | 'specific_month' | 'current_year'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'current_month' | 'specific_month' | 'selected_year'>('all');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [includePasswords, setIncludePasswords] = useState<boolean>(true);
+  const todayStrInit = getLocalTodayDateStr();
+  const currentYearStr = todayStrInit.slice(0, 4);
+  const currentMonthStr = todayStrInit.slice(0, 7);
+
+  const availableYears = React.useMemo(() => {
+    const yearSet = new Set<string>([currentYearStr]);
+    bodyCompRecords.forEach(b => {
+      if (b.recordedAt && b.recordedAt.length >= 4) yearSet.add(b.recordedAt.slice(0, 4));
+    });
+    evaluations.forEach(e => {
+      if (e.evaluationDate && e.evaluationDate.length >= 4) yearSet.add(e.evaluationDate.slice(0, 4));
+    });
+    return Array.from(yearSet).sort((a, b) => b.localeCompare(a));
+  }, [bodyCompRecords, evaluations, currentYearStr]);
+
+  const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
+  const [includePasswords, setIncludePasswords] = useState<boolean>(!isAthleteMode);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
 
   const athletes = users.filter(u => u.role === 'athlete');
@@ -58,14 +237,16 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   );
 
   // Target athletes based on filters
-  let targetAthletes = athletes;
-  if (athleteScope === 'single' && selectedAthleteId) {
-    targetAthletes = athletes.filter(a => a.id === selectedAthleteId);
-  } else if (athleteScope === 'selected') {
-    const idSet = new Set(selectedAthleteIds);
-    targetAthletes = athletes.filter(a => idSet.has(a.id));
-  } else if (athleteScope === 'color') {
-    targetAthletes = athletes.filter(a => (a.membership.billingDayOfMonth ?? 15) === selectedColorDay);
+  let targetAthletes = restrictToAthlete ? [restrictToAthlete] : athletes;
+  if (!restrictToAthlete) {
+    if (athleteScope === 'single' && selectedAthleteId) {
+      targetAthletes = athletes.filter(a => a.id === selectedAthleteId);
+    } else if (athleteScope === 'selected') {
+      const idSet = new Set(selectedAthleteIds);
+      targetAthletes = athletes.filter(a => idSet.has(a.id));
+    } else if (athleteScope === 'color') {
+      targetAthletes = athletes.filter(a => (a.membership.billingDayOfMonth ?? 15) === selectedColorDay);
+    }
   }
 
   const toggleMultiAthlete = (id: string) => {
@@ -75,10 +256,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   };
 
   // Safe local YYYY-MM-DD date filtering (immune to UTC midnight day-shift)
-  const todayStr = getLocalTodayDateStr();
-  const currentYearStr = todayStr.slice(0, 4);
-  const currentMonthStr = todayStr.slice(0, 7);
-  const targetSpecificYm = `${currentYearStr}-${String(selectedMonth + 1).padStart(2, '0')}`;
+  const targetSpecificYm = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
 
   const isDateInFilter = (dateStr: string): boolean => {
     if (dateFilter === 'all') return true;
@@ -86,7 +264,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
     const ym = dateStr.slice(0, 7);
     if (dateFilter === 'current_month') return ym === currentMonthStr;
     if (dateFilter === 'specific_month') return ym === targetSpecificYm;
-    if (dateFilter === 'current_year') return dateStr.slice(0, 4) === currentYearStr;
+    if (dateFilter === 'selected_year') return dateStr.slice(0, 4) === selectedYear;
     return true;
   };
 
@@ -147,7 +325,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
       'Resistencia Funcional Reto',
       'Tiempo Resistencia',
     ];
-    if (includePasswords) headers.push('Clave de Acceso (Password)');
+    if (!isAthleteMode && includePasswords) headers.push('Clave de Acceso (Password)');
 
     const rows: CellVal[][] = [headers];
 
@@ -228,7 +406,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
         formatEnduranceResult(latestAerobic),
       ];
 
-      if (includePasswords) {
+      if (!isAthleteMode && includePasswords) {
         row.push(ath.password || 'kinetix123');
       }
       rows.push(row);
@@ -260,7 +438,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
       '',
       '',
     ];
-    if (includePasswords) totalRow.push('');
+    if (!isAthleteMode && includePasswords) totalRow.push('');
     rows.push(totalRow);
 
     return rows;
@@ -474,66 +652,8 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
     return rows;
   };
 
-  const escapeXml = (val: CellVal): string => {
-    if (val === undefined || val === null) return '';
-    return String(val)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-  };
-
-  const buildSpreadsheetXml = (sheets: { name: string; rows: CellVal[][] }[]): string => {
-    const worksheetsXml = sheets
-      .map(sheet => {
-        const safeName = escapeXml(sheet.name.slice(0, 31));
-        const rowsXml = sheet.rows
-          .map((row, rowIdx) => {
-            const isHeader = rowIdx === 0;
-            const isTotal = rowIdx === sheet.rows.length - 1 && sheet.rows.length > 1;
-            const styleAttr = isHeader
-              ? ' ss:StyleID="sHeader"'
-              : isTotal
-              ? ' ss:StyleID="sTotal"'
-              : '';
-            const cellsXml = row
-              .map(cell => {
-                const isNum = typeof cell === 'number' && Number.isFinite(cell);
-                const type = isNum ? 'Number' : 'String';
-                return `<Cell${styleAttr}><Data ss:Type="${type}">${escapeXml(cell)}</Data></Cell>`;
-              })
-              .join('');
-            return `<Row>${cellsXml}</Row>`;
-          })
-          .join('\n');
-        return `<Worksheet ss:Name="${safeName}"><Table>${rowsXml}</Table></Worksheet>`;
-      })
-      .join('\n');
-
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Center"/>
-   <Font ss:FontName="Calibri" ss:Size="11"/>
-  </Style>
-  <Style ss:ID="sHeader">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#1E3A8A" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="sTotal">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#065F46"/>
-   <Interior ss:Color="#D1FAE5" ss:Pattern="Solid"/>
-  </Style>
- </Styles>
- ${worksheetsXml}
-</Workbook>`;
-  };
+  const escapeXml = escapeXmlShared;
+  const buildSpreadsheetXml = buildSpreadsheetXmlDoc;
 
   const escapeCsv = (val: CellVal): string => {
     if (val === undefined || val === null) return '""';
@@ -543,29 +663,34 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
 
   const handleDownload = () => {
     const timestamp = getLocalTodayDateStr();
+    const athleteSlug = restrictToAthlete
+      ? `_${restrictToAthlete.name.replace(/\s+/g, '_')}`
+      : '';
     const baseNameMap: Record<typeof reportType, string> = {
-      consolidated: `Kinetix_Consolidado_Totales_${timestamp}`,
+      consolidated: `Kinetix_Progreso${athleteSlug}_${timestamp}`,
       credentials: `Kinetix_Credenciales_Control_${timestamp}`,
-      body_comp: `Kinetix_Antropometria_Totales_${timestamp}`,
-      evaluations: `Kinetix_Pruebas_Fisicas_Totales_${timestamp}`,
+      body_comp: `Kinetix_Antropometria${athleteSlug}_${timestamp}`,
+      evaluations: `Kinetix_Pruebas_Fisicas${athleteSlug}_${timestamp}`,
     };
 
+    const effectiveReportType = isAthleteMode && reportType === 'credentials' ? 'consolidated' : reportType;
+
     const primaryRows =
-      reportType === 'credentials'
+      effectiveReportType === 'credentials'
         ? buildCredentialsSheet()
-        : reportType === 'body_comp'
+        : effectiveReportType === 'body_comp'
         ? buildBodyCompSheet()
-        : reportType === 'evaluations'
+        : effectiveReportType === 'evaluations'
         ? buildEvaluationsSheet()
         : buildConsolidatedSheet();
 
     if (exportFormat === 'xml') {
       const sheets: { name: string; rows: CellVal[][] }[] = [];
-      if (reportType === 'consolidated') {
-        sheets.push({ name: 'Consolidado y Totales', rows: primaryRows });
+      if (effectiveReportType === 'consolidated') {
+        sheets.push({ name: isAthleteMode ? 'Mi Resumen Actual' : 'Consolidado y Totales', rows: primaryRows });
         sheets.push({ name: 'Bioimpedancia Renpho', rows: buildBodyCompSheet() });
         sheets.push({ name: 'Pruebas Fisicas 1RM', rows: buildEvaluationsSheet() });
-        if (includePasswords) {
+        if (!isAthleteMode && includePasswords) {
           sheets.push({ name: 'Claves Acceso', rows: buildCredentialsSheet() });
         }
       } else {
@@ -574,7 +699,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
           body_comp: 'Bioimpedancia Renpho',
           evaluations: 'Pruebas Fisicas 1RM',
         };
-        sheets.push({ name: titleMap[reportType], rows: primaryRows });
+        sheets.push({ name: titleMap[effectiveReportType], rows: primaryRows });
       }
 
       const xmlContent = buildSpreadsheetXml(sheets);
@@ -613,8 +738,10 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   ];
 
   const isDownloadDisabled =
-    (athleteScope === 'single' && !selectedAthleteId) ||
-    (athleteScope === 'selected' && selectedAthleteIds.length === 0);
+    !isAthleteMode && (
+      (athleteScope === 'single' && !selectedAthleteId) ||
+      (athleteScope === 'selected' && selectedAthleteIds.length === 0)
+    );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in">
@@ -627,9 +754,13 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white font-brand">
-                Exportar Excel XML / CSV Kinetix
+                {isAthleteMode ? 'Descargar Mi Progreso en Excel' : 'Exportar Excel XML / CSV Kinetix'}
               </h3>
-              <p className="text-xs text-neutral-400">Hojas multi-pestaña con totales, promedios, todos o algunos atletas</p>
+              <p className="text-xs text-neutral-400">
+                {isAthleteMode
+                  ? `Respalda tus pesajes y 1RM por mes o año · ${restrictToAthlete?.name}`
+                  : 'Hojas multi-pestaña con totales, promedios, todos o algunos atletas'}
+              </p>
             </div>
           </div>
           <button
@@ -702,23 +833,25 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setReportType('credentials')}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
-                    reportType === 'credentials'
-                      ? 'bg-amber-600/20 border-amber-500 text-white ring-1 ring-amber-500'
-                      : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 font-bold text-xs">
-                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Claves y Control Staff</span>
-                  </div>
-                  <span className="text-[10px] text-neutral-400 block mt-0.5">
-                    Lista de contraseñas y contactos
-                  </span>
-                </button>
+                {!isAthleteMode && (
+                  <button
+                    type="button"
+                    onClick={() => setReportType('credentials')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      reportType === 'credentials'
+                        ? 'bg-amber-600/20 border-amber-500 text-white ring-1 ring-amber-500'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Claves y Control Staff</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-400 block mt-0.5">
+                      Lista de contraseñas y contactos
+                    </span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -758,7 +891,8 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
               </div>
             </div>
 
-            {/* Athlete Scope Filter */}
+            {/* Athlete Scope Filter (Staff only) */}
+            {!isAthleteMode && (
             <div className="space-y-1.5">
               <label className="text-neutral-300 font-medium block flex items-center justify-between">
                 <span>¿De qué atletas exportar?</span>
@@ -817,9 +951,10 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
                 </button>
               </div>
             </div>
+            )}
 
             {/* Multi-select "Algunos atletas" */}
-            {athleteScope === 'selected' && (
+            {!isAthleteMode && athleteScope === 'selected' && (
               <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2 animate-fade-in">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-700/60 flex-1">
@@ -876,7 +1011,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
             )}
 
             {/* If Single Athlete Selected */}
-            {athleteScope === 'single' && (
+            {!isAthleteMode && athleteScope === 'single' && (
               <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2 animate-fade-in">
                 <div className="flex items-center gap-2 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-700/60">
                   <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
@@ -916,7 +1051,7 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
             )}
 
             {/* If Color Group Selected (including Sin Corte = 0) */}
-            {athleteScope === 'color' && (
+            {!isAthleteMode && athleteScope === 'color' && (
               <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-2 animate-fade-in">
                 <div className="grid grid-cols-2 gap-2">
                   {[...OFFICIAL_COLORS, NO_CUTOFF_CONFIG].map(c => {
@@ -945,14 +1080,14 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
               </div>
             )}
 
-            {/* Date / Month Range Filter */}
+            {/* Date / Month / Year Range Filter */}
             <div className="space-y-1.5">
               <label className="text-neutral-300 font-medium block flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-blue-400" />
                   <span>Rango de Fecha:</span>
                 </span>
-                <span className="text-[10px] text-neutral-500 font-mono">Filtro Temporal</span>
+                <span className="text-[10px] text-neutral-500 font-mono">Filtro Mes & Año</span>
               </label>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -994,27 +1129,42 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setDateFilter('current_year')}
+                  onClick={() => setDateFilter('selected_year')}
                   className={`p-2 rounded-xl border text-center transition-all ${
-                    dateFilter === 'current_year'
+                    dateFilter === 'selected_year'
                       ? 'bg-neutral-800 border-neutral-600 text-white font-bold'
                       : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                   }`}
                 >
-                  <span>Año {currentYearStr}</span>
+                  <span>Año {selectedYear}</span>
                 </button>
               </div>
 
-              {dateFilter === 'specific_month' && (
-                <div className="pt-2 animate-fade-in">
+              {(dateFilter === 'specific_month' || dateFilter === 'selected_year') && (
+                <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-fade-in">
+                  {dateFilter === 'specific_month' && (
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-blue-500"
+                    >
+                      {MONTHS.map((m, idx) => (
+                        <option key={m} value={idx}>
+                          Mes de {m}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-blue-500"
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className={`w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-blue-500 ${
+                      dateFilter === 'selected_year' ? 'sm:col-span-2' : ''
+                    }`}
                   >
-                    {MONTHS.map((m, idx) => (
-                      <option key={m} value={idx}>
-                        Mes de {m} {currentYearStr}
+                    {availableYears.map((yr) => (
+                      <option key={yr} value={yr}>
+                        Año {yr}
                       </option>
                     ))}
                   </select>
@@ -1022,8 +1172,8 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
               )}
             </div>
 
-            {/* Checkbox: Include credentials in consolidated */}
-            {reportType === 'consolidated' && (
+            {/* Checkbox: Include credentials in consolidated (Staff only) */}
+            {!isAthleteMode && reportType === 'consolidated' && (
               <label className="flex items-center gap-2 p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer">
                 <input
                   type="checkbox"

@@ -16,6 +16,7 @@ import { StaffManagementView } from './mobile/StaffManagementView';
 import { ProgressReportModal } from './mobile/ProgressReportModal';
 import { ShareableStoryModal } from './mobile/ShareableStoryModal';
 import { SendNotificationModal } from './common/SendNotificationModal';
+import { ExcelExportModal } from './common/ExcelExportModal';
 import { 
   Home, 
   Activity, 
@@ -88,6 +89,7 @@ interface KinetixResponsiveAppProps {
   gymLogoUrl?: string | null;
   onSendBatchNotification?: (title: string, body: string, targetUserIds: string[]) => void;
   onRefreshFromCloud?: () => Promise<{ ok: boolean; message: string }>;
+  onArchiveOldYearRecords?: (year: string) => Promise<{ deletedEvals: number; deletedBody: number; deletedNotifs: number }>;
 }
 
 export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
@@ -119,11 +121,13 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
   gymLogoUrl,
   onSendBatchNotification,
   onRefreshFromCloud,
+  onArchiveOldYearRecords,
 }) => {
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy'>('dashboard');
   const [tabHistory, setTabHistory] = useState<('dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy')[]>(['dashboard']);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
+  const [showAthleteExcelModal, setShowAthleteExcelModal] = useState<boolean>(false);
   const [showSendNotificationModal, setShowSendNotificationModal] = useState<boolean>(false);
   const [inspectedAthlete, setInspectedAthlete] = useState<UserProfile | null>(null);
   const [autoOpenEvalModal, setAutoOpenEvalModal] = useState<boolean>(false);
@@ -468,6 +472,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onNavigateTab={(tab) => handleNavigateTab(tab)}
             onOpenReport={() => setShowReportModal(true)}
             onOpenShareStory={() => setShowShareStoryModal(true)}
+            onOpenExcelExport={() => setShowAthleteExcelModal(true)}
           />
         )}
 
@@ -543,6 +548,7 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onAddEvaluation={onAddEvaluation}
             onUpdateEvaluation={onUpdateEvaluation}
             onRefreshFromCloud={onRefreshFromCloud}
+            onArchiveOldYearRecords={onArchiveOldYearRecords}
           />
         )}
 
@@ -828,6 +834,16 @@ export const KinetixResponsiveApp: React.FC<KinetixResponsiveAppProps> = ({
             onSimulatePushNotification(title, body, targetUserId);
           }}
           onClose={() => setShowSendNotificationModal(false)}
+        />
+      )}
+
+      {showAthleteExcelModal && (
+        <ExcelExportModal
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          restrictToAthlete={effectiveUser}
+          onClose={() => setShowAthleteExcelModal(false)}
         />
       )}
     </div>

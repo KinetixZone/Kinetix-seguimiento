@@ -90,6 +90,7 @@ export const shiftYearMonth = (ym: string, deltaMonths: number): string => {
 
 export interface ResolvedExerciseRecord {
   record: StrengthMaxRecord;
+  evaluationId: string;
   evaluationDate: string;
   previousRecord: StrengthMaxRecord | null;
   previousDate: string | null;
@@ -113,18 +114,18 @@ export const resolveLatestStrengthPillars = (
   const results: ResolvedExerciseRecord[] = [];
 
   for (const exId of PILLAR_IDS) {
-    const history: { record: StrengthMaxRecord; evaluationDate: string }[] = [];
+    const history: { record: StrengthMaxRecord; evaluationId: string; evaluationDate: string }[] = [];
     for (const ev of sortedEvalsAsc) {
       const rec = (ev.strengthRecords || []).find((r) => r.exerciseId === exId);
       if (!rec) continue;
       if (rec.status === 'na' && rec.statusReason === 'Pendiente en jornada Express') continue;
-      history.push({ record: rec, evaluationDate: ev.evaluationDate });
+      history.push({ record: rec, evaluationId: ev.id, evaluationDate: ev.evaluationDate });
     }
     if (history.length === 0) {
       // Fallback: check if there's literally any entry even if express placeholder
       for (const ev of sortedEvalsAsc) {
         const rec = (ev.strengthRecords || []).find((r) => r.exerciseId === exId);
-        if (rec) history.push({ record: rec, evaluationDate: ev.evaluationDate });
+        if (rec) history.push({ record: rec, evaluationId: ev.id, evaluationDate: ev.evaluationDate });
       }
     }
     if (history.length === 0) continue;
@@ -137,6 +138,7 @@ export const resolveLatestStrengthPillars = (
 
     results.push({
       record: latest.record,
+      evaluationId: latest.evaluationId,
       evaluationDate: latest.evaluationDate,
       previousRecord: prevValid ? prevValid.record : null,
       previousDate: prevValid ? prevValid.evaluationDate : null,

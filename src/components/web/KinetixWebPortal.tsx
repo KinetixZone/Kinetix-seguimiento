@@ -14,6 +14,7 @@ import { MembershipView } from '../mobile/MembershipView';
 import { StaffManagementView } from '../mobile/StaffManagementView';
 import { ProgressReportModal } from '../mobile/ProgressReportModal';
 import { ShareableStoryModal } from '../mobile/ShareableStoryModal';
+import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { 
   Home, 
@@ -92,6 +93,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
   const [isInspectingAthlete, setIsInspectingAthlete] = useState<boolean>(false);
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
+  const [showAthleteExcelModal, setShowAthleteExcelModal] = useState<boolean>(false);
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const isStaff = currentUser.role === 'staff';
@@ -346,6 +348,7 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
               onNavigateTab={(tab) => setCurrentSection(tab as any)}
               onOpenReport={() => setShowReportModal(true)}
               onOpenShareStory={() => setShowShareStoryModal(true)}
+              onOpenExcelExport={() => setShowAthleteExcelModal(true)}
             />
           )}
 
@@ -446,6 +449,16 @@ export const KinetixWebPortal: React.FC<KinetixWebPortalProps> = ({
           latestAerobicEval={latestAerobicEval}
           evaluations={userEvals}
           onClose={() => setShowShareStoryModal(false)}
+        />
+      )}
+
+      {showAthleteExcelModal && (
+        <ExcelExportModal
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          restrictToAthlete={currentUser}
+          onClose={() => setShowAthleteExcelModal(false)}
         />
       )}
     </div>

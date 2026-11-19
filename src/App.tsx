@@ -27,23 +27,26 @@ import {
   BrandTheme,
   PrivacyConsentRecord
 } from './types';
-import { isAerobicOmittedEval } from './utils/evaluationHelpers';
+import { isAerobicOmittedEval, resolveLatestStrengthPillars } from './utils/evaluationHelpers';
 import { 
   syncUserToSupabase, 
   syncBodyCompToSupabase, 
   syncEvaluationToSupabase, 
-  syncNotificationToSupabase, 
+  syncNotificationToSupabase,
+  syncNotificationsBatchToSupabase,
   syncAllToSupabase,
   loadAllFromSupabase,
   deleteUserFromSupabase,
   deleteBodyCompFromSupabase,
   deleteEvaluationFromSupabase,
   deleteNotificationFromSupabase,
+  deleteRecordsBatchFromSupabase,
   importSupabaseFromUrlParams,
   ensureSharedCloudConfig,
   subscribeToRealtimeUpdates,
   isSupabaseConfigured
 } from './lib/supabase';
+import { deliverUnreadBrowserNotifications } from './utils/pwaNotifications';
 
 export const KINETIX_APP_VERSION = '2026.10.23-v4';
 
@@ -308,24 +311,32 @@ export default function App() {
     let cancelled = false;
     let unsubscribeRealtime = () => {};
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let isPulling = false;
+    let lastPullAt = 0;
 
-    const pullLatest = async () => {
-      if (cancelled || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    const pullLatest = async (force = false) => {
+      if (cancelled || isPulling || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+      const now = Date.now();
+      if (!force && now - lastPullAt < 12000) return;
+      isPulling = true;
       try {
         const cloud = await loadAllFromSupabase();
+        lastPullAt = Date.now();
         if (!cancelled && cloud) {
           applyCloudSnapshot(cloud);
         }
       } catch (err) {
         console.warn('Cloud refresh skipped:', err);
+      } finally {
+        isPulling = false;
       }
     };
 
     const schedulePull = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        pullLatest();
-      }, 600);
+        pullLatest(true);
+      }, 900);
     };
 
     async function hydrateAndSubscribe() {
@@ -333,7 +344,10 @@ export default function App() {
         const imported = importSupabaseFromUrlParams();
         await ensureSharedCloudConfig();
         if (!cancelled) setCloudStatusTick(t => t + 1);
+        isPulling = true;
         const cloud = await loadAllFromSupabase();
+        lastPullAt = Date.now();
+        isPulling = false;
         if (!cancelled && cloud) {
           applyCloudSnapshot(cloud);
           if (imported) {
@@ -345,6 +359,7 @@ export default function App() {
           unsubscribeRealtime = subscribeToRealtimeUpdates(schedulePull);
         }
       } catch (err) {
+        isPulling = false;
         console.warn('Hydration from Supabase skipped:', err);
       }
     }
@@ -368,7 +383,7 @@ export default function App() {
             setTimeout(() => setSentToastMsg(null), 4000);
           }
         }
-        await pullLatest();
+        await pullLatest(true);
         unsubscribeRealtime();
         if (isSupabaseConfigured()) {
           unsubscribeRealtime = subscribeToRealtimeUpdates(schedulePull);
@@ -382,7 +397,7 @@ export default function App() {
 
     const handleFocus = () => {
       if (typeof navigator === 'undefined' || navigator.onLine) {
-        pullLatest();
+        pullLatest(false);
       }
     };
 
@@ -988,7 +1003,7 @@ export default function App() {
       targetAudience: 'athletes',
     }));
     setNotifications(prev => [...newNotifs, ...prev]);
-    newNotifs.forEach(n => syncNotificationToSupabase(n));
+    syncNotificationsBatchToSupabase(newNotifs);
     setSentToastMsg(`✅ Aviso enviado a ${targetUserIds.length} atleta(s)`);
     setTimeout(() => setSentToastMsg(null), 3500);
   };
@@ -1086,7 +1101,9 @@ export default function App() {
         return n;
       })
     );
-    toSync.forEach(n => syncNotificationToSupabase(n));
+    if (toSync.length > 0) {
+      syncNotificationsBatchToSupabase(toSync);
+    }
   };
 
   const handleMarkNotificationAsRead = (id: string) => {
@@ -1111,10 +1128,78 @@ export default function App() {
   };
 
   const handleClearReadNotifications = () => {
-    // Dismiss all read notifications for current user and remove from Supabase
+    // Dismiss all read notifications for current user and batch remove from Supabase
     const readIds = new Set(visibleNotifications.filter(n => n.read).map(n => n.id));
     setNotifications(prev => prev.filter(n => !readIds.has(n.id)));
-    readIds.forEach(id => deleteNotificationFromSupabase(id));
+    deleteRecordsBatchFromSupabase('notifications', Array.from(readIds));
+  };
+
+  // Safe Annual Cleanup: prunes records from targetYear while strictly preserving every athlete's latest current baseline
+  const handleArchiveOldYearRecords = async (
+    targetYear: string
+  ): Promise<{ deletedEvals: number; deletedBody: number; deletedNotifs: number }> => {
+    const protectedBodyIds = new Set<string>();
+    const protectedEvalIds = new Set<string>();
+
+    usersRef.current.forEach(u => {
+      const athBody = bodyCompRef.current
+        .filter(b => b.userId === u.id)
+        .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+      if (athBody.length > 0) {
+        protectedBodyIds.add(athBody[athBody.length - 1].id);
+      }
+
+      const athEvals = evalsRef.current
+        .filter(e => e.userId === u.id)
+        .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate));
+      if (athEvals.length > 0) {
+        protectedEvalIds.add(athEvals[athEvals.length - 1].id);
+        const latestAero = [...athEvals].reverse().find(e => !isAerobicOmittedEval(e));
+        if (latestAero) protectedEvalIds.add(latestAero.id);
+        const resolvedPillars = resolveLatestStrengthPillars(athEvals);
+        resolvedPillars.forEach(p => {
+          if (p.evaluationId) protectedEvalIds.add(p.evaluationId);
+        });
+      }
+    });
+
+    const deletedBodyIds = bodyCompRef.current
+      .filter(b => (b.recordedAt || '').startsWith(targetYear) && !protectedBodyIds.has(b.id))
+      .map(b => b.id);
+
+    const deletedEvalIds = evalsRef.current
+      .filter(e => (e.evaluationDate || '').startsWith(targetYear) && !protectedEvalIds.has(e.id))
+      .map(e => e.id);
+
+    const deletedNotifIds = notifsRef.current
+      .filter(n => n.read && (n.timestamp || '').startsWith(targetYear))
+      .map(n => n.id);
+
+    const bodySet = new Set(deletedBodyIds);
+    const evalSet = new Set(deletedEvalIds);
+    const notifSet = new Set(deletedNotifIds);
+
+    if (deletedBodyIds.length > 0) {
+      setBodyCompRecords(prev => prev.filter(b => !bodySet.has(b.id)));
+    }
+    if (deletedEvalIds.length > 0) {
+      setEvaluations(prev => prev.filter(e => !evalSet.has(e.id)));
+    }
+    if (deletedNotifIds.length > 0) {
+      setNotifications(prev => prev.filter(n => !notifSet.has(n.id)));
+    }
+
+    await Promise.all([
+      deleteRecordsBatchFromSupabase('body_composition', deletedBodyIds),
+      deleteRecordsBatchFromSupabase('physical_evaluations', deletedEvalIds),
+      deleteRecordsBatchFromSupabase('notifications', deletedNotifIds),
+    ]);
+
+    return {
+      deletedEvals: deletedEvalIds.length,
+      deletedBody: deletedBodyIds.length,
+      deletedNotifs: deletedNotifIds.length,
+    };
   };
 
   // Only show notifications relevant to the logged-in user
@@ -1135,6 +1220,14 @@ export default function App() {
 
 
   const unreadCount = visibleNotifications.filter(n => !n.read).length;
+
+  // Deliver real OS/PWA notifications once per unread alert when user is authenticated
+  const firstPushPassRef = useRef(true);
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) return;
+    deliverUnreadBrowserNotifications(visibleNotifications, firstPushPassRef.current);
+    firstPushPassRef.current = false;
+  }, [isAuthenticated, currentUser?.id, visibleNotifications]);
 
   // IF NOT AUTHENTICATED: Show the Portal de Acceso (Login Page)
   if (!isAuthenticated) {
@@ -1208,6 +1301,7 @@ export default function App() {
           gymLogoUrl={gymLogoUrl}
           onSendBatchNotification={handleSendBatchNotification}
           onRefreshFromCloud={handleRefreshFromCloud}
+          onArchiveOldYearRecords={handleArchiveOldYearRecords}
         />
       </main>
 

@@ -14,6 +14,7 @@ import { MembershipView } from './MembershipView';
 import { StaffManagementView } from './StaffManagementView';
 import { ProgressReportModal } from './ProgressReportModal';
 import { ShareableStoryModal } from './ShareableStoryModal';
+import { ExcelExportModal } from '../common/ExcelExportModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { 
   Home, 
@@ -101,6 +102,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
   // Modal Report View
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showShareStoryModal, setShowShareStoryModal] = useState<boolean>(false);
+  const [showAthleteExcelModal, setShowAthleteExcelModal] = useState<boolean>(false);
 
   const currentUser = users.find(u => u.id === selectedUserId) || users[0];
   const userBodyComps = [...bodyCompRecords.filter(b => b.userId === currentUser.id)].sort(
@@ -362,6 +364,7 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
               onNavigateTab={(tab) => setCurrentTab(tab)}
               onOpenReport={() => setShowReportModal(true)}
               onOpenShareStory={() => setShowShareStoryModal(true)}
+              onOpenExcelExport={() => setShowAthleteExcelModal(true)}
             />
           )}
 
@@ -520,6 +523,16 @@ export const MobileAppSimulator: React.FC<MobileAppSimulatorProps> = ({
           latestAerobicEval={latestAerobicEval}
           evaluations={userEvals}
           onClose={() => setShowShareStoryModal(false)}
+        />
+      )}
+
+      {showAthleteExcelModal && (
+        <ExcelExportModal
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          restrictToAthlete={currentUser}
+          onClose={() => setShowAthleteExcelModal(false)}
         />
       )}
     </div>

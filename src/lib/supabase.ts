@@ -694,8 +694,127 @@ export async function syncNotificationToSupabase(notif: PushNotificationSimulati
   }
 }
 
+function chunkArray<T>(items: T[], chunkSize = 50): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+function mapUserToSupabaseRow(user: UserProfile) {
+  let savedPwd = user.password || (user.role === 'staff' ? 'kinetix2026' : 'kinetix123');
+  try {
+    const p = localStorage.getItem(`kinetix_pwd_${user.id}`);
+    if (p) savedPwd = p;
+  } catch {}
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    username: user.username || user.name.toLowerCase().split(' ')[0],
+    password: savedPwd,
+    role: user.role,
+    staff_role: user.staffRole || null,
+    phone: user.phone,
+    avatar_url: user.avatarUrl,
+    birth_date: user.birthDate || null,
+    gender: user.gender,
+    height_cm: user.heightCm,
+    weight_unit: user.weightUnit || 'kg',
+    emergency_contact: user.emergencyContact,
+    membership: user.membership,
+    created_at: user.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function mapBodyCompToSupabaseRow(record: BodyCompositionRecord) {
+  return {
+    id: record.id,
+    user_id: record.userId,
+    recorded_at: record.recordedAt,
+    weight_kg: record.weightKg,
+    muscle_mass_percent: record.muscleMassPercent,
+    muscle_mass_kg: record.muscleMassKg ?? null,
+    body_fat_percent: record.bodyFatPercent,
+    body_fat_kg: record.bodyFatKg ?? null,
+    visceral_fat_level: record.visceralFatLevel,
+    bmi: record.bmi,
+    bmi_category: record.bmiCategory || null,
+    notes: record.notes || null,
+    recorded_by_role: record.recordedByRole || 'staff',
+  };
+}
+
+function mapEvalToSupabaseRow(evalRec: PhysicalEvaluationRecord) {
+  return {
+    id: evalRec.id,
+    user_id: evalRec.userId,
+    evaluation_date: evalRec.evaluationDate,
+    coach_id: evalRec.coachId || null,
+    coach_name: evalRec.coachName || 'Coach Kinetix',
+    general_coach_notes: evalRec.generalCoachNotes || null,
+    cooper_test: evalRec.cooperTest || null,
+    endurance_test: evalRec.enduranceTest || null,
+    strength_records: evalRec.strengthRecords || [],
+  };
+}
+
+function mapNotifToSupabaseRow(notif: PushNotificationSimulation) {
+  return {
+    id: notif.id,
+    title: notif.title,
+    body: notif.body,
+    timestamp: notif.timestamp,
+    read: notif.read,
+    type: notif.type,
+    target_user_id: notif.targetUserId || null,
+    target_audience: notif.targetAudience || null,
+  };
+}
+
+export async function syncNotificationsBatchToSupabase(notifs: PushNotificationSimulation[]): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || notifs.length === 0) return false;
+  try {
+    for (const chunk of chunkArray(notifs.map(mapNotifToSupabaseRow), 50)) {
+      const { error } = await client.from('notifications').upsert(chunk);
+      if (error) {
+        console.warn('Error batch syncing notifications:', error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('Supabase exception batch syncing notifications:', err);
+    return false;
+  }
+}
+
+export async function deleteRecordsBatchFromSupabase(
+  table: 'body_composition' | 'physical_evaluations' | 'notifications',
+  ids: string[]
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client || ids.length === 0) return true;
+  try {
+    for (const chunk of chunkArray(ids, 50)) {
+      const { error } = await client.from(table).delete().in('id', chunk);
+      if (error) {
+        console.warn(`Error batch deleting ${table}:`, error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn(`Supabase exception batch deleting ${table}:`, err);
+    return false;
+  }
+}
+
 /**
- * SYNC ALL DATA to Supabase at once
+ * SYNC ALL DATA to Supabase using chunked batch upserts (prevents request floods)
  */
 export async function syncAllToSupabase(
   users: UserProfile[],
@@ -705,36 +824,36 @@ export async function syncAllToSupabase(
 ): Promise<{ success: boolean; syncedCount: { users: number; bodyComp: number; evals: number; notifs: number }; error?: string }> {
   const client = getSupabaseClient();
   if (!client) {
-    return { 
-      success: false, 
-      syncedCount: { users: 0, bodyComp: 0, evals: 0, notifs: 0 }, 
-      error: 'Supabase no está configurado.' 
+    return {
+      success: false,
+      syncedCount: { users: 0, bodyComp: 0, evals: 0, notifs: 0 },
+      error: 'Supabase no está configurado.',
     };
   }
 
   try {
     let uCount = 0;
-    for (const u of users) {
-      const ok = await syncUserToSupabase(u);
-      if (ok) uCount++;
+    for (const chunk of chunkArray(users.map(mapUserToSupabaseRow), 50)) {
+      const { error } = await client.from('users').upsert(chunk);
+      if (!error) uCount += chunk.length;
     }
 
     let bCount = 0;
-    for (const b of bodyCompRecords) {
-      const ok = await syncBodyCompToSupabase(b);
-      if (ok) bCount++;
+    for (const chunk of chunkArray(bodyCompRecords.map(mapBodyCompToSupabaseRow), 50)) {
+      const { error } = await client.from('body_composition').upsert(chunk);
+      if (!error) bCount += chunk.length;
     }
 
     let eCount = 0;
-    for (const e of evaluations) {
-      const ok = await syncEvaluationToSupabase(e);
-      if (ok) eCount++;
+    for (const chunk of chunkArray(evaluations.map(mapEvalToSupabaseRow), 50)) {
+      const { error } = await client.from('physical_evaluations').upsert(chunk);
+      if (!error) eCount += chunk.length;
     }
 
     let nCount = 0;
-    for (const n of notifications) {
-      const ok = await syncNotificationToSupabase(n);
-      if (ok) nCount++;
+    for (const chunk of chunkArray(notifications.map(mapNotifToSupabaseRow), 50)) {
+      const { error } = await client.from('notifications').upsert(chunk);
+      if (!error) nCount += chunk.length;
     }
 
     return {
@@ -908,11 +1027,12 @@ export function subscribeToRealtimeUpdates(onChange: () => void): () => void {
         es.onmessage = () => onChange();
       } catch {}
     }
+    const fallbackMs = serverSupportsSse ? 60000 : 45000;
     const pollId = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         onChange();
       }
-    }, 8000);
+    }, fallbackMs);
     return () => {
       try { es?.close(); } catch {}
       clearInterval(pollId);

@@ -18,7 +18,8 @@ import {
   Flame,
   ShieldAlert,
   TrendingDown,
-  Zap
+  Zap,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface AthleteDashboardProps {
@@ -30,6 +31,7 @@ interface AthleteDashboardProps {
   onNavigateTab: (tab: 'dashboard' | 'body' | 'tests' | 'membership' | 'staff' | 'privacy') => void;
   onOpenReport: () => void;
   onOpenShareStory?: () => void;
+  onOpenExcelExport?: () => void;
 }
 
 import { calculateDaysUntilExpiry } from '../../utils/fitnessCalculations';
@@ -44,6 +46,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
   onNavigateTab,
   onOpenReport,
   onOpenShareStory,
+  onOpenExcelExport,
 }) => {
   const daysRemaining = currentUser.membership?.expiryDate && currentUser.membership.expiryDate !== 'Permanente'
     ? calculateDaysUntilExpiry(currentUser.membership.expiryDate)
@@ -178,6 +181,16 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
               <span className="hidden sm:inline">Compartir</span>
             </button>
           )}
+          {onOpenExcelExport && (
+            <button
+              onClick={onOpenExcelExport}
+              className="text-[11px] font-medium text-emerald-300 bg-emerald-950/70 border border-emerald-700/60 hover:border-emerald-500 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors active:scale-95"
+              title="Descargar mi progreso mensual o anual en Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Excel</span>
+            </button>
+          )}
           <button
             onClick={onOpenReport}
             className="text-[11px] font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 hover:border-red-500/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
@@ -187,6 +200,34 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Year-End / Prior-Year Athlete Backup Reminder */}
+      {onOpenExcelExport && currentUser.role !== 'staff' && (() => {
+        const now = new Date();
+        const curYear = String(now.getFullYear());
+        const isYearEndWindow = now.getMonth() === 11 || now.getMonth() === 0;
+        const hasPriorYearData =
+          sortedBodyComps.some(b => b.recordedAt && b.recordedAt.slice(0, 4) < curYear) ||
+          sortedEvals.some(e => e.evaluationDate && e.evaluationDate.slice(0, 4) < curYear);
+        if (!isYearEndWindow && !hasPriorYearData) return null;
+        return (
+          <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-700/50 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="text-[11px] text-emerald-100 leading-snug">
+                <strong>Respalda tu año:</strong> Descarga tu historial completo de pesajes y 1RM en Excel antes del cierre anual.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenExcelExport}
+              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shrink-0 active:scale-95"
+            >
+              Descargar
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Paused Access Alert Banner */}
       {isSuspended && (

@@ -16,8 +16,14 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  Archive
+  Archive,
+  BellRing
 } from 'lucide-react';
+import {
+  getPushPermissionStatus,
+  requestPushNotificationPermission,
+  PushPermissionStatus
+} from '../../utils/pwaNotifications';
 
 interface InAppNotificationCenterProps {
   isOpen: boolean;
@@ -55,6 +61,7 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
   const [sentAudienceFilter, setSentAudienceFilter] = useState<'all' | 'broadcast' | 'color' | 'individual'>('all');
   const [sentVisibleLimit, setSentVisibleLimit] = useState(8);
   const [expandedSentIds, setExpandedSentIds] = useState<Record<string, boolean>>({});
+  const [pushStatus, setPushStatus] = useState<PushPermissionStatus>(() => getPushPermissionStatus());
   const [archivedSentIds, setArchivedSentIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem('kinetix_archived_sent_notifs');
@@ -167,6 +174,32 @@ export const InAppNotificationCenter: React.FC<InAppNotificationCenterProps> = (
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Push Notifications Permission Banner */}
+        {pushStatus !== 'unsupported' && pushStatus !== 'granted' && (
+          <div className="p-2.5 rounded-2xl bg-blue-950/40 border border-blue-700/50 flex items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center gap-2 text-blue-200 min-w-0">
+              <BellRing className="w-4 h-4 text-blue-400 shrink-0" />
+              <span className="leading-tight">
+                {pushStatus === 'denied'
+                  ? 'Alertas bloqueadas en este navegador. Habilítalas en Ajustes del sitio.'
+                  : 'Activa alertas push para recibir avisos aunque la app esté en segundo plano.'}
+              </span>
+            </div>
+            {pushStatus === 'default' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await requestPushNotificationPermission();
+                  setPushStatus(res);
+                }}
+                className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] shrink-0 active:scale-95"
+              >
+                Activar Push
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Staff Switcher Tabs */}
         {isStaff && (

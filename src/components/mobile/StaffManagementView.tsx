@@ -14,6 +14,7 @@ import {
 import { CURRENT_PRIVACY_NOTICE_VERSION } from '../../data/privacyNoticeContent';
 import { getPaymentGroup, PAYMENT_COLOR_GROUPS, PaymentColorCode, NO_CUTOFF_CONFIG } from '../../utils/paymentColorCodes';
 import { ExcelExportModal } from '../common/ExcelExportModal';
+import { AnnualArchiveModal } from '../common/AnnualArchiveModal';
 import { UserAvatar } from '../common/UserAvatar';
 import { BatchEvaluationGridView } from './BatchEvaluationGridView';
 import { calculate1RM } from '../../utils/fitnessCalculations';
@@ -80,7 +81,8 @@ import {
   Zap,
   MessageCircle,
   Smartphone,
-  Share2
+  Share2,
+  Archive
 } from 'lucide-react';
 import { ShareCredentialsWhatsAppModal } from '../common/ShareCredentialsWhatsAppModal';
 
@@ -142,6 +144,7 @@ interface StaffManagementViewProps {
   onAddEvaluation?: (evaluation: Omit<PhysicalEvaluationRecord, 'id'>) => void;
   onUpdateEvaluation?: (evalId: string, updates: Partial<PhysicalEvaluationRecord>) => void;
   onRefreshFromCloud?: () => Promise<{ ok: boolean; message: string }>;
+  onArchiveOldYearRecords?: (year: string) => Promise<{ deletedEvals: number; deletedBody: number; deletedNotifs: number }>;
 }
 
 export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
@@ -169,10 +172,13 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
   onAddEvaluation,
   onUpdateEvaluation,
   onRefreshFromCloud,
+  onArchiveOldYearRecords,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateStaffModal, setShowCreateStaffModal] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [showAnnualArchiveModal, setShowAnnualArchiveModal] = useState(false);
+  const [dismissedArchiveBanner, setDismissedArchiveBanner] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedCloudLink, setCopiedCloudLink] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
@@ -1921,6 +1927,47 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
         </div>
       </div>
 
+      {/* Year-End / Prior-Year Staff Archiving Reminder Banner */}
+      {!dismissedArchiveBanner && (() => {
+        const now = new Date();
+        const curYr = String(now.getFullYear());
+        const priorCount =
+          bodyCompRecords.filter(b => b.recordedAt && b.recordedAt.slice(0, 4) < curYr).length +
+          evaluations.filter(e => e.evaluationDate && e.evaluationDate.slice(0, 4) < curYr).length;
+        const isYearEnd = now.getMonth() === 11 || now.getMonth() === 0;
+        if (priorCount === 0 && !isYearEnd) return null;
+        return (
+          <div className="p-3 sm:p-4 rounded-2xl bg-amber-950/35 border border-amber-600/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <Archive className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="text-amber-100 leading-snug">
+                <strong>Cierre Anual & Optimización de Nube:</strong>{' '}
+                {priorCount > 0
+                  ? `Detectados ${priorCount} registros de años anteriores a ${curYr}. Descarga el Excel anual y depura historial antiguo sin perder las marcas actuales.`
+                  : `Temporada de cierre anual: respalda el Excel de ${curYr} para tus atletas y mantén Supabase siempre ligero.`}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAnnualArchiveModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-neutral-950 font-bold text-[11px] active:scale-95"
+              >
+                Respaldar y Depurar
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissedArchiveBanner(true)}
+                className="p-1.5 rounded-lg text-amber-300/70 hover:text-white"
+                title="Ocultar aviso"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ========================================================================= */}
       {/* SUB-PESTAÑAS DE NAVEGACIÓN RÁPIDA DEL PANEL DE STAFF */}
       {/* ========================================================================= */}
@@ -2682,7 +2729,7 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <button
               type="button"
               onClick={() => setShowSupabaseModal(true)}
@@ -2722,6 +2769,20 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
               </div>
               <p className="text-[11px] text-neutral-400">
                 Guarda una copia de seguridad local completa de tus atletas y marcas.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAnnualArchiveModal(true)}
+              className="p-3.5 rounded-2xl bg-neutral-950 border border-amber-700/40 hover:border-amber-500 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-white group-hover:text-amber-400">Cierre Anual & Depurar</span>
+                <Archive className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Respalda años pasados en Excel y depura historial viejo sin tocar marcas actuales.
               </p>
             </button>
           </div>
@@ -5061,6 +5122,17 @@ export const StaffManagementView: React.FC<StaffManagementViewProps> = ({
           bodyCompRecords={bodyCompRecords}
           evaluations={evaluations}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+
+      {/* MODAL: CIERRE ANUAL Y DEPURACIÓN SEGURA */}
+      {showAnnualArchiveModal && (
+        <AnnualArchiveModal
+          users={users}
+          bodyCompRecords={bodyCompRecords}
+          evaluations={evaluations}
+          onArchiveOldYearRecords={onArchiveOldYearRecords}
+          onClose={() => setShowAnnualArchiveModal(false)}
         />
       )}
 

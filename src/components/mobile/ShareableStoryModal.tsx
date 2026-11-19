@@ -179,6 +179,25 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     return currentY + lineHeight;
   };
 
+  // Auto-scale font size until single-line text fits comfortably inside maxWidth
+  const fitFontSize = (
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+    startSize: number,
+    minSize: number,
+    fontTemplate: (size: number) => string
+  ): number => {
+    let size = startSize;
+    while (size > minSize) {
+      ctx.font = fontTemplate(size);
+      if (ctx.measureText(text).width <= maxWidth) break;
+      size -= 2;
+    }
+    ctx.font = fontTemplate(size);
+    return size;
+  };
+
   // Build high-res PNG data URL (1080x1920 Instagram Story format)
   const buildStoryCanvasDataUrl = (): string => {
     const canvas = document.createElement('canvas');
@@ -224,110 +243,127 @@ export const ShareableStoryModal: React.FC<ShareableStoryModalProps> = ({
     ctx.fillText('KZ', 115, 182);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 52px sans-serif';
-    ctx.fillText('KINETIX FUNCTIONAL ZONE', 215, 175);
+    fitFontSize(ctx, 'KINETIX FUNCTIONAL ZONE', 755, 50, 34, (s) => `bold ${s}px sans-serif`);
+    ctx.fillText('KINETIX FUNCTIONAL ZONE', 215, 173);
     ctx.fillStyle = '#9ca3af';
-    ctx.font = '32px monospace';
-    ctx.fillText('HISTORIA OFICIAL DE RENDIMIENTO', 215, 215);
+    fitFontSize(ctx, 'HISTORIA OFICIAL DE RENDIMIENTO', 755, 30, 22, (s) => `${s}px monospace`);
+    ctx.fillText('HISTORIA OFICIAL DE RENDIMIENTO', 215, 213);
 
-    // Middle Content
+    // Middle Content (safe width: x=100..980 => 880px max)
     if (storyType === 'strength') {
       ctx.fillStyle = '#ef4444';
-      ctx.font = 'bold 36px sans-serif';
+      fitFontSize(ctx, '🔥 NUEVO RÉCORD PERSONAL (PR)', 880, 36, 26, (s) => `bold ${s}px sans-serif`);
       ctx.fillText('🔥 NUEVO RÉCORD PERSONAL (PR)', 100, 500);
 
       if (strengthRecord) {
         const oneRm = getEffectiveStrength1RMKg(strengthRecord);
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 68px sans-serif';
-        drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 610, 880, 80);
+        ctx.font = 'bold 64px sans-serif';
+        const afterExerciseY = drawWrappedText(ctx, strengthRecord.exerciseName.toUpperCase(), 100, 600, 880, 76);
 
+        const weightY = Math.max(820, afterExerciseY + 95);
+        const weightLabel = `${strengthRecord.weightKg} ${strengthRecord.weightUnit}`;
         ctx.fillStyle = '#60a5fa';
-        ctx.font = 'bold 140px monospace';
-        ctx.fillText(`${strengthRecord.weightKg} ${strengthRecord.weightUnit}`, 100, 820);
+        fitFontSize(ctx, weightLabel, 880, 136, 72, (s) => `bold ${s}px monospace`);
+        ctx.fillText(weightLabel, 100, weightY);
 
+        const rmLabel = `1RM Estimado: ${oneRm} kg · ${strengthRecord.reps} reps`;
         ctx.fillStyle = '#ffffff';
-        ctx.font = '46px monospace';
-        ctx.fillText(`1RM Estimado: ${oneRm} kg · ${strengthRecord.reps} reps`, 100, 930);
+        fitFontSize(ctx, rmLabel, 880, 44, 28, (s) => `${s}px monospace`);
+        ctx.fillText(rmLabel, 100, weightY + 105);
 
         ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 38px monospace';
-        ctx.fillText(`✓ Fuerza Máxima Validada por ${strengthCoachName}`, 100, 1050);
+        ctx.font = 'bold 36px monospace';
+        drawWrappedText(ctx, `✓ Fuerza Máxima Validada por ${strengthCoachName}`, 100, weightY + 215, 880, 52);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
-        drawWrappedText(ctx, 'EVALUACIÓN DE FUERZA PENDIENTE', 100, 610, 880, 80);
+        const afterTitleY = drawWrappedText(ctx, 'EVALUACIÓN DE FUERZA PENDIENTE', 100, 610, 880, 80);
         ctx.fillStyle = '#9ca3af';
-        ctx.font = '40px monospace';
-        drawWrappedText(ctx, 'Inicia tu primer registro con el Coach para desbloquear tu tarjeta.', 100, 750, 880, 60);
+        ctx.font = '38px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer registro con el Coach para desbloquear tu tarjeta.', 100, afterTitleY + 60, 880, 58);
       }
     } else if (storyType === 'cooper') {
+      const cooperKicker = `❤️ ${cooperDisplay?.testTitle || 'TEST DE COOPER 12 MINUTOS'}`;
       ctx.fillStyle = '#ef4444';
-      ctx.font = 'bold 36px sans-serif';
-      ctx.fillText(`❤️ ${cooperDisplay?.testTitle || 'TEST DE COOPER 12 MINUTOS'}`, 100, 500);
+      fitFontSize(ctx, cooperKicker, 880, 36, 24, (s) => `bold ${s}px sans-serif`);
+      ctx.fillText(cooperKicker, 100, 500);
 
       if (cooperDisplay) {
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 68px sans-serif';
-        drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 610, 880, 80);
+        ctx.font = 'bold 64px sans-serif';
+        const afterTitleY = drawWrappedText(ctx, 'POTENCIA AERÓBICA Y RESISTENCIA', 100, 600, 880, 78);
 
+        const headlineY = Math.max(820, afterTitleY + 100);
         ctx.fillStyle = '#f59e0b';
-        ctx.font = 'bold 115px monospace';
-        ctx.fillText(cooperDisplay.headline, 100, 820);
+        fitFontSize(ctx, cooperDisplay.headline, 880, 112, 54, (s) => `bold ${s}px monospace`);
+        ctx.fillText(cooperDisplay.headline, 100, headlineY);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = '42px monospace';
-        drawWrappedText(ctx, cooperDisplay.subline, 100, 930, 880, 58);
+        ctx.font = '40px monospace';
+        drawWrappedText(ctx, cooperDisplay.subline, 100, headlineY + 105, 880, 56);
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
-        drawWrappedText(ctx, 'TEST AERÓBICO PENDIENTE', 100, 610, 880, 80);
+        const afterTitleY = drawWrappedText(ctx, 'TEST AERÓBICO PENDIENTE', 100, 610, 880, 80);
         ctx.fillStyle = '#9ca3af';
-        ctx.font = '40px monospace';
-        drawWrappedText(ctx, 'Inicia tu primer test aeróbico para medir tu nivel y distancia.', 100, 750, 880, 60);
+        ctx.font = '38px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer test aeróbico para medir tu nivel y distancia.', 100, afterTitleY + 60, 880, 58);
       }
     } else {
       ctx.fillStyle = '#3b82f6';
-      ctx.font = 'bold 36px sans-serif';
+      fitFontSize(ctx, '✨ COMPOSICIÓN & SALUD', 880, 36, 26, (s) => `bold ${s}px sans-serif`);
       ctx.fillText('✨ COMPOSICIÓN & SALUD', 100, 500);
 
       if (latestBodyComp) {
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 68px sans-serif';
-        drawWrappedText(ctx, 'RECOMPOSICIÓN CORPORAL', 100, 610, 880, 80);
+        ctx.font = 'bold 64px sans-serif';
+        const afterTitleY = drawWrappedText(ctx, 'RECOMPOSICIÓN CORPORAL', 100, 600, 880, 78);
 
+        const weightY = Math.max(820, afterTitleY + 100);
+        const weightLabel = `${latestBodyComp.weightKg} kg`;
         ctx.fillStyle = '#60a5fa';
-        ctx.font = 'bold 120px monospace';
-        ctx.fillText(`${latestBodyComp.weightKg} kg`, 100, 820);
+        fitFontSize(ctx, weightLabel, 880, 120, 72, (s) => `bold ${s}px monospace`);
+        ctx.fillText(weightLabel, 100, weightY);
 
+        const bodyStatsLabel = `Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`;
         ctx.fillStyle = '#ffffff';
-        ctx.font = '46px monospace';
-        ctx.fillText(`Masa Muscular: ${latestBodyComp.muscleMassPercent}% · Grasa: ${latestBodyComp.bodyFatPercent}%`, 100, 930);
+        fitFontSize(ctx, bodyStatsLabel, 880, 44, 28, (s) => `${s}px monospace`);
+        if (ctx.measureText(bodyStatsLabel).width > 880) {
+          drawWrappedText(ctx, bodyStatsLabel, 100, weightY + 105, 880, 52);
+        } else {
+          ctx.fillText(bodyStatsLabel, 100, weightY + 105);
+        }
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px sans-serif';
-        drawWrappedText(ctx, 'COMPOSICIÓN CORPORAL', 100, 610, 880, 80);
+        const afterTitleY = drawWrappedText(ctx, 'COMPOSICIÓN CORPORAL', 100, 610, 880, 80);
         ctx.fillStyle = '#9ca3af';
-        ctx.font = '40px monospace';
-        drawWrappedText(ctx, 'Inicia tu primer registro antropométrico para activar tu tarjeta.', 100, 750, 880, 60);
+        ctx.font = '38px monospace';
+        drawWrappedText(ctx, 'Inicia tu primer registro antropométrico para activar tu tarjeta.', 100, afterTitleY + 60, 880, 58);
       }
     }
 
-    // Bottom Athlete Signature
+    // Bottom Athlete Signature (auto-fit width to prevent clipping on long names/plans)
     ctx.strokeStyle = '#333333';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(100, 1650);
-    ctx.lineTo(980, 1650);
+    ctx.moveTo(100, 1640);
+    ctx.lineTo(980, 1640);
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px sans-serif';
-    ctx.fillText(athlete.name, 100, 1730);
+    fitFontSize(ctx, athlete.name, 880, 48, 30, (s) => `bold ${s}px sans-serif`);
+    ctx.fillText(athlete.name, 100, 1720);
 
+    const footerPlanText = `${athlete.membership.planName} · @kinetix.zone`;
     ctx.fillStyle = '#9ca3af';
-    ctx.font = '36px monospace';
-    ctx.fillText(`${athlete.membership.planName} · @kinetix.zone`, 100, 1785);
+    fitFontSize(ctx, footerPlanText, 880, 34, 22, (s) => `${s}px monospace`);
+    if (ctx.measureText(footerPlanText).width > 880) {
+      drawWrappedText(ctx, footerPlanText, 100, 1775, 880, 36);
+    } else {
+      ctx.fillText(footerPlanText, 100, 1780);
+    }
 
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrl;

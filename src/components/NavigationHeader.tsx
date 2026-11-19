@@ -2,6 +2,7 @@ import React from 'react';
 import { Bell, LogOut, ShieldCheck, User, Camera, Upload } from 'lucide-react';
 import { UserProfile } from '../types';
 import { UserAvatar } from './common/UserAvatar';
+import { PWAInstallButton } from './common/PWAInstallButton';
 
 interface NavigationHeaderProps {
   currentUser: UserProfile;
@@ -67,6 +68,8 @@ export const NavigationHeader: React.FC<NavigationHeaderProps> = ({
 
         {/* Zone 2: User Status & Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <PWAInstallButton compact />
+
           {/* Direct Privacy Link (Visible en pantallas medianas/grandes, en celular se accede desde el perfil) */}
           {onOpenPrivacyPolicy && (
             <button

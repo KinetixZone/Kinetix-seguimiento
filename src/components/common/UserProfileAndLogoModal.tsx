@@ -18,8 +18,45 @@ import {
   ShieldAlert,
   RefreshCw,
   Smartphone,
-  Lock
+  Lock,
+  BellRing
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
+import { getPushPermissionStatus, requestPushNotificationPermission, PushPermissionStatus } from '../../utils/pwaNotifications';
+
+function compressImageFileToDataUrl(
+  file: File,
+  maxDimension: number,
+  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+  quality = 0.8
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve(String(reader.result || ''));
+      img.onload = () => {
+        const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(String(reader.result || ''));
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL(mimeType, quality));
+        } catch {
+          resolve(String(reader.result || ''));
+        }
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 interface UserProfileAndLogoModalProps {
   currentUser: UserProfile;
@@ -49,6 +86,7 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
   });
   const [whatsappSaved, setWhatsappSaved] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushPermissionStatus>(() => getPushPermissionStatus());
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -88,49 +126,45 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
   const isOwner = isStaff && (currentUser.staffRole === 'owner' || !currentUser.staffRole);
   const isCoachGus = isStaff && currentUser.staffRole === 'coach';
 
-  // Handle user uploading their own avatar
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle user uploading their own avatar (compressed to <= 256px JPEG so Supabase stays fast)
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar los 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('La imagen no debe superar los 8MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        onUpdateAvatar(currentUser.id, result);
+    try {
+      const compressed = await compressImageFileToDataUrl(file, 256, 'image/jpeg', 0.8);
+      if (compressed) {
+        onUpdateAvatar(currentUser.id, compressed);
         setAvatarSuccess(true);
         setTimeout(() => setAvatarSuccess(false), 2000);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {}
   };
 
-  // Handle gym coach uploading the gym logo
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle gym coach uploading the gym logo (compressed to <= 400px)
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('El logo no debe superar los 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('El logo no debe superar los 8MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        onUpdateGymLogo(result);
+    try {
+      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const compressed = await compressImageFileToDataUrl(file, 400, mime, 0.85);
+      if (compressed) {
+        onUpdateGymLogo(compressed);
         setLogoSuccess(true);
         setTimeout(() => setLogoSuccess(false), 2000);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {}
   };
 
   const handleApplyLogoUrl = () => {
@@ -488,6 +522,33 @@ export const UserProfileAndLogoModal: React.FC<UserProfileAndLogoModalProps> = (
                 {isClearingCache ? '...' : 'Actualizar'}
               </span>
             </button>
+
+            <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <BellRing className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="text-[11px] text-neutral-300">
+                  Notificaciones Push:{' '}
+                  <strong className={pushStatus === 'granted' ? 'text-emerald-400' : pushStatus === 'denied' ? 'text-red-400' : 'text-amber-300'}>
+                    {pushStatus === 'granted' ? 'Activadas' : pushStatus === 'denied' ? 'Bloqueadas' : pushStatus === 'unsupported' ? 'No soportado' : 'Pendientes'}
+                  </strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {pushStatus === 'default' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = await requestPushNotificationPermission();
+                      setPushStatus(next);
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold"
+                  >
+                    Activar Push
+                  </button>
+                )}
+                <PWAInstallButton compact />
+              </div>
+            </div>
           </div>
 
           {/* Legal y Privacidad: Acceso permanente al Aviso de Privacidad Integral */}
